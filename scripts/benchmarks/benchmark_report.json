@@ -46,9 +46,9 @@
       }
     }
   },
-  "faizdb_live": null,
+  "tapisaurus_live": null,
   "instructions": {
-    "microbenchmark": "cargo bench -p faizdb-core",
+    "microbenchmark": "cargo bench -p tapisaurus-core",
     "full_verification": "bash scripts/verify_all.sh"
   }
 }

@@ -1,22 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-    "faizdb-core",
-    "faizdb-query",
-    "faizdb-vector",
-    "faizdb-graph",
-    "faizdb-security",
-    "faizdb-server",
-    "faizdb-cli",
+    "tapisaurus-core",
+    "tapisaurus-query",
+    "tapisaurus-vector",
+    "tapisaurus-graph",
+    "tapisaurus-security",
+    "tapisaurus-server",
+    "tapisaurus-cli",
     "bindings/wasm",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Ahmad Faiz <faiz@ict.house>"]
+authors = ["Ahmad Faiz <faiz@tapirusdb.com>"]
 license = "BSL-1.1"
-repository = "https://github.com/ictdothouse/faizdb"
+repository = "https://github.com/tapiruslab/TapisaurusDB"
 description = "The AI-Native NoSQL Database Engine — Fast, Secure, Run Everywhere"
 rust-version = "1.88"
 
@@ -35,7 +35,6 @@ tonic = "0.12"
 prost = "0.13"
 tokio-stream = { version = "0.1", features = ["sync"] }
 tower = "0.5"
-hyper = "1.5"
 futures-util = "0.3"
 
 # Crypto & Security
@@ -52,7 +51,6 @@ pem = "3.0"
 # Storage
 crc32fast = "1.4"
 lz4_flex = "0.11"
-zstd = "0.13"
 crossbeam-skiplist = "0.1"
 parking_lot = "0.12"
 
@@ -62,11 +60,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
-rustyline = "14.0"
 
 # Error handling
 thiserror = "2.0"
-anyhow = "1.0"
 
 # Testing
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -80,7 +76,6 @@ chrono = { version = "0.4", features = ["serde"] }
 bytes = "1.9"
 memmap2 = "0.9"
 dashmap = "6.1"
-num_cpus = "1.16"
 
 [profile.release]
 opt-level = 3

@@ -3,9 +3,9 @@ import urllib.request
 from pymongo import MongoClient
 
 def test_aggregation():
-    print("1. Connecting via pymongo to FaizDB (mongodb://127.0.0.1:27017)...")
+    print("1. Connecting via pymongo to TapisaurusDB (mongodb://127.0.0.1:27017)...")
     client = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
-    db = client["faizdb"]
+    db = client["tapisaurus"]
     col = db["analytics_sales"]
 
     # Insert sample dataset

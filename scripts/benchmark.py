@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🔥 FaizDB Official Benchmark Suite
+🔥 TapisaurusDB Official Benchmark Suite
 Tests and measures:
 1. Ingestion Throughput (Documents / Sec)
 2. Sequential & Filter Query Latency
@@ -39,14 +39,14 @@ def http_get(endpoint):
         return json.loads(resp.read().decode("utf-8"))
 
 def test_engine_health():
-    print("Checking FaizDB Engine Health...")
+    print("Checking TapisaurusDB Engine Health...")
     try:
         res = http_get("/v1/health")
         print(f"✅ Engine Online: Status={res.get('status')}, Version={res.get('version')}")
         return True
     except Exception as e:
-        print(f"❌ Could not connect to FaizDB on {HOST}: {e}")
-        print("💡 Ensure FaizDB is running: ./target/release/faizdb serve")
+        print(f"❌ Could not connect to TapisaurusDB on {HOST}: {e}")
+        print("💡 Ensure TapisaurusDB is running: ./target/release/tapisaurus serve")
         return False
 
 def benchmark_ingestion(count=10000):
@@ -130,7 +130,7 @@ def benchmark_fulltext_search():
     print(f"  Average Latency: {avg_lat_ms:.2f} ms / search")
 
 def print_summary_table():
-    print_header("🏁 FaizDB Benchmark Summary")
+    print_header("🏁 TapisaurusDB Benchmark Summary")
     print("""
 ┌──────────────────────────────────────┬────────────────┬─────────────────┐
 │ Benchmark Operation                  │ Throughput     │ Average Latency │
@@ -147,7 +147,7 @@ def print_summary_table():
 if __name__ == "__main__":
     print("""
   ╔══════════════════════════════════════════════════════════════╗
-  ║           🔥 FaizDB Live Performance Benchmark Suite         ║
+  ║           🔥 TapisaurusDB Live Performance Benchmark Suite         ║
   ╚══════════════════════════════════════════════════════════════╝
 """)
     if test_engine_health():
@@ -157,4 +157,4 @@ if __name__ == "__main__":
         print_summary_table()
     else:
         print("\nℹ️  To run local CLI in-memory benchmark directly via Rust:")
-        print("    cargo run --release --bin faizdb -- benchmark --count 50000")
+        print("    cargo run --release --bin tapisaurus -- benchmark --count 50000")

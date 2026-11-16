@@ -1,29 +1,29 @@
-# 🎮 FaizDB Live Demonstration Applications
+# 🎮 TapisaurusDB Live Demonstration Applications
 
-This directory contains two complete, production-ready sample web applications demonstrating how to build apps with FaizDB.
+This directory contains two complete, production-ready sample web applications demonstrating how to build apps with TapisaurusDB.
 
 ---
 
 ## 📁 1. Static HTML & JavaScript Web App (`examples/static-html-web/`)
-A pure static web application with **zero backend server required**. It talks directly to FaizDB via HTTP REST API and listens to real-time database changes over WebSockets.
+A pure static web application with **zero backend server required**. It talks directly to TapisaurusDB via HTTP REST API and listens to real-time database changes over WebSockets.
 
 ### How to Run:
-1. Ensure FaizDB is running:
+1. Ensure TapisaurusDB is running:
    ```bash
-   faizdb serve --wire-port 27017 --http-port 27018
+   tapisaurus serve --wire-port 27017 --http-port 27018
    ```
 2. Simply double-click `examples/static-html-web/index.html` to open it in any web browser (Chrome, Edge, Safari, Firefox)!
-3. Add a player score, watch it save to FaizDB, and see live WebSocket change events flash in real time!
+3. Add a player score, watch it save to TapisaurusDB, and see live WebSocket change events flash in real time!
 
 ---
 
 ## 📁 2. Fullstack Node.js & Express Web App (`examples/nodejs-express-web/`)
-A modern SaaS dashboard built with Node.js and Express that connects to FaizDB using the **official MongoDB Node.js driver** (`mongodb`) over port 27017.
+A modern SaaS dashboard built with Node.js and Express that connects to TapisaurusDB using the **official MongoDB Node.js driver** (`mongodb`) over port 27017.
 
 ### How to Run:
-1. Ensure FaizDB is running:
+1. Ensure TapisaurusDB is running:
    ```bash
-   faizdb serve --wire-port 27017 --http-port 27018
+   tapisaurus serve --wire-port 27017 --http-port 27018
    ```
 2. Open terminal in `examples/nodejs-express-web/`:
    ```bash

@@ -34,8 +34,8 @@ export const GraphExplorer: React.FC = () => {
 
   const nodes: GraphNode[] = [
     {
-      id: 'faizdb_core',
-      label: 'FaizDB Engine',
+      id: 'tapisaurus_core',
+      label: 'TapisaurusDB Engine',
       type: 'Core System',
       x: 350,
       y: 180,
@@ -81,19 +81,19 @@ export const GraphExplorer: React.FC = () => {
   ];
 
   const edges: GraphEdge[] = [
-    { from: 'faizdb_core', to: 'lsm_storage', label: 'PERSISTS_VIA', weight: 1.0 },
-    { from: 'faizdb_core', to: 'hnsw_vector', label: 'INDEXES_EMBEDDINGS', weight: 1.0 },
-    { from: 'faizdb_core', to: 'mongo_wire', label: 'EXPOSES_PROTOCOL', weight: 1.0 },
-    { from: 'faizdb_core', to: 'graphrag', label: 'ENABLES_REASONING', weight: 1.0 },
+    { from: 'tapisaurus_core', to: 'lsm_storage', label: 'PERSISTS_VIA', weight: 1.0 },
+    { from: 'tapisaurus_core', to: 'hnsw_vector', label: 'INDEXES_EMBEDDINGS', weight: 1.0 },
+    { from: 'tapisaurus_core', to: 'mongo_wire', label: 'EXPOSES_PROTOCOL', weight: 1.0 },
+    { from: 'tapisaurus_core', to: 'graphrag', label: 'ENABLES_REASONING', weight: 1.0 },
     { from: 'hnsw_vector', to: 'graphrag', label: 'AUGMENTS_VECTORS', weight: 0.85 },
   ];
 
   const runGraphRAGTraversal = () => {
     setIsTraversing(true);
-    setActivePath(['faizdb_core']);
+    setActivePath(['tapisaurus_core']);
 
     setTimeout(() => {
-      setActivePath(['faizdb_core', 'lsm_storage', 'hnsw_vector', 'mongo_wire', 'graphrag']);
+      setActivePath(['tapisaurus_core', 'lsm_storage', 'hnsw_vector', 'mongo_wire', 'graphrag']);
       setIsTraversing(false);
     }, 800);
   };

@@ -3,8 +3,8 @@
 **/*.rs.bk
 Cargo.lock.bak
 
-# ── FaizDB Runtime Artifacts ──────────────────────────────────────
-faizdb_data/
+# ── TapisaurusDB Runtime Artifacts ──────────────────────────────────────
+tapisaurus_data/
 embedded_db_data/
 iot_data/
 logs/
@@ -18,8 +18,8 @@ backups/*.enc.json
 !backups/.gitkeep
 
 # ── Standalone Binaries & Libraries ───────────────────────────────
-/faizdb
-/faizdb.exe
+/tapisaurus
+/tapisaurus.exe
 /dist_local/
 *.so
 *.dylib
@@ -43,7 +43,7 @@ docs/*INTERNAL*
 
 # ── Root-level files not meant for repo ───────────────────────────
 /index.html
-/faizdb.postman_collection.json
+/tapisaurus.postman_collection.json
 
 # ── Frontend & Studio ─────────────────────────────────────────────
 node_modules/

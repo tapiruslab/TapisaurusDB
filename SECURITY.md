@@ -12,7 +12,7 @@
 
 Report security issues via **private email** to:
 
-📧 **faiz@ict.house**
+📧 **faiz@tapirusdb.com**
 
 Include in your report:
 - A clear description of the vulnerability
@@ -33,7 +33,7 @@ We follow [Responsible Disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 
 ## Security Architecture
 
-FaizDB implements the following security measures:
+TapisaurusDB implements the following security measures:
 
 - **Password Hashing:** Argon2id with random salt (industry standard for 2026)
 - **JWT Authentication:** EdDSA (Ed25519) — asymmetric, immune to timing attacks

@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: faizdb-cluster
+  name: tapisaurus-cluster
   labels:
-    app: faizdb
+    app: tapisaurus
     tier: database
 spec:
-  serviceName: "faizdb-headless"
+  serviceName: "tapisaurus-headless"
   replicas: 3
   selector:
     matchLabels:
-      app: faizdb
+      app: tapisaurus
   template:
     metadata:
       labels:
-        app: faizdb
+        app: tapisaurus
         tier: database
     spec:
       containers:
-        - name: faizdb-engine
-          image: ictdothouse/faizdb:latest
+        - name: tapisaurus-engine
+          image: tapiruslab/TapisaurusDB:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 27017
@@ -31,26 +31,26 @@ spec:
             - containerPort: 27018
               name: http-rest
           env:
-            - name: FAIZDB_WIRE_PORT
+            - name: TAPISAURUS_WIRE_PORT
               value: "27017"
-            - name: FAIZDB_HTTP_PORT
+            - name: TAPISAURUS_HTTP_PORT
               value: "27018"
-            - name: FAIZDB_DATA_DIR
-              value: "/data/faizdb"
-            - name: FAIZDB_ADMIN_USER
+            - name: TAPISAURUS_DATA_DIR
+              value: "/data/tapisaurus"
+            - name: TAPISAURUS_ADMIN_USER
               valueFrom:
                 secretKeyRef:
-                  name: faizdb-credentials
+                  name: tapisaurus-credentials
                   key: admin-user
-            - name: FAIZDB_ADMIN_PASS
+            - name: TAPISAURUS_ADMIN_PASS
               valueFrom:
                 secretKeyRef:
-                  name: faizdb-credentials
+                  name: tapisaurus-credentials
                   key: admin-password
-            - name: FAIZDB_JWT_SECRET
+            - name: TAPISAURUS_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: faizdb-credentials
+                  name: tapisaurus-credentials
                   key: jwt-secret
           resources:
             requests:
@@ -80,11 +80,11 @@ spec:
             failureThreshold: 30
             periodSeconds: 2
           volumeMounts:
-            - name: faizdb-storage
-              mountPath: /data/faizdb
+            - name: tapisaurus-storage
+              mountPath: /data/tapisaurus
   volumeClaimTemplates:
     - metadata:
-        name: faizdb-storage
+        name: tapisaurus-storage
       spec:
         accessModes: [ "ReadWriteOnce" ]
         resources:
@@ -94,9 +94,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: faizdb-service
+  name: tapisaurus-service
   labels:
-    app: faizdb
+    app: tapisaurus
 spec:
   type: ClusterIP
   ports:
@@ -113,4 +113,4 @@ spec:
       targetPort: 27018
       name: http-rest
   selector:
-    app: faizdb
+    app: tapisaurus

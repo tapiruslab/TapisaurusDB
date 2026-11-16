@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Official SDKs — FaizDB</title>
+  <title>Official SDKs — TapisaurusDB</title>
   <meta name="description" content="Official Client Libraries & SDKs for TypeScript/Node.js, Python, Go, Rust, and PHP.">
   
   <link rel="preconnect" href="https://api.fontshare.com">
@@ -79,7 +79,7 @@
     <div class="container nav-inner">
       <a href="index.html" class="logo">
         <div class="logo-mark">⚡</div>
-        <span>FaizDB</span>
+        <span>TapisaurusDB</span>
       </a>
       <ul class="nav-menu">
         <li><a href="index.html">Home</a></li>
@@ -91,7 +91,7 @@
       </ul>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="themeToggle" class="btn btn-secondary">☀️</button>
-        <a href="https://github.com/ictdothouse/faizdb" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
+        <a href="https://github.com/tapiruslab/TapisaurusDB" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
       </div>
     </div>
   </header>
@@ -107,11 +107,11 @@
     <div class="content-card">
       <h2 class="type-subhead">Node.js / TypeScript SDK</h2>
       <div class="code-block">
-        <div><span class="c-pri">npm install</span> @ictdothouse/faizdb</div>
+        <div><span class="c-pri">npm install</span> @tapiruslab/TapisaurusDB</div>
       </div>
       <div class="code-block">
-        <div><span class="c-pri">import</span> { FaizDB } <span class="c-pri">from</span> '@ictdothouse/faizdb';</div>
-        <div>const db = new FaizDB({ endpoint: 'http://127.0.0.1:27018' });</div>
+        <div><span class="c-pri">import</span> { TapisaurusDB } <span class="c-pri">from</span> '@tapiruslab/TapisaurusDB';</div>
+        <div>const db = new TapisaurusDB({ endpoint: 'http://127.0.0.1:27018' });</div>
         <div>await db.collection('products').insert({ title: 'MacBook Pro M4', price: 1999 });</div>
       </div>
     </div>
@@ -120,11 +120,11 @@
     <div class="content-card">
       <h2 class="type-subhead">Python SDK (PEP 517/621)</h2>
       <div class="code-block">
-        <div><span class="c-pri">pip install</span> faizdb</div>
+        <div><span class="c-pri">pip install</span> tapisaurus</div>
       </div>
       <div class="code-block">
-        <div><span class="c-pri">from</span> faizdb <span class="c-pri">import</span> FaizDBClient</div>
-        <div>client = FaizDBClient("http://127.0.0.1:27018")</div>
+        <div><span class="c-pri">from</span> tapisaurus <span class="c-pri">import</span> TapisaurusClient</div>
+        <div>client = TapisaurusClient("http://127.0.0.1:27018")</div>
         <div>docs = client.collection("embeddings").search_vector(query_vector=[0.12, 0.45], top_k=5)</div>
       </div>
     </div>
@@ -133,14 +133,14 @@
     <div class="content-card">
       <h2 class="type-subhead">Rust Native SDK & In-Process Engine</h2>
       <div class="code-block">
-        <div><span class="c-sec">cargo add</span> faizdb-core</div>
+        <div><span class="c-sec">cargo add</span> tapisaurus-core</div>
       </div>
     </div>
   </main>
 
   <footer>
     <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
-      <span>© 2026 FaizDB Project · Genesis Design System</span>
+      <span>© 2026 TapisaurusDB Project · Genesis Design System</span>
       <a href="index.html" style="color: var(--primary); text-decoration: none;">Back to Home</a>
     </div>
   </footer>
@@ -148,7 +148,7 @@
   <script>
     const toggleBtn = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
-    const saved = localStorage.getItem('faizdb-theme') || 'light';
+    const saved = localStorage.getItem('tapisaurus-theme') || 'light';
     htmlEl.className = saved;
     toggleBtn.textContent = saved === 'dark' ? '🌙' : '☀️';
 
@@ -156,7 +156,7 @@
       const next = htmlEl.classList.contains('light') ? 'dark' : 'light';
       htmlEl.className = next;
       toggleBtn.textContent = next === 'dark' ? '🌙' : '☀️';
-      localStorage.setItem('faizdb-theme', next);
+      localStorage.setItem('tapisaurus-theme', next);
     });
   </script>
 </body>

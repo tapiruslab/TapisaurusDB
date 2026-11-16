@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Benchmark Suite — FaizDB</title>
+  <title>Benchmark Suite — TapisaurusDB</title>
   <meta name="description" content="Official Verified Benchmarks: YCSB Workloads, Vector ANN similarity search, and throughput comparisons.">
   
   <link rel="preconnect" href="https://api.fontshare.com">
@@ -82,7 +82,7 @@
     <div class="container nav-inner">
       <a href="index.html" class="logo">
         <div class="logo-mark">⚡</div>
-        <span>FaizDB</span>
+        <span>TapisaurusDB</span>
       </a>
       <ul class="nav-menu">
         <li><a href="index.html">Home</a></li>
@@ -94,7 +94,7 @@
       </ul>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="themeToggle" class="btn btn-secondary">☀️</button>
-        <a href="https://github.com/ictdothouse/faizdb" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
+        <a href="https://github.com/tapiruslab/TapisaurusDB" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
       </div>
     </div>
   </header>
@@ -162,13 +162,13 @@
         </thead>
         <tbody>
           <tr style="background: rgba(16, 185, 129, 0.08);">
-            <td><strong>⚡ FaizDB (Full Server)</strong></td>
+            <td><strong>⚡ TapisaurusDB (Full Server)</strong></td>
             <td><strong>7.70 MB</strong> (8,080,104 bytes)</td>
             <td><strong>23.05 MB</strong> (23,608 kB idle, 69.9 MB peak)</td>
             <td><strong>✅ Document + Vector + Graph + SQL + 5 Gateways</strong></td>
           </tr>
           <tr>
-            <td><strong>⚡ FaizDB (Embedded Core)</strong></td>
+            <td><strong>⚡ TapisaurusDB (Embedded Core)</strong></td>
             <td><strong>~3.5 MB</strong></td>
             <td><strong>~8 – 16 MB</strong></td>
             <td><strong>✅ LSM-Tree + MemTable + WAL + ACID MVCC</strong></td>
@@ -282,12 +282,12 @@
     </div>
 
     <div class="content-card">
-      <h2 class="type-subhead">Architectural Transparency: Where FaizDB Stands Against ArcadeDB, ArangoDB, FoundationDB &amp; GlueSQL</h2>
+      <h2 class="type-subhead">Architectural Transparency: Where TapisaurusDB Stands Against ArcadeDB, ArangoDB, FoundationDB &amp; GlueSQL</h2>
       <p class="type-body" style="margin-top: 6px;">
-        True systems engineering is defined by clear architectural priorities. For a rigorous, empirical audit detailing FaizDB's core moats (7.70MB Safe Rust footprint, Transactional GraphRAG, 5-Way Universal Gateways) and architectural specializations against mature incumbents, read our exhaustive report:
+        True systems engineering is defined by clear architectural priorities. For a rigorous, empirical audit detailing TapisaurusDB's core moats (7.70MB Safe Rust footprint, Transactional GraphRAG, 5-Way Universal Gateways) and architectural specializations against mature incumbents, read our exhaustive report:
       </p>
       <div style="margin-top: 14px;">
-        <a href="https://github.com/ictdothouse/faizdb/blob/main/docs/COMPETITIVE_ANALYSIS.md#8-architectural--empirical-benchmark-arcadedb-arangodb-foundationdb--gluesql" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--primary); color: #fff; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600;">
+        <a href="https://github.com/tapiruslab/TapisaurusDB/blob/main/docs/COMPETITIVE_ANALYSIS.md#8-architectural--empirical-benchmark-arcadedb-arangodb-foundationdb--gluesql" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--primary); color: #fff; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600;">
           Read 4-Engine Empirical Benchmark Audit (docs/COMPETITIVE_ANALYSIS.md) ➔
         </a>
       </div>
@@ -316,7 +316,7 @@
         </div>
         <div style="padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
           <strong style="font-size: 13px;">Binary HNSW Persistence</strong>
-          <p class="type-small" style="margin-top: 4px;"><code>FAIZHNSW</code> binary files load 50x faster with 5x smaller disk footprint than legacy JSON.</p>
+          <p class="type-small" style="margin-top: 4px;"><code>TPSHNSW1</code> binary files load 50x faster with 5x smaller disk footprint than legacy JSON.</p>
         </div>
       </div>
     </div>
@@ -328,7 +328,7 @@
         <div><span class="c-comment"># 1. Run official Scientific Systems Performance & Verification Suite</span></div>
         <div><span class="c-cmd">bash</span> scripts/run_verification_suite.sh</div>
         <div style="margin-top: 8px;"><span class="c-comment"># 2. Run built-in 50,000 document release benchmark (in-memory + durable)</span></div>
-        <div><span class="c-cmd">./target/release/faizdb</span> benchmark --count 50000</div>
+        <div><span class="c-cmd">./target/release/tapisaurus</span> benchmark --count 50000</div>
         <div style="margin-top: 8px;"><span class="c-comment"># 3. Measure kernel resident memory (VmRSS) directly from /proc/&lt;pid&gt;/status</span></div>
         <div><span class="c-cmd">bash</span> scripts/measure_memory.sh</div>
         <div style="margin-top: 8px;"><span class="c-comment"># 4. Run full automated workspace test suite across all 26 suites (200+ passing)</span></div>
@@ -339,7 +339,7 @@
 
   <footer>
     <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
-      <span>© 2026 FaizDB Project · Genesis Design System</span>
+      <span>© 2026 TapisaurusDB Project · Genesis Design System</span>
       <a href="index.html" style="color: var(--primary); text-decoration: none;">Back to Home</a>
     </div>
   </footer>
@@ -347,7 +347,7 @@
   <script>
     const toggleBtn = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
-    const saved = localStorage.getItem('faizdb-theme') || 'light';
+    const saved = localStorage.getItem('tapisaurus-theme') || 'light';
     htmlEl.className = saved;
     toggleBtn.textContent = saved === 'dark' ? '🌙' : '☀️';
 
@@ -355,7 +355,7 @@
       const next = htmlEl.classList.contains('light') ? 'dark' : 'light';
       htmlEl.className = next;
       toggleBtn.textContent = next === 'dark' ? '🌙' : '☀️';
-      localStorage.setItem('faizdb-theme', next);
+      localStorage.setItem('tapisaurus-theme', next);
     });
   </script>
 </body>

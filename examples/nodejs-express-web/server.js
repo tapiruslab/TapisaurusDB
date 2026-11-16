@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
-const FAIZDB_URI = process.env.FAIZDB_URI || 'mongodb://127.0.0.1:27017';
+const TAPISAURUS_URI = process.env.TAPISAURUS_URI || 'mongodb://127.0.0.1:27017';
 
 app.use(cors());
 app.use(express.json());
@@ -17,17 +17,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let db, usersCollection;
 
-// Connect to FaizDB via official MongoDB Wire Protocol
-async function initFaizDB() {
+// Connect to TapisaurusDB via official MongoDB Wire Protocol
+async function initTapisaurusDB() {
   try {
-    console.log(`Connecting to FaizDB at ${FAIZDB_URI}...`);
-    const client = new MongoClient(FAIZDB_URI, { serverSelectionTimeoutMS: 3000 });
+    console.log(`Connecting to TapisaurusDB at ${TAPISAURUS_URI}...`);
+    const client = new MongoClient(TAPISAURUS_URI, { serverSelectionTimeoutMS: 3000 });
     await client.connect();
     db = client.db('enterprise_app');
     usersCollection = db.collection('customers');
-    console.log('✅ Successfully connected to FaizDB MongoDB Wire Protocol (Port 27017)!');
+    console.log('✅ Successfully connected to TapisaurusDB MongoDB Wire Protocol (Port 27017)!');
   } catch (err) {
-    console.error('❌ Failed to connect to FaizDB:', err.message);
+    console.error('❌ Failed to connect to TapisaurusDB:', err.message);
   }
 }
 
@@ -76,6 +76,6 @@ app.get('/api/analytics', async (req, res) => {
 
 // Start Server
 app.listen(PORT, async () => {
-  await initFaizDB();
+  await initTapisaurusDB();
   console.log(`🚀 Node.js App running at http://localhost:${PORT}`);
 });

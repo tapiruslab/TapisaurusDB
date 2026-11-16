@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-⚡ FaizDB vs SQLite Independent Comparative Benchmark Suite
+⚡ TapisaurusDB vs SQLite Independent Comparative Benchmark Suite
 ============================================================
 Evaluates realistic workloads (YCSB-inspired) under identical machine conditions:
 - Workload A: 50% Read, 50% Write (Update Heavy)
@@ -23,11 +23,11 @@ import statistics
 import urllib.request
 import urllib.error
 
-FAIZDB_HOST = os.environ.get("FAIZDB_HOST", "http://127.0.0.1:27018")
+TAPISAURUS_HOST = os.environ.get("TAPISAURUS_HOST", "http://127.0.0.1:27018")
 
 def print_banner():
     print("=" * 72)
-    print("  🚀 FAIZDB INDEPENDENT BENCHMARK & COMPARISON SUITE (YCSB WORKLOADS)")
+    print("  🚀 TAPISAURUS INDEPENDENT BENCHMARK & COMPARISON SUITE (YCSB WORKLOADS)")
     print("=" * 72)
 
 def calculate_percentiles(latencies_us):
@@ -131,10 +131,10 @@ class SQLiteHarness:
         total_time = time.perf_counter() - start_time
         return {"throughput": count / total_time, "latencies": calculate_percentiles(latencies)}
 
-# ── FaizDB Benchmark Harness ─────────────────────────────────────────────────
+# ── TapisaurusDB Benchmark Harness ─────────────────────────────────────────────────
 
-class FaizDBHarness:
-    def __init__(self, host=FAIZDB_HOST):
+class TapisaurusHarness:
+    def __init__(self, host=TAPISAURUS_HOST):
         self.host = host
         self.online = self.check_health()
 
@@ -198,7 +198,7 @@ class FaizDBHarness:
 
 def main():
     print_banner()
-    temp_dir = tempfile.mkdtemp(prefix="faizdb_bench_")
+    temp_dir = tempfile.mkdtemp(prefix="tapisaurus_bench_")
     sqlite_db = os.path.join(temp_dir, "bench.sqlite")
 
     print(f"📦 Environment: Python {sys.version.split()[0]} | Host: localhost | Storage: WAL")
@@ -216,23 +216,23 @@ def main():
     sqlite_e = sqlite_harness.run_workload_e(500)
     print(f"   Workload E (Range Scan): {sqlite_e['throughput']:,.0f} ops/sec | p50: {sqlite_e['latencies']['p50']}µs | p99: {sqlite_e['latencies']['p99']}µs\n")
 
-    # 2. Check FaizDB Server
-    faiz_harness = FaizDBHarness()
-    faiz_results = None
-    if faiz_harness.online:
-        print("▶️  Running FaizDB Server Benchmarks (REST Gateway)...")
+    # 2. Check TapisaurusDB Server
+    tapisaurus_harness = TapisaurusHarness()
+    tapisaurus_results = None
+    if tapisaurus_harness.online:
+        print("▶️  Running TapisaurusDB Server Benchmarks (REST Gateway)...")
         try:
-            faiz_a = faiz_harness.run_workload_a(1000)
-            faiz_c = faiz_harness.run_workload_c(1000)
-            faiz_results = {"workload_a": faiz_a, "workload_c": faiz_c}
-            print(f"   Workload A: {faiz_a['throughput']:,.0f} ops/sec | p50: {faiz_a['latencies']['p50']}µs | p99: {faiz_a['latencies']['p99']}µs")
-            print(f"   Workload C: {faiz_c['throughput']:,.0f} ops/sec | p50: {faiz_c['latencies']['p50']}µs | p99: {faiz_c['latencies']['p99']}µs")
+            tapisaurus_a = tapisaurus_harness.run_workload_a(1000)
+            tapisaurus_c = tapisaurus_harness.run_workload_c(1000)
+            tapisaurus_results = {"workload_a": tapisaurus_a, "workload_c": tapisaurus_c}
+            print(f"   Workload A: {tapisaurus_a['throughput']:,.0f} ops/sec | p50: {tapisaurus_a['latencies']['p50']}µs | p99: {tapisaurus_a['latencies']['p99']}µs")
+            print(f"   Workload C: {tapisaurus_c['throughput']:,.0f} ops/sec | p50: {tapisaurus_c['latencies']['p50']}µs | p99: {tapisaurus_c['latencies']['p99']}µs")
         except Exception as e:
-            print(f"   ⚠️ Could not complete online FaizDB tests: {e}")
+            print(f"   ⚠️ Could not complete online TapisaurusDB tests: {e}")
     else:
-        print("💡 Note: FaizDB HTTP server not running on :27018.")
-        print("   To benchmark live HTTP, run: `./target/release/faizdb` then re-run this script.")
-        print("   To benchmark core Rust engine throughput (>320,000 ops/sec), run: `cargo bench -p faizdb-core`\n")
+        print("💡 Note: TapisaurusDB HTTP server not running on :27018.")
+        print("   To benchmark live HTTP, run: `./target/release/tapisaurus` then re-run this script.")
+        print("   To benchmark core Rust engine throughput (>320,000 ops/sec), run: `cargo bench -p tapisaurus-core`\n")
 
     # 3. Compile report
     report = {
@@ -243,9 +243,9 @@ def main():
             "workload_c": sqlite_c,
             "workload_e": sqlite_e,
         },
-        "faizdb_live": faiz_results,
+        "tapisaurus_live": tapisaurus_results,
         "instructions": {
-            "microbenchmark": "cargo bench -p faizdb-core",
+            "microbenchmark": "cargo bench -p tapisaurus-core",
             "full_verification": "bash scripts/verify_all.sh"
         }
     }

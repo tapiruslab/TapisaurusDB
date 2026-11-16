@@ -176,7 +176,7 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">Fetching documents from FaizDB...</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">Fetching documents from TapisaurusDB...</p>
           </div>
         ) : filteredDocs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-80 gap-3 text-center p-6">
@@ -186,7 +186,7 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
             <div>
               <p className="text-sm font-medium text-slate-900 dark:text-zinc-100">No documents in {collectionName}</p>
               <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-sm mt-1">
-                Insert a document or import existing CSV/JSON datasets into FaizDB.
+                Insert a document or import existing CSV/JSON datasets into TapisaurusDB.
               </p>
             </div>
             <div className="flex items-center gap-2 mt-2">
@@ -342,7 +342,7 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
               placeholder={
                 importFormat === 'json'
                   ? '[\n  { "name": "Faiz", "role": "Architect", "active": true },\n  { "name": "Elena", "role": "Engineer", "active": true }\n]'
-                  : 'name,role,country,active\nFaiz,Architect,Malaysia,true\nElena,Engineer,Singapore,true'
+                  : 'name,role,country,active\nTapir,Architect,Malaysia,true\nElena,Engineer,Singapore,true'
               }
               className="w-full p-3 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 font-mono text-xs text-slate-800 dark:text-zinc-200 focus:ring-1 focus:ring-emerald-500 outline-hidden"
             />

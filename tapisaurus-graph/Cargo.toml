@@ -1,0 +1,20 @@
+[package]
+name = "tapisaurus-graph"
+description = "Graph engine for TapisaurusDB — vertices, edges, traversals"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tapisaurus-core = { path = "../tapisaurus-core" }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+crc32fast = { workspace = true }
+uuid = { workspace = true }
+tapisaurus-vector = { path = "../tapisaurus-vector" }
+
+

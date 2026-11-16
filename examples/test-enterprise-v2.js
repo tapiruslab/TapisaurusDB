@@ -4,13 +4,13 @@
 
 async function main() {
   const BASE_URL = 'http://127.0.0.1:27018';
-  console.log('🚀 Connecting to FaizDB for Enterprise Migration & Scheduler Verification...\n');
+  console.log('🚀 Connecting to TapisaurusDB for Enterprise Migration & Scheduler Verification...\n');
 
   // 1. Authenticate as admin
   const loginRes = await fetch(`${BASE_URL}/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'faizdb-admin-2026' })
+    body: JSON.stringify({ username: 'admin', password: 'tapisaurus-admin-2026' })
   });
   const loginData = await loginRes.json();
   const token = loginData.data?.token;

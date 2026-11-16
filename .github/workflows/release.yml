@@ -24,32 +24,32 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact_name: faizdb-linux-x86_64.tar.gz
+            artifact_name: tapisaurus-linux-x86_64.tar.gz
             use_cross: false
 
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact_name: faizdb-linux-arm64-robot-chip.tar.gz
+            artifact_name: tapisaurus-linux-arm64-robot-chip.tar.gz
             use_cross: true
 
           - target: armv7-unknown-linux-gnueabihf
             os: ubuntu-latest
-            artifact_name: faizdb-linux-armv7-embedded-chip.tar.gz
+            artifact_name: tapisaurus-linux-armv7-embedded-chip.tar.gz
             use_cross: true
 
           - target: x86_64-apple-darwin
             os: macos-13
-            artifact_name: faizdb-macos-x86_64.tar.gz
+            artifact_name: tapisaurus-macos-x86_64.tar.gz
             use_cross: false
 
           - target: aarch64-apple-darwin
             os: macos-latest
-            artifact_name: faizdb-macos-arm64.tar.gz
+            artifact_name: tapisaurus-macos-arm64.tar.gz
             use_cross: false
 
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            artifact_name: faizdb-windows-x86_64.zip
+            artifact_name: tapisaurus-windows-x86_64.zip
             use_cross: false
 
     steps:
@@ -69,9 +69,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.use_cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }} --bin faizdb
+            cross build --release --target ${{ matrix.target }} --bin tapisaurus
           else
-            cargo build --release --target ${{ matrix.target }} --bin faizdb
+            cargo build --release --target ${{ matrix.target }} --bin tapisaurus
           fi
 
       - name: Package Artifacts (Unix)
@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/faizdb dist/ 2>/dev/null || cp target/release/faizdb dist/ 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/tapisaurus dist/ 2>/dev/null || cp target/release/tapisaurus dist/ 2>/dev/null || true
           cp README.md dist/ 2>/dev/null || true
           cp LICENSE dist/ 2>/dev/null || true
           tar -czf ${{ matrix.artifact_name }} -C dist .
@@ -90,14 +90,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist
-          if (Test-Path target/${{ matrix.target }}/release/faizdb.exe) {
-            Copy-Item target/${{ matrix.target }}/release/faizdb.exe dist/
-          } elseif (Test-Path target/release/faizdb.exe) {
-            Copy-Item target/release/faizdb.exe dist/
+          if (Test-Path target/${{ matrix.target }}/release/tapisaurus.exe) {
+            Copy-Item target/${{ matrix.target }}/release/tapisaurus.exe dist/
+          } elseif (Test-Path target/release/tapisaurus.exe) {
+            Copy-Item target/release/tapisaurus.exe dist/
           }
           if (Test-Path README.md) { Copy-Item README.md dist/ }
           if (Test-Path LICENSE) { Copy-Item LICENSE dist/ }
-          if (Test-Path scripts/start-faizdb-studio.bat) { Copy-Item scripts/start-faizdb-studio.bat dist/ }
+          if (Test-Path scripts/start-tapisaurus-studio.bat) { Copy-Item scripts/start-tapisaurus-studio.bat dist/ }
           Compress-Archive -Path dist/* -DestinationPath ${{ matrix.artifact_name }}
           (Get-FileHash ${{ matrix.artifact_name }} -Algorithm SHA256).Hash > ${{ matrix.artifact_name }}.sha256
 

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FaizDB Interactive Tutorial & Real-World Use Cases</title>
-  <meta name="description" content="Step-by-step interactive tutorial for FaizDB — multi-dialect SQL & MongoDB queries, ACID MVCC ticketing, HNSW AI vector search, GraphRAG, and 128Hz robotics edge streaming.">
+  <title>TapisaurusDB Interactive Tutorial & Real-World Use Cases</title>
+  <meta name="description" content="Step-by-step interactive tutorial for TapisaurusDB — multi-dialect SQL & MongoDB queries, ACID MVCC ticketing, HNSW AI vector search, GraphRAG, and 128Hz robotics edge streaming.">
 
   <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -528,7 +528,7 @@
   <nav>
     <a href="index.html" class="nav-brand">
       <div class="brand-logo">🔥</div>
-      <span>FaizDB</span>
+      <span>TapisaurusDB</span>
       <span class="badge-tutorial">Interactive Tutorial</span>
     </a>
 
@@ -542,7 +542,7 @@
         🖥️ Open Web Studio
       </a>
 
-      <a href="https://github.com/ictdothouse/faizdb" target="_blank" class="btn-action">
+      <a href="https://github.com/tapiruslab/TapisaurusDB" target="_blank" class="btn-action">
         ⭐ GitHub
       </a>
 
@@ -609,9 +609,9 @@
       <!-- Hero Banner -->
       <section class="tutorial-hero">
         <div class="hero-tag">🎓 Hands-on Developer Guide</div>
-        <h1>Master FaizDB in 15 Minutes</h1>
+        <h1>Master TapisaurusDB in 15 Minutes</h1>
         <p class="lead">
-          Welcome to the official interactive tutorial for FaizDB. Explore how a single 8MB native binary delivers 5-way wire protocols (MySQL, PostgreSQL, MongoDB, gRPC, REST), multi-dialect SQL & MongoDB syntax, sub-millisecond AI vector search, GraphRAG multi-hop traversal, and 128Hz robotics telemetry with zero GC pauses.
+          Welcome to the official interactive tutorial for TapisaurusDB. Explore how a single 8MB native binary delivers 5-way wire protocols (MySQL, PostgreSQL, MongoDB, gRPC, REST), multi-dialect SQL & MongoDB syntax, sub-millisecond AI vector search, GraphRAG multi-hop traversal, and 128Hz robotics telemetry with zero GC pauses.
         </p>
       </section>
 
@@ -641,18 +641,18 @@
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
           <pre id="c1-win"><code># 1. Double click the official 1-click launcher inside your extracted folder:
-start-faizdb-studio.bat
+start-tapisaurus-studio.bat
 
 # It starts the 5-Way Gateway and immediately opens Studio at:
 # http://localhost:27020</code></pre>
           <pre id="c1-cli" style="display:none;"><code># Start interactive shell directly:
-.\faizdb.exe shell
+.\tapisaurus.exe shell
 
 # Or start 5-Way server (using port 5433 to avoid local PostgreSQL conflicts):
-.\faizdb.exe serve --pg-port 5433 --mysql-port 3306</code></pre>
+.\tapisaurus.exe serve --pg-port 5433 --mysql-port 3306</code></pre>
           <pre id="c1-unix" style="display:none;"><code># 1-Line Universal Install & Run:
-curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.sh | bash
-./faizdb serve --pg-port 5433 --mysql-port 3306</code></pre>
+curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | bash
+./tapisaurus serve --pg-port 5433 --mysql-port 3306</code></pre>
         </div>
 
         <!-- Live Sandbox -->
@@ -682,7 +682,7 @@ curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/ins
         </div>
 
         <div class="scenario-box">
-          <strong>Scenario:</strong> Frontend developers love working with flexible JSON documents (MongoDB style), while data analysts and backend reporting teams need standard SQL queries. FaizDB unifies both without ETL pipelines!
+          <strong>Scenario:</strong> Frontend developers love working with flexible JSON documents (MongoDB style), while data analysts and backend reporting teams need standard SQL queries. TapisaurusDB unifies both without ETL pipelines!
         </div>
 
         <div class="code-container">
@@ -695,7 +695,7 @@ curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/ins
             </div>
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
-          <pre id="c2-mongo"><code>// Inside faizdb shell or MongoDB Compass (Port 27017):
+          <pre id="c2-mongo"><code>// Inside tapisaurus shell or MongoDB Compass (Port 27017):
 db.inventory.insert({
   "sku": "GPU-5090",
   "name": "NVIDIA RTX 5090",
@@ -722,7 +722,7 @@ FROM inventory;</code></pre>
 
 # Connect directly using official PyMongo driver on port 27017:
 client = MongoClient("mongodb://127.0.0.1:27017")
-db = client["faizdb"]
+db = client["tapisaurus"]
 db.inventory.insert_one({"sku": "GPU-5090", "price": 1999.00, "stock": 42})
 print("Inserted successfully into unified LSM storage!")</code></pre>
         </div>
@@ -753,7 +753,7 @@ print("Inserted successfully into unified LSM storage!")</code></pre>
         </div>
 
         <div class="scenario-box">
-          <strong>Scenario:</strong> 5,000 concert fans click "Buy Ticket" at the exact same millisecond when only 2 tickets remain. Under standard NoSQL, race conditions cause overselling. FaizDB enforces Multi-Version Concurrency Control (MVCC) with Write-Ahead Log (WAL) safety.
+          <strong>Scenario:</strong> 5,000 concert fans click "Buy Ticket" at the exact same millisecond when only 2 tickets remain. Under standard NoSQL, race conditions cause overselling. TapisaurusDB enforces Multi-Version Concurrency Control (MVCC) with Write-Ahead Log (WAL) safety.
         </div>
 
         <div class="code-container">
@@ -807,7 +807,7 @@ COMMIT;</code></pre>
         </div>
 
         <div class="scenario-box">
-          <strong>Scenario:</strong> You're building an AI Chatbot or Semantic Document Search. Instead of paying for a separate Pinecone or Milvus cluster, FaizDB indexes up to 4,096-dimension vectors natively using SIMD-accelerated HNSW.
+          <strong>Scenario:</strong> You're building an AI Chatbot or Semantic Document Search. Instead of paying for a separate Pinecone or Milvus cluster, TapisaurusDB indexes up to 4,096-dimension vectors natively using SIMD-accelerated HNSW.
         </div>
 
         <div class="code-container">
@@ -819,7 +819,7 @@ COMMIT;</code></pre>
             </div>
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
-          <pre id="c4-shell"><code># Inside faizdb shell:
+          <pre id="c4-shell"><code># Inside tapisaurus shell:
 demo vector
 
 # Output will index 4 concept vectors and perform sub-millisecond similarity search!</code></pre>
@@ -884,7 +884,7 @@ console.log('Top match similarity:', matches[0].similarity);</code></pre>
             </div>
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
-          <pre id="c5-cli"><code># Inside faizdb shell:
+          <pre id="c5-cli"><code># Inside tapisaurus shell:
 demo graph
 
 # Traverses knowledge graph from 'Ahmad' across 3 hops in 0.04ms!</code></pre>
@@ -892,7 +892,7 @@ demo graph
 curl -X POST http://127.0.0.1:27018/v1/graph/traverse \
   -H "Content-Type: application/json" \
   -d '{
-    "start_node": "developer_faiz",
+    "start_node": "developer_tapir",
     "relationship": "CONTRIBUTES_TO",
     "max_depth": 2
   }'</code></pre>
@@ -924,7 +924,7 @@ curl -X POST http://127.0.0.1:27018/v1/graph/traverse \
         </div>
 
         <div class="scenario-box">
-          <strong>Scenario:</strong> Warehouse robots and drones record telemetry at 128Hz. Heavy databases crash with Out-Of-Memory (OOM) or cause micro-stutters when garbage collection fires. FaizDB operates at 0 GC pauses with a strict 32MB RAM ceiling and offline WAL buffering.
+          <strong>Scenario:</strong> Warehouse robots and drones record telemetry at 128Hz. Heavy databases crash with Out-Of-Memory (OOM) or cause micro-stutters when garbage collection fires. TapisaurusDB operates at 0 GC pauses with a strict 32MB RAM ceiling and offline WAL buffering.
         </div>
 
         <div class="code-container">
@@ -935,7 +935,7 @@ curl -X POST http://127.0.0.1:27018/v1/graph/traverse \
             </div>
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
-          <pre id="c6-studio"><code>1. Open FaizDB Studio: http://localhost:27020
+          <pre id="c6-studio"><code>1. Open TapisaurusDB Studio: http://localhost:27020
 2. Click the new "Robot & Edge Chip" icon on the sidebar.
 3. Choose your Hardware Profile:
    - Microcontroller (16MB Cap)
@@ -992,7 +992,7 @@ while True:
             </div>
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
-          <pre id="c7-sql"><code>-- Execute full distributed profiling in faizdb shell or Query Console:
+          <pre id="c7-sql"><code>-- Execute full distributed profiling in tapisaurus shell or Query Console:
 EXPLAIN (ANALYZE, VERBOSE, COSTS) 
 SELECT o.order_id, u.name, o.amount 
 FROM orders o 
@@ -1026,13 +1026,13 @@ Planning Time: 0.042 ms | Execution Time: 0.380 ms</code></pre>
             <div class="module-icon">🐬</div>
             <div>
               <h2 class="module-title">Module 8: Enterprise Web Frameworks & Laravel / MySQL Wire (Port 3306)</h2>
-              <p class="module-sub">Plug existing MySQL, Laravel Eloquent, and PHP applications directly into FaizDB without code rewrites.</p>
+              <p class="module-sub">Plug existing MySQL, Laravel Eloquent, and PHP applications directly into TapisaurusDB without code rewrites.</p>
             </div>
           </div>
         </div>
 
         <div class="scenario-box">
-          <strong>Scenario:</strong> Your team maintains applications built for MySQL or MariaDB (Laravel Eloquent, PHP PDO, or Python mysqlclient). Rather than rewriting database drivers, connect directly to FaizDB's native MySQL Wire Protocol on Port 3306!
+          <strong>Scenario:</strong> Your team maintains applications built for MySQL or MariaDB (Laravel Eloquent, PHP PDO, or Python mysqlclient). Rather than rewriting database drivers, connect directly to TapisaurusDB's native MySQL Wire Protocol on Port 3306!
         </div>
 
         <div class="code-container">
@@ -1047,19 +1047,19 @@ Planning Time: 0.042 ms | Execution Time: 0.380 ms</code></pre>
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=faizdb
+DB_DATABASE=tapisaurus
 DB_USERNAME=root
 DB_PASSWORD=
 
-# Run migrations instantly on FaizDB:
+# Run migrations instantly on TapisaurusDB:
 # php artisan migrate</code></pre>
           <pre id="c8-cli" style="display:none;"><code># Connect using standard official MySQL CLI terminal client:
-mysql -h 127.0.0.1 -P 3306 -u root faizdb
+mysql -h 127.0.0.1 -P 3306 -u root tapisaurus
 
-# Verify FaizDB Universal Engine handshake:
+# Verify TapisaurusDB Universal Engine handshake:
 SELECT @@version, @@version_comment;
 SHOW TABLES;
-INSERT INTO articles (title, content) VALUES ('Hello FaizDB', 'Pure Safe Rust Engine');
+INSERT INTO articles (title, content) VALUES ('Hello TapisaurusDB', 'Pure Safe Rust Engine');
 SELECT * FROM articles;</code></pre>
         </div>
 
@@ -1089,7 +1089,7 @@ SELECT * FROM articles;</code></pre>
         </div>
 
         <div class="scenario-box">
-          <strong>Scenario:</strong> You are deploying FaizDB in a mission-critical banking or enterprise AI pipeline where power cuts, abrupt container terminations, and burst concurrency (100K+ req/s) must never cause data corruption, lock stalls, or split-brain partitions.
+          <strong>Scenario:</strong> You are deploying TapisaurusDB in a mission-critical banking or enterprise AI pipeline where power cuts, abrupt container terminations, and burst concurrency (100K+ req/s) must never cause data corruption, lock stalls, or split-brain partitions.
         </div>
 
         <div class="code-container">
@@ -1102,7 +1102,7 @@ SELECT * FROM articles;</code></pre>
             <button class="btn-copy" onclick="copyCode(this)">Copy</button>
           </div>
 
-          <pre id="c9-rust"><code>use faizdb_core::storage::{Engine, StorageConfig, Compression};
+          <pre id="c9-rust"><code>use tapisaurus_core::storage::{Engine, StorageConfig, Compression};
 
 // Configure production-hardened storage engine with LZ4, fsync & 16-shard ARC:
 let config = StorageConfig {
@@ -1115,24 +1115,24 @@ let config = StorageConfig {
 };
 
 let engine = Engine::open(config)?;
-println!("FaizDB Storage Engine initialized with Lock-Free SkipMap & sync_data durability");</code></pre>
-          <pre id="c9-cli" style="display:none;"><code># Start FaizDB with production audit hardening environment flags:
-FAIZDB_SYNC_WRITES=true \
-FAIZDB_COMPRESSION=lz4 \
-FAIZDB_MAX_CONNECTIONS=10000 \
-FAIZDB_DATA_DIR=/var/lib/faizdb \
-faizdb server
+println!("TapisaurusDB Storage Engine initialized with Lock-Free SkipMap & sync_data durability");</code></pre>
+          <pre id="c9-cli" style="display:none;"><code># Start TapisaurusDB with production audit hardening environment flags:
+TAPISAURUS_SYNC_WRITES=true \
+TAPISAURUS_COMPRESSION=lz4 \
+TAPISAURUS_MAX_CONNECTIONS=10000 \
+TAPISAURUS_DATA_DIR=/var/lib/tapisaurus \
+tapisaurus server
 
 # Verify binary HNSW vector format & storage statistics:
-faizdb stats --data-dir /var/lib/faizdb
-# Output shows: FAIZHNSW binary v1, LZ4 compressed blocks, 0 WAL uncommitted bytes</code></pre>
+tapisaurus stats --data-dir /var/lib/tapisaurus
+# Output shows: TPSHNSW1 binary v1, LZ4 compressed blocks, 0 WAL uncommitted bytes</code></pre>
           <pre id="c9-raft" style="display:none;"><code># Distributed Raft Cluster configuration (Follower-first boot, BSON binary log store):
-faizdb cluster join \
+tapisaurus cluster join \
   --node-id node-02 \
   --peer 10.0.0.1:50051 \
   --peer 10.0.0.2:50051 \
   --peer 10.0.0.3:50051 \
-  --state-dir /var/lib/faizdb/raft \
+  --state-dir /var/lib/tapisaurus/raft \
   --log-format bson-binary
 
 # Direct O(1) Raft log lookup + CRC32 verification enabled automatically</code></pre>
@@ -1159,12 +1159,12 @@ faizdb cluster join \
     function toggleTheme() {
       const html = document.documentElement;
       const isDark = html.classList.toggle('dark');
-      localStorage.setItem('faizdb_theme', isDark ? 'dark' : 'light');
+      localStorage.setItem('tapisaurus_theme', isDark ? 'dark' : 'light');
       document.getElementById('theme-toggle').innerText = isDark ? '☀️ Light' : '🌙 Dark';
     }
 
     // Initialize Theme
-    const savedTheme = localStorage.getItem('faizdb_theme');
+    const savedTheme = localStorage.getItem('tapisaurus_theme');
     if (savedTheme === 'dark') {
       document.documentElement.classList.add('dark');
       document.getElementById('theme-toggle').innerText = '☀️ Light';
@@ -1199,7 +1199,7 @@ faizdb cluster join \
 
     // Progress Tracking
     const totalModules = 9;
-    let completedSet = new Set(JSON.parse(localStorage.getItem('faizdb_tutorial_progress') || '[]'));
+    let completedSet = new Set(JSON.parse(localStorage.getItem('tapisaurus_tutorial_progress') || '[]'));
 
     function updateProgressUI() {
       document.getElementById('progress-text').innerText = `${completedSet.size} of ${totalModules} Completed`;
@@ -1234,18 +1234,18 @@ faizdb cluster join \
       } else {
         completedSet.add(moduleId);
       }
-      localStorage.setItem('faizdb_tutorial_progress', JSON.stringify(Array.from(completedSet)));
+      localStorage.setItem('tapisaurus_tutorial_progress', JSON.stringify(Array.from(completedSet)));
       updateProgressUI();
     }
 
     // Interactive Sandbox Simulations
     function runSandbox(step) {
       const out = document.getElementById(`output-${step}`);
-      out.innerText = 'Executing query on FaizDB engine...\n';
+      out.innerText = 'Executing query on TapisaurusDB engine...\n';
 
       setTimeout(() => {
         if (step === 1) {
-          out.innerText = `🟢 HTTP/REST 27018 : Status 200 OK (Engine: FaizDB v0.1.0, Latency: 0.18ms)\n` +
+          out.innerText = `🟢 HTTP/REST 27018 : Status 200 OK (Engine: TapisaurusDB v0.1.0, Latency: 0.18ms)\n` +
             `🐬 MySQL Wire 3306  : Listening (Ready for MySQL CLI / PHP mysqli / Laravel)\n` +
             `🐘 Postgres 5433   : Listening (Ready for psql / DBeaver / Grafana / SQL ORMs)\n` +
             `🍃 Mongo Wire 27017 : Listening (Ready for PyMongo / Mongoose / Compass)\n` +
@@ -1277,9 +1277,9 @@ faizdb cluster join \
             `HNSW Graph visited 18 nodes across 3 layers. 8-lane SIMD hardware loop unrolled. Zero GC lag.`;
         } else if (step === 5) {
           out.innerText = `[GraphRAG Knowledge Graph Traversal]\n` +
-            `Root Node: 'developer_faiz' | Max Depth: 2 Hops\n` +
-            `Path 1: (developer_faiz) --[CREATED]--> (FaizDB Engine) --[WRITTEN_IN]--> (Safe Rust)\n` +
-            `Path 2: (developer_faiz) --[COOPERATES_WITH]--> (Edge Robotics) --[TARGET_ARCH]--> (ARM64)\n` +
+            `Root Node: 'developer_tapir' | Max Depth: 2 Hops\n` +
+            `Path 1: (developer_tapir) --[CREATED]--> (TapisaurusDB Engine) --[WRITTEN_IN]--> (Safe Rust)\n` +
+            `Path 2: (developer_tapir) --[COOPERATES_WITH]--> (Edge Robotics) --[TARGET_ARCH]--> (ARM64)\n` +
             `Retrieved 4 contextual entity relations in 0.042ms for LLM context grounding.`;
         } else if (step === 6) {
           out.innerText = `[Robotics 128Hz Telemetry Ingest Loop]\n` +
@@ -1298,25 +1298,25 @@ faizdb cluster join \
         } else if (step === 8) {
           out.innerText = `[MySQL HandshakeV10 & Query Simulation]\n` +
             `TCP Handshake: Connected to 127.0.0.1:3306\n` +
-            `<-- Server Greeting: HandshakeV10 (Version: '8.0.35-FaizDB-Universal', ConnID: 42, Auth: mysql_native_password)\n` +
-            `--> Client Response: HandshakeResponse41 (User: 'root', DB: 'faizdb', Charset: utf8mb4)\n` +
+            `<-- Server Greeting: HandshakeV10 (Version: '8.0.35-TapisaurusDB-Universal', ConnID: 42, Auth: mysql_native_password)\n` +
+            `--> Client Response: HandshakeResponse41 (User: 'root', DB: 'tapisaurus', Charset: utf8mb4)\n` +
             `<-- OK_Packet (0x00): Authentication Successful (0 warnings)\n` +
             `--> COM_QUERY: 'SELECT @@version_comment, @@version'\n` +
             `--------------------------------------------------------------------------------\n` +
             `| @@version_comment                                    | @@version             |\n` +
             `--------------------------------------------------------------------------------\n` +
-            `| FaizDB Universal Multi-Model Engine (Safe Rust)       | 8.0.35-FaizDB         |\n` +
+            `| TapisaurusDB Universal Multi-Model Engine (Safe Rust)       | 8.0.35-TapisaurusDB         |\n` +
             `--------------------------------------------------------------------------------\n` +
             `Handshake & Query resolved in 0.12ms. Compatible with Laravel Eloquent & MySQL CLI.`;
         } else if (step === 9) {
           out.innerText = `[Hard Crash Durability & Recovery Verification]\n` +
             `--> Injecting SIGKILL (pkill -9) during active 50,000 write burst...\n` +
             `[Process Terminated Abruptly]\n` +
-            `[FaizDB Re-launching from ./prod_data]...\n` +
+            `[TapisaurusDB Re-launching from ./prod_data]...\n` +
             `✓ Initializing Lock-Free MemTable (crossbeam_skiplist::SkipMap)\n` +
             `✓ Reading Write-Ahead Log (WAL): Validating 32-bit CRC32 checksums...\n` +
             `✓ Verified 50,000 WAL records flushed via sync_data() prior to kill. Replayed 0 torn records.\n` +
-            `✓ Loading Binary HNSW Vector Index (FAIZHNSW): 4-byte LE floats loaded in 0.82ms (50x faster than JSON)\n` +
+            `✓ Loading Binary HNSW Vector Index (TPSHNSW1): 4-byte LE floats loaded in 0.82ms (50x faster than JSON)\n` +
             `✓ Opening LZ4 Compressed SSTable blocks: 0 block corruption detected (Space saved: 63.4%)\n` +
             `✓ Initializing ShardedArcCache (16 mutex shards, 0 read contention)\n` +
             `✓ Raft Consensus: Node initialized as Follower; commit_index=42 restored safely.\n` +

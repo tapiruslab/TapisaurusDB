@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for FaizDB Studio Frontend
+# Multi-stage Dockerfile for TapisaurusDB Studio Frontend
 FROM node:22-alpine AS builder
 
 WORKDIR /app
@@ -26,7 +26,7 @@ RUN echo 'server { \
         try_files $uri $uri/ /index.html; \
     } \
     location /v1/ { \
-        proxy_pass http://faizdb:27018/v1/; \
+        proxy_pass http://tapisaurus:27018/v1/; \
         proxy_set_header Host $host; \
         proxy_set_header X-Real-IP $remote_addr; \
     } \

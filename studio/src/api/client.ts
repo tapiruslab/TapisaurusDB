@@ -1,5 +1,5 @@
 /**
- * FaizDB Studio REST Client
+ * TapisaurusDB Studio REST Client
  * JWT-aware — obtains a short-lived token via /v1/auth/login and refreshes automatically.
  */
 
@@ -31,10 +31,10 @@ export interface AuthSession {
   expiresAt: number; // unix ms
 }
 
-const SESSION_KEY = 'faizdb_session';
-const CLUSTER_TOKEN_KEY = 'faizdb_cluster_token';
+const SESSION_KEY = 'tapisaurus_session';
+const CLUSTER_TOKEN_KEY = 'tapisaurus_cluster_token';
 
-class FaizApiClient {
+class TapisaurusApiClient {
   private baseUrl: string = '';
 
   // ── Session Management ────────────────────────────────────────────────────
@@ -88,8 +88,8 @@ class FaizApiClient {
   getClusterToken(): string {
     return (
       sessionStorage.getItem(CLUSTER_TOKEN_KEY) ||
-      import.meta.env.VITE_FAIZDB_CLUSTER_TOKEN ||
-      'faizdb-cluster-secret'
+      import.meta.env.VITE_TAPISAURUS_CLUSTER_TOKEN ||
+      'tapisaurus-cluster-secret'
     );
   }
 
@@ -344,4 +344,4 @@ class FaizApiClient {
   }
 }
 
-export const api = new FaizApiClient();
+export const api = new TapisaurusApiClient();

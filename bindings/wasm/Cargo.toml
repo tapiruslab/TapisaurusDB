@@ -1,18 +1,18 @@
 [package]
-name = "faizdb-wasm"
+name = "tapisaurus-wasm"
 version = "0.1.0"
 edition = "2021"
-authors = ["Ahmad Faiz <faiz@ict.house>"]
+authors = ["Ahmad Faiz <faiz@tapirusdb.com>"]
 license = "BSL-1.1"
-description = "WebAssembly (WASM) in-browser headless database engine for FaizDB"
+description = "WebAssembly (WASM) in-browser headless database engine for TapisaurusDB"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-faizdb-core = { path = "../../faizdb-core" }
-faizdb-query = { path = "../../faizdb-query" }
-faizdb-vector = { path = "../../faizdb-vector" }
+tapisaurus-core = { path = "../../tapisaurus-core" }
+tapisaurus-query = { path = "../../tapisaurus-query" }
+tapisaurus-vector = { path = "../../tapisaurus-vector" }
 wasm-bindgen = "0.2.127"
 serde = { workspace = true }
 serde_json = { workspace = true }

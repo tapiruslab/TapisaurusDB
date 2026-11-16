@@ -1,7 +1,7 @@
-# 🏆 FaizDB Enterprise Production Standards & Architectural Verification Specification
+# 🏆 TapisaurusDB Enterprise Production Standards & Architectural Verification Specification
 **Official Verification & Compliance Documentation**
 **Date:** September 2026  
-**System:** FaizDB Multi-Model AI-Native Database Engine (`ictdothouse/faizdb`)  
+**System:** TapisaurusDB Multi-Model AI-Native Database Engine (`tapiruslab/TapisaurusDB`)  
 **Target Standard:** **100% Full Enterprise Production Compliance**  
 **Verification Script:** `bash scripts/verify_all.sh` / `powershell scripts/verify_all.ps1`
 
@@ -35,13 +35,13 @@ All 6 core enterprise criteria have been implemented and verified with productio
 ### 1. 🟢 Benchmark Independent Verification & Realistic Workloads (Production Grade Verification)
 * **Architecture Requirement:** Production claims require independent verification scripts, side-by-side database comparison, and realistic load testing.
 * **Engineering Solution:**
-  1. **Criterion Microbenchmark Suite** (`faizdb-core/benches/storage_bench.rs`):
+  1. **Criterion Microbenchmark Suite** (`tapisaurus-core/benches/storage_bench.rs`):
      - `bench_collection_ingestion`: Evaluates 1k, 10k, and 50k document ingestion rates on lock-free MemTable/SkipList structures.
      - `bench_sequential_scan`: Evaluates 50k document sequential table scans.
      - `bench_secondary_index_lookup`: Tests B-Tree secondary index point lookup latencies.
      - `bench_persistent_storage_wal`: Measures durable WAL append & storage engine throughput.
   2. **Independent Comparative Benchmark Runner** (`scripts/benchmarks/benchmark_comparison.py`):
-     - Evaluates FaizDB against SQLite (WAL mode, production tuning) under standardized **YCSB Workloads**:
+     - Evaluates TapisaurusDB against SQLite (WAL mode, production tuning) under standardized **YCSB Workloads**:
        - **Workload A (50/50 R/W)**: Heavy update and insert workloads.
        - **Workload B (95/5 Read)**: Read-predominant analytics.
        - **Workload C (100% Read)**: Cache-hit index scans.
@@ -75,11 +75,11 @@ All 6 core enterprise criteria have been implemented and verified with productio
 ### 3. 🟡 Comprehensive Testing Coverage & Fuzz Testing (Fault Injection & Crash Resilience)
 * **Architecture Requirement:** Comprehensive Rust integration tests for critical durability paths and fuzz testing for edge cases.
 * **Engineering Solution:**
-  1. **Durability & Crash Recovery Integration Tests** (`faizdb-core/tests/test_storage_durability.rs`):
+  1. **Durability & Crash Recovery Integration Tests** (`tapisaurus-core/tests/test_storage_durability.rs`):
      - `test_wal_crash_recovery_durability`: Simulates process crash without flush, verifies 100% data recovery from WAL upon reopen.
      - `test_sstable_bloom_filter_guarantee`: Verifies Bloom filter guarantees zero false negatives across 500 keys.
      - `test_collection_persistence_with_storage_engine`: Verifies document collection persistence to disk.
-  2. **Fuzz Testing & Fault Injection** (`faizdb-core/tests/test_fuzz_storage.rs`):
+  2. **Fuzz Testing & Fault Injection** (`tapisaurus-core/tests/test_fuzz_storage.rs`):
      - `test_fuzz_truncated_wal_recovery`: Truncates WAL files mid-record (simulating sudden power loss); verifies engine recovers all complete records safely without panicking.
      - `test_fuzz_corrupted_magic_bytes`: Corrupts header magic bytes; engine isolates corrupted file and skips gracefully.
      - `test_fuzz_crc_checksum_mismatch`: Injects bitflips into record payload; engine detects CRC mismatch and truncates replay at corruption boundary without crashing.
@@ -89,12 +89,12 @@ All 6 core enterprise criteria have been implemented and verified with productio
 ### 4. 🟡 Observability & Monitoring Hooks (Production SRE Telemetry)
 * **Architecture Requirement:** Production observability requires live Prometheus metrics with latency histograms, OpenTelemetry trace context propagation, and diagnostic profiling endpoints.
 * **Engineering Solution:**
-  1. **Live Prometheus Metrics Exporter** (`faizdb-server/src/api/metrics.rs`):
+  1. **Live Prometheus Metrics Exporter** (`tapisaurus-server/src/api/metrics.rs`):
      - Standard `# HELP` and `# TYPE` formatting.
-     - Counters: `faizdb_operations_total`, `faizdb_io_bytes_total`, `faizdb_wal_syncs_total`.
+     - Counters: `tapisaurus_operations_total`, `tapisaurus_io_bytes_total`, `tapisaurus_wal_syncs_total`.
      - Latency Histograms: microsecond buckets `[100µs, 500µs, 1ms, 5ms, 10ms, 50ms, 100ms, +Inf]` measuring end-to-end request latencies.
-     - Gauges: `faizdb_active_connections`, `faizdb_cache_hit_ratio`, `faizdb_uptime_seconds`.
-  2. **W3C Distributed Tracing & Correlation IDs** (`faizdb-server/src/api/middleware.rs`):
+     - Gauges: `tapisaurus_active_connections`, `tapisaurus_cache_hit_ratio`, `tapisaurus_uptime_seconds`.
+  2. **W3C Distributed Tracing & Correlation IDs** (`tapisaurus-server/src/api/middleware.rs`):
      - Extracts or generates W3C `traceparent` headers (`00-{trace_id}-{span_id}-01`).
      - Extracts or propagates `x-correlation-id`.
      - Structured logging using `tracing` spans.
@@ -107,7 +107,7 @@ All 6 core enterprise criteria have been implemented and verified with productio
 ### 5. 🟠 Advanced Backup, PITR & AES-256-GCM Encryption (Disaster Recovery & Zero-Trust Security)
 * **Architecture Requirement:** Enterprise data protection mandates incremental backups, point-in-time recovery (PITR), and zero-trust at-rest encryption.
 * **Engineering Solution:**
-  1. **Incremental Snapshots** (`faizdb-core/src/backup/snapshot.rs`):
+  1. **Incremental Snapshots** (`tapisaurus-core/src/backup/snapshot.rs`):
      - Differentiates `BackupType::Full` and `BackupType::Incremental`.
      - `SnapshotManifest` tracks `start_lsn` and `end_lsn`.
      - `build_incremental_snapshot` captures only documents mutated or added since base backup.
@@ -125,7 +125,7 @@ All 6 core enterprise criteria have been implemented and verified with productio
 ### 6. 🟠 Cost-Based Query Optimizer (CBO) (Adaptive Workload Execution)
 * **Architecture Requirement:** High-scale relational queries require cost-based optimization, equi-width column histograms, and adaptive scan selection.
 * **Engineering Solution:**
-  1. **Equi-Width Column Histograms** (`faizdb-query/src/optimizer/mod.rs`):
+  1. **Equi-Width Column Histograms** (`tapisaurus-query/src/optimizer/mod.rs`):
      - `ColumnHistogram` computes bucket frequencies and linear interpolation for range filters (`<`, `<=`, `>`, `>=`, `BETWEEN`).
   2. **Table Statistics & Cardinality**:
      - `TableStatistics` tracks document count, average tuple size, null counts, min/max numerics, and distinct values (NDV).
@@ -160,19 +160,19 @@ powershell -ExecutionPolicy Bypass -File scripts/verify_all.ps1
 cargo test --workspace
 
 # 2. Run durability and crash recovery tests
-cargo test -p faizdb-core --test test_storage_durability
+cargo test -p tapisaurus-core --test test_storage_durability
 
 # 3. Run Raft consensus multi-node tests
-cargo test -p faizdb-core --test test_raft_consensus
+cargo test -p tapisaurus-core --test test_raft_consensus
 
 # 4. Run incremental backup & PITR recovery tests
-cargo test -p faizdb-core --test test_backup_pitr
+cargo test -p tapisaurus-core --test test_backup_pitr
 
 # 5. Run storage engine fuzz tests
-cargo test -p faizdb-core --test test_fuzz_storage
+cargo test -p tapisaurus-core --test test_fuzz_storage
 
 # 6. Run CBO query optimizer tests
-cargo test -p faizdb-query --test test_query_cbo
+cargo test -p tapisaurus-query --test test_query_cbo
 
 # 7. Run comparative load benchmark vs SQLite
 python3 scripts/benchmarks/benchmark_comparison.py
@@ -227,12 +227,12 @@ Following completion of Phase 2 features (out-of-core pagination, drop collectio
 * **Multi-Dialect Drop Collection Parity:** Added parser support for `DROP TABLE`, `DROP COLLECTION`, and `db.collection.drop()`, plus REST endpoint `DELETE /v1/collections/{name}` with RBAC write protection.
 * **Clippy & Code Integrity:** 100% clean under `cargo clippy --all-targets -- -D warnings` (0 warnings, 0 errors in 7.87s).
 * **Workspace Unit & Core Library Suite:** 150/150 passed (0 failed, finished in 0.93s):
-  - `faizdb-core`: 76/76 passed
-  - `faizdb-vector`: 16/16 passed
-  - `faizdb-query`: 36/36 passed
-  - `faizdb-security`: 7/7 passed
-  - `faizdb-server`: 8/8 passed
-  - `faizdb-graph`: 7/7 passed
+  - `tapisaurus-core`: 76/76 passed
+  - `tapisaurus-vector`: 16/16 passed
+  - `tapisaurus-query`: 36/36 passed
+  - `tapisaurus-security`: 7/7 passed
+  - `tapisaurus-server`: 8/8 passed
+  - `tapisaurus-graph`: 7/7 passed
 * **Phase 2 Out-of-Core & Disk Fallback:** `test_pagination_and_disk_fallback` (9/9 passed in 0.02s).
 * **Storage Lifecycle Zero-Leak Drop:** `test_executor_drop_collection_purges_storage` (1/1 passed in 0.07s).
 * **Production Hardening & Operational Resilience:** `test_production_hardening_and_features` (9/9 passed in 1.06s).
@@ -243,7 +243,7 @@ Following completion of Phase 2 features (out-of-core pagination, drop collectio
 
 ## 10. 🚀 Phase 3 Automated Tiered Storage, SIMD Acceleration & Columnar Analytics (7 September 2026)
 
-Phase 3 transitions FaizDB from single-tier storage and scalar vector processing into an automated, hardware-accelerated hybrid enterprise engine:
+Phase 3 transitions TapisaurusDB from single-tier storage and scalar vector processing into an automated, hardware-accelerated hybrid enterprise engine:
 
 ### A. Architectural Enhancements & Forensic Hardening:
 1. **Automated Tiered Storage (`StorageEngine` + `TieredStorageManager`)**:
@@ -255,7 +255,7 @@ Phase 3 transitions FaizDB from single-tier storage and scalar vector processing
    - **Deterministic Migration Prioritization**: Candidates are evaluated oldest-first with projected hot capacity decrementing, preserving newest hot data in NVMe while evicting only qualifying tables.
    - Full persistence across database restarts: cold SSTables are scanned, registered, and validated during `StorageEngine::open()`.
    - Real-time telemetry (`StorageStats` and `TieredStorageStats`) tracking active hot vs. cold bytes, tables, and access frequencies.
-2. **Hardware SIMD Vector Acceleration (`faizdb-vector`)**:
+2. **Hardware SIMD Vector Acceleration (`tapisaurus-vector`)**:
    - Upgraded core distance kernels (`cosine_distance`, `squared_euclidean_distance`, and `dot_product_distance`) to 8-lane unrolled loops with trailing remainder handlers.
    - Emits 256-bit AVX2 / ARM NEON SIMD instructions, drastically accelerating high-dimensional vector search for modern 1536-dim (OpenAI) and 4096-dim (Llama) embeddings.
    - Hardened slice length bounds (`a.len().min(b.len())`) to defensively prevent out-of-bounds panics on mismatched inputs.
@@ -272,8 +272,8 @@ Phase 3 transitions FaizDB from single-tier storage and scalar vector processing
   - `test_automatic_tier_migration_on_flush`: PASS
   - `test_hot_compaction_preserves_tombstones_preventing_cold_zombie_resurrection`: PASS
   - `test_cold_sstable_compaction_and_purging`: PASS
-* **Hardware SIMD Vector Math (`faizdb-vector`)**: 16/16 passed in 0.38s (all distance, quantization, and HNSW index tests).
-* **Core Analytical Aggregations (`faizdb-core`)**: 76/76 unit tests passed.
+* **Hardware SIMD Vector Math (`tapisaurus-vector`)**: 16/16 passed in 0.38s (all distance, quantization, and HNSW index tests).
+* **Core Analytical Aggregations (`tapisaurus-core`)**: 76/76 unit tests passed.
 * **Static Analysis & Linting**: `cargo clippy --workspace --all-targets -- -D warnings` verified 100% clean with **0 warnings and 0 errors** across all 7 workspace crates in 26.66s.
 * **Full Workspace Test Suite (`cargo test --workspace`)**: 100% passed across all 7 crates (200+ unit, integration, wire protocol, and chaos tests).
 
@@ -319,26 +319,26 @@ Phase 3 transitions FaizDB from single-tier storage and scalar vector processing
 **Scope:** MVCC TOCTOU Concurrency Race, WAL Multi-Segment Sequence Continuity, PostgreSQL Extended Query Parameter Substitution & Integer Bounds, MongoDB Wire Cursor Reaping, Document Primary ID Lookups & Sorts, Relational Hash Join Null Isolation, and ANSI SQL WHERE Operators.
 
 ### A. Architectural Invariants & Guarantees:
-1. **MVCC TOCTOU Lost-Update Race Condition (`faizdb-core/src/transaction/mvcc.rs`)**:
+1. **MVCC TOCTOU Lost-Update Race Condition (`tapisaurus-core/src/transaction/mvcc.rs`)**:
    - `commit()` originally invoked `self.validate(txn)?` which acquired and released a read lock, and then separately acquired `self.committed_writes.write()`. Two concurrent transactions modifying identical write sets could both pass validation simultaneously, leading to silent lost updates.
    - **Implementation Guarantee**: Atomic validation: conflict detection is now executed directly under `committed_writes.write()`, serializing concurrent commits and guaranteeing strict Snapshot Isolation.
-2. **WAL Sequence Reset on Empty Rotated Segments (`faizdb-core/src/storage/wal.rs`)**:
+2. **WAL Sequence Reset on Empty Rotated Segments (`tapisaurus-core/src/storage/wal.rs`)**:
    - If a WAL segment was freshly created (8-byte header only) right before an unexpected shutdown or crash, `find_or_create_wal_file` returned `last_seq = 0`, resetting the global sequence counter and corrupting log ordering across earlier WAL segments.
    - **Implementation Guarantee**: The engine now scans existing WAL segments in reverse (`wal_files.iter().rev()`) to discover the highest recorded sequence across all previous segments.
-3. **PostgreSQL Wire Extended Query Parameter Substitution & Bounds Protection (`faizdb-server/src/wire/postgres/listener.rs`)**:
+3. **PostgreSQL Wire Extended Query Parameter Substitution & Bounds Protection (`tapisaurus-server/src/wire/postgres/listener.rs`)**:
    - `i16` count casts to `usize` for format codes and parameter counts were vulnerable to negative values (`-1` wrapping to `usize::MAX`).
    - Global `.replace(&format!("${}", idx + 1), ...)` corrupted queries where `$1` was a substring of `$10` or appeared within string literals like `'Price is $1'`.
    - **Implementation Guarantee**: Enforced `num >= 0` guards and implemented a tokenizer-based parameter substitution engine (`substitute_postgres_params`) that respects string literal boundaries and exact `$N` integer token matches.
-4. **MongoDB Wire Abandoned Cursor Memory Leak (`faizdb-server/src/wire/handler.rs`)**:
+4. **MongoDB Wire Abandoned Cursor Memory Leak (`tapisaurus-server/src/wire/handler.rs`)**:
    - `CURSOR_CACHE` retained paginated cursors indefinitely when clients disconnected or abandoned queries without exhausting batches or sending `killCursors`.
    - **Implementation Guarantee**: Integrated an active reaper (`reap_expired_cursors`) that purges abandoned cursors older than 10 minutes (600s) on cursor operations.
-5. **Document Primary Identifier (`_id` / `id`) Query & Sort Resolution (`faizdb-core` & `faizdb-query`)**:
+5. **Document Primary Identifier (`_id` / `id`) Query & Sort Resolution (`tapisaurus-core` & `tapisaurus-query`)**:
    - `doc.get_nested` only inspected the `doc.fields` map. Queries filtering on `_id` or `id` via `Collection::find` or sorting `ORDER BY id` returned `None`.
    - **Implementation Guarantee**: Added unified `matches_filter` in `Collection` and updated `sort_by` comparators in `executor.rs` and `handler.rs` to resolve `doc.id` natively.
-6. **Relational Hash Join NULL Key Isolation & Canonical Stringification (`faizdb-query/src/executor.rs`)**:
+6. **Relational Hash Join NULL Key Isolation & Canonical Stringification (`tapisaurus-query/src/executor.rs`)**:
    - Foreign keys with missing values defaulted to empty string (`""`), causing unrelated records without keys to join. Enums were debug-formatted as `Float(1.2)`.
    - **Implementation Guarantee**: Differentiated missing/NULL join keys: never match NULL in inner joins. Added canonical string representation for Float, Boolean, UUID, and DateTime values.
-7. **ANSI SQL WHERE Operators (`faizdb-query/src/parser.rs` & `ast.rs`)**:
+7. **ANSI SQL WHERE Operators (`tapisaurus-query/src/parser.rs` & `ast.rs`)**:
    - `<>` (ANSI SQL not equal) was previously misparsed as `>`. `IS NULL`, `IS NOT NULL`, and `LIKE '%pattern%'` were unsupported.
    - **Implementation Guarantee**: Added full support for `<>`, `IS NULL`, `IS NOT NULL`, and `LIKE` (`Contains`, `StartsWith`, `EndsWith`) in `parse_sql_where` and `ast.rs`.
 
@@ -357,25 +357,25 @@ Phase 3 transitions FaizDB from single-tier storage and scalar vector processing
 **Scope:** SQL Keyword Boundary & Substring Collision Isolation (`UPDATE`, `DELETE`, `CREATE/DROP INDEX`), Range Predicate Preservation (`BETWEEN` & `NOT BETWEEN`), Set Membership (`IN` & `NOT IN`), Compound Boolean Predicates (`OR` with Parentheses), PostgreSQL Wire Parse Message Underflow Guard, HNSW Tombstone Query Consistency, and MVCC Write Buffer Memory Pruning.
 
 ### A. Parser Boundaries & Subsystem Memory Guarantees:
-1. **SQL Keyword Boundary & Substring Collision Isolation (`faizdb-query/src/parser.rs`)**:
+1. **SQL Keyword Boundary & Substring Collision Isolation (`tapisaurus-query/src/parser.rs`)**:
    - `parse_update_query`, `parse_delete_query`, and `parse_create_index_query` previously relied on naive `.find("SET")`, `.find("WHERE")`, and `.find("ON")` substrings on uppercase inputs. Queries against tables named `settings`, `assets`, or `warehouse`, or indexes named `idx_location` triggered false matches on identifier substrings, mangling the AST and raising bogus syntax errors.
    - **Implementation Guarantee**: Implemented `find_keyword_top_level(text, keyword)` ensuring whole-word boundaries (`is_ascii_whitespace`, `;`, `(`, `)`, `,`) while strictly skipping string literals (`'...'`, `"..."`, `` `...` ``) and parenthesized blocks.
-2. **SQL `WHERE col BETWEEN val1 AND val2` & `NOT BETWEEN` Preservation (`faizdb-query/src/parser.rs`)**:
+2. **SQL `WHERE col BETWEEN val1 AND val2` & `NOT BETWEEN` Preservation (`tapisaurus-query/src/parser.rs`)**:
    - `parse_sql_where` previously split on `" AND "` indiscriminately. A clause like `WHERE age BETWEEN 18 AND 30` split into `age BETWEEN 18` and `30`, silently failing operator parsing and returning `FilterExpr::AlwaysTrue` (leaking all unfiltered rows).
    - **Implementation Guarantee**: Added `split_top_level_and` which tracks `has_unpaired_between` to preserve `BETWEEN ... AND ...` as a single atomic ternary predicate, translating it into `FilterExpr::And(vec![col >= low, col <= high])` and `NOT BETWEEN` into `FilterExpr::Or(vec![col < low, col > high])`.
-3. **SQL `WHERE col IN (...)` & `NOT IN (...)` Set Membership (`faizdb-query/src/parser.rs`)**:
+3. **SQL `WHERE col IN (...)` & `NOT IN (...)` Set Membership (`tapisaurus-query/src/parser.rs`)**:
    - `Operator::In` existed in AST but was completely unparseable from SQL text.
    - **Implementation Guarantee**: Added top-level parsing for `IN (...)` and `NOT IN (...)`, evaluating elements via `split_list_outside_quotes` into `FilterExpr::Field { field, op: Operator::In, value: Value::Array(...) }`.
-4. **Compound `OR` & Nested Parenthesized Conditions (`faizdb-query/src/parser.rs`)**:
+4. **Compound `OR` & Nested Parenthesized Conditions (`tapisaurus-query/src/parser.rs`)**:
    - `WHERE` only supported `AND`. Complex queries with `OR` or grouping like `(status = 'active' OR role = 'admin') AND age >= 18` were dropped or misparsed.
    - **Implementation Guarantee**: Added top-level `OR` splitting with proper standard boolean precedence over `AND`, combined with recursive outer-parentheses evaluation (`has_enclosing_parens`).
-5. **PostgreSQL Wire Parse Message Negative Parameter Count Guard (`faizdb-server/src/wire/postgres/listener.rs`)**:
+5. **PostgreSQL Wire Parse Message Negative Parameter Count Guard (`tapisaurus-server/src/wire/postgres/listener.rs`)**:
    - Parse message (`b'P'`) deserialized parameter count via `i16::from_be_bytes(...) as usize`. Clients sending `-1` (unspecified types) triggered integer underflow to $2^{64}-1$, locking the worker thread in a 100% CPU infinite loop.
    - **Implementation Guarantee**: Enforced `raw_num_params > 0` validation, capped counts at `min(10_000)`, and added immediate buffer exhaustion break statements.
-6. **`HnswIndex::try_search` Tombstone Deleted Index Inconsistency (`faizdb-vector/src/hnsw.rs`)**:
+6. **`HnswIndex::try_search` Tombstone Deleted Index Inconsistency (`tapisaurus-vector/src/hnsw.rs`)**:
    - `try_search` checked `self.nodes.is_empty()` instead of `self.is_empty()`. An index with all vectors tombstone-deleted failed to exit early, leading to divergence with `search()`.
    - **Implementation Guarantee**: Aligned `try_search` to verify `self.is_empty()`.
-7. **MVCC Committed Writes Unbounded Memory Pruning (`faizdb-core/src/transaction/mvcc.rs`)**:
+7. **MVCC Committed Writes Unbounded Memory Pruning (`tapisaurus-core/src/transaction/mvcc.rs`)**:
    - In long-running servers, `committed_writes` map grew indefinitely without automated pruning.
    - **Implementation Guarantee**: Added automatic clearing in `TransactionManager::commit` when no active concurrent transactions exist, and automatic invocation of `gc()` when entries exceed 10,000 during concurrent load.
 
@@ -393,27 +393,27 @@ Phase 3 transitions FaizDB from single-tier storage and scalar vector processing
 
 ## 🚀 Distributed Cluster Architecture, Outbound CDC Streaming & Edge WASM Engine Verification
 
-**Scope:** Distributed Scatter-Gather Query Coordinator (`faizdb-core/src/cluster/scatter_gather.rs`), Active Outbound CDC Stream Dispatcher (`faizdb-server/src/stream/cdc_dispatcher.rs`), and In-Browser WebAssembly Headless Engine (`bindings/wasm`).
+**Scope:** Distributed Scatter-Gather Query Coordinator (`tapisaurus-core/src/cluster/scatter_gather.rs`), Active Outbound CDC Stream Dispatcher (`tapisaurus-server/src/stream/cdc_dispatcher.rs`), and In-Browser WebAssembly Headless Engine (`bindings/wasm`).
 
 ### A. Subsystems Implemented & Verified:
-1. **Active Outbound CDC Stream Dispatcher (`faizdb-server/src/stream/cdc_dispatcher.rs`)**:
+1. **Active Outbound CDC Stream Dispatcher (`tapisaurus-server/src/stream/cdc_dispatcher.rs`)**:
    - Expanded `CdcEnvelope` with `new_update(seq, col, doc_id, before, after)` and `new_delete(seq, col, doc_id, before)`.
    - Built asynchronous multi-worker `CdcOutboundDispatcher` supporting retry with exponential backoff and jitter, configurable batching (`batch_size`, `flush_interval_ms`), channel buffer bounds, and live atomic metrics (`delivered_total`, `failed_total`, `retried_total`, `lag_records`).
    - Standardized `CdcTransportBackend` supporting `InMemoryCdcTransport` for ultra-fast integration testing and `HttpWebhookTransport` for Kafka REST proxies, Debezium bridges, and downstream HTTP webhooks.
-   - Verified in `faizdb-server/tests/test_outbound_cdc.rs` with full mutation lifecycle validation and batch delivery checks.
+   - Verified in `tapisaurus-server/tests/test_outbound_cdc.rs` with full mutation lifecycle validation and batch delivery checks.
 
-2. **Distributed Scatter-Gather Query Coordinator (`faizdb-core/src/cluster/scatter_gather.rs`)**:
-   - Integrated with FaizDB's 16,384 virtual hash slot architecture (`compute_slot` with `{hash_tag}` extraction).
+2. **Distributed Scatter-Gather Query Coordinator (`tapisaurus-core/src/cluster/scatter_gather.rs`)**:
+   - Integrated with TapisaurusDB's 16,384 virtual hash slot architecture (`compute_slot` with `{hash_tag}` extraction).
    - Intelligently routes point queries and tagged range queries directly to candidate partitions without broadcast penalty.
    - Executes parallel multi-partition scattering for global scans, merging partial streams with multi-field sort merge (`ORDER BY ... ASC/DESC`) and streaming `LIMIT`/`OFFSET`.
    - Columnar aggregate pushdown: gathers partial `COUNT`, `SUM`, `MIN`, and `MAX` across distributed shards and computes exact global averages and aggregates.
-   - Verified in `faizdb-core/tests/test_scatter_gather.rs`.
+   - Verified in `tapisaurus-core/tests/test_scatter_gather.rs`.
 
 3. **In-Browser WebAssembly (WASM) Headless Engine (`bindings/wasm`)**:
-   - Exported pure in-memory FaizDB execution to browser and Node.js environments via `wasm-bindgen`.
+   - Exported pure in-memory TapisaurusDB execution to browser and Node.js environments via `wasm-bindgen`.
    - Supports zero-server document collections, CRUD mutations, JSON document serialization, and multi-field queries.
    - Ships client-side in-memory HNSW vector search with metric selection (Cosine, Euclidean, Dot Product) and top-k approximate nearest neighbor search directly in the browser tab.
-   - Verified in `bindings/wasm/src/lib.rs` unit tests under `cargo test -p faizdb-wasm`.
+   - Verified in `bindings/wasm/src/lib.rs` unit tests under `cargo test -p tapisaurus-wasm`.
 
 ### B. Automated Verification Suite:
 - `test_outbound_cdc.rs`: **PASS** (2 tests)
@@ -425,7 +425,7 @@ Phase 3 transitions FaizDB from single-tier storage and scalar vector processing
 
 ## 🏁 Conclusion & Enterprise Certification Status
 
-All enterprise criteria and architectural standards have been thoroughly verified and certified across all core subsystems and development phases (Phases 1 through 5). FaizDB includes:
+All enterprise criteria and architectural standards have been thoroughly verified and certified across all core subsystems and development phases (Phases 1 through 5). TapisaurusDB includes:
 - Production-grade Raft consensus with disk WAL persistence and dynamic quorums.
 - Comprehensive Rust durability, PITR, and fuzz test suites.
 - Production-ready Prometheus metrics with latency histograms and W3C tracing.
@@ -436,7 +436,7 @@ All enterprise criteria and architectural standards have been thoroughly verifie
 - Phase 3 Hybrid Automated Tiered Storage (Hot NVMe + Cold Tier), 8-Lane SIMD Vector Acceleration, and High-Speed Columnar Analytical Batch Aggregations.
 - Phase 4 Active Outbound CDC Stream Dispatcher (Kafka REST / Webhooks) and Distributed Scatter-Gather Query Coordinator (16,384 virtual hash slots, sort-merge, columnar pushdown).
 - Phase 5 In-Browser WebAssembly (WASM) Headless Engine for client-side edge databases and local vector search.
-- Decoupled Graph Companion Engine (`faizdb-graph`) with PageRank, Dijkstra, K-hop traversal, and snapshot persistence.
+- Decoupled Graph Companion Engine (`tapisaurus-graph`) with PageRank, Dijkstra, K-hop traversal, and snapshot persistence.
 - 100% workspace unit and integration tests passing with 0 warnings on Clippy.
 
 **Final Certification: 100% Pass (Grade A+ — Enterprise Mission-Critical Certified)**.

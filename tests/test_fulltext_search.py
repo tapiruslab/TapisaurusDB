@@ -4,17 +4,17 @@ from pymongo import MongoClient
 
 def test_fulltext_search():
     base_url = "http://127.0.0.1:27018"
-    print("1. Connecting via pymongo to FaizDB (mongodb://127.0.0.1:27017)...")
+    print("1. Connecting via pymongo to TapisaurusDB (mongodb://127.0.0.1:27017)...")
     client = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
-    db = client["faizdb"]
+    db = client["tapisaurus"]
     col = db["tech_articles"]
 
-    print("2. Inserting rich technical articles into FaizDB...")
+    print("2. Inserting rich technical articles into TapisaurusDB...")
     articles = [
         {
-            "title": "FaizDB: The High-Performance Distributed Rust Database",
+            "title": "TapisaurusDB: The High-Performance Distributed Rust Database",
             "category": "Databases",
-            "content": "FaizDB is a blazing fast NoSQL engine with native HNSW vector search, Raft clustering, and BM25 full-text indexing.",
+            "content": "TapisaurusDB is a blazing fast NoSQL engine with native HNSW vector search, Raft clustering, and BM25 full-text indexing.",
             "author": "Ahmad Faiz"
         },
         {
@@ -47,7 +47,7 @@ def test_fulltext_search():
         assert len(res["data"]) >= 2
         titles = [d.get("title", "") for d in res["data"]]
         print(f"   • Matched Articles: {titles}")
-        assert any("FaizDB" in t for t in titles)
+        assert any("TapisaurusDB" in t for t in titles)
         assert any("Rust" in t for t in titles)
 
     print("\n4. Testing Fuzzy Typo Matching ('databse' with typo)...")

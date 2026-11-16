@@ -1,6 +1,6 @@
-# 🧪 FaizDB: Testing & Benchmarking Guide
+# 🧪 TapisaurusDB: Testing & Benchmarking Guide
 
-This guide details how to run unit tests, multi-protocol integration tests, high-throughput benchmarks, and inspect real-world verification results across the FaizDB workspace.
+This guide details how to run unit tests, multi-protocol integration tests, high-throughput benchmarks, and inspect real-world verification results across the TapisaurusDB workspace.
 
 ---
 
@@ -16,18 +16,18 @@ This guide details how to run unit tests, multi-protocol integration tests, high
 
 ## 1. Actual Test Run Results
 
-The following metrics represent verified test runs conducted against the optimized release build of FaizDB:
+The following metrics represent verified test runs conducted against the optimized release build of TapisaurusDB:
 
 ### A. Workspace Unit & Integration Tests (`cargo test --workspace`):
 * **Status:** ✅ **200+ Tests Passed (100% Pass Rate across all Workspace Crates)**
 * **Compilation Status:** **0 Errors, 0 Warnings** (Strict Clean Build under `cargo clippy -- -D warnings`)
 * **Tested Monorepo Suites & Crates:**
-  * `faizdb-core` (86 tests: Dynamic LSM-Tree Anti-Stall Compaction, MemTable, WAL with Torn-Write Recovery, MVCC ACID, BM25, TTL, Raft Disk Consensus, Storage Durability, Storage Fuzzing, Backup PITR AES-256-GCM)
-  * `faizdb-server` (66+ tests: Jepsen Distributed Chaos Suite, Multi-Protocol Handshake, Auth Flow, Chaos CRDT Partition Healing, Document CRUD, Durability & Transaction Write Staging, Vector & Graph REST API, Vector Search, Wire Protocol Security & Performance Benchmarks, PostgreSQL Virtual Catalog & Extended Query Protocol, MongoDB Stateful Cursors & O(1) Lookup, Enterprise Consistency & Indexing Suite, Production Hardening & Operational Standards, TLS / HTTPS Transport)
-  * `faizdb-vector` (16 tests: Multi-Layer HNSW, Cosine/L2/Manhattan, Scalar & Binary 32x Quantization, GDPR Tombstone Deletion, In-Place Mutation)
-  * `faizdb-query` (35 tests: openCypher Parser, Hybrid Cypher-GraphRAG + Vector Executor, AST Parser, SQL & Mongo UPDATE, Multi-Table Hash INNER/LEFT JOIN, ORDER BY ASC/DESC, Distributed Scatter-Gather Reduction, Cost-Based CBO Optimizer, $unwind Aggregation Pipeline)
-  * `faizdb-security` (14 tests: AES-256-GCM AEAD, Argon2id, Ed25519 JWT RBAC, Rustls / Ring TLS Self-Signed & PEM Server Config, Central UserStore)
-  * `faizdb-graph` (7 tests: Knowledge Graph, Multi-Hop BFS/DFS Traversal, Dijkstra Shortest Path, Incident Edge Pruning & Deduplication, Deterministic `extract_rag_context` Markdown Extraction, In-Memory `SemanticCache` Cosine Similarity & TTL Expiry)
+  * `tapisaurus-core` (86 tests: Dynamic LSM-Tree Anti-Stall Compaction, MemTable, WAL with Torn-Write Recovery, MVCC ACID, BM25, TTL, Raft Disk Consensus, Storage Durability, Storage Fuzzing, Backup PITR AES-256-GCM)
+  * `tapisaurus-server` (66+ tests: Jepsen Distributed Chaos Suite, Multi-Protocol Handshake, Auth Flow, Chaos CRDT Partition Healing, Document CRUD, Durability & Transaction Write Staging, Vector & Graph REST API, Vector Search, Wire Protocol Security & Performance Benchmarks, PostgreSQL Virtual Catalog & Extended Query Protocol, MongoDB Stateful Cursors & O(1) Lookup, Enterprise Consistency & Indexing Suite, Production Hardening & Operational Standards, TLS / HTTPS Transport)
+  * `tapisaurus-vector` (16 tests: Multi-Layer HNSW, Cosine/L2/Manhattan, Scalar & Binary 32x Quantization, GDPR Tombstone Deletion, In-Place Mutation)
+  * `tapisaurus-query` (35 tests: openCypher Parser, Hybrid Cypher-GraphRAG + Vector Executor, AST Parser, SQL & Mongo UPDATE, Multi-Table Hash INNER/LEFT JOIN, ORDER BY ASC/DESC, Distributed Scatter-Gather Reduction, Cost-Based CBO Optimizer, $unwind Aggregation Pipeline)
+  * `tapisaurus-security` (14 tests: AES-256-GCM AEAD, Argon2id, Ed25519 JWT RBAC, Rustls / Ring TLS Self-Signed & PEM Server Config, Central UserStore)
+  * `tapisaurus-graph` (7 tests: Knowledge Graph, Multi-Hop BFS/DFS Traversal, Dijkstra Shortest Path, Incident Edge Pruning & Deduplication, Deterministic `extract_rag_context` Markdown Extraction, In-Memory `SemanticCache` Cosine Similarity & TTL Expiry)
   * Documentation doctests (2 tests)
 * **Latest Verification Reference:** See [`LATEST_SYSTEM_VERIFICATION_AND_BENCHMARKS.md`](LATEST_SYSTEM_VERIFICATION_AND_BENCHMARKS.md) and [`PRODUCTION_STANDARDS_AND_OPERATIONAL_HARDENING.md`](PRODUCTION_STANDARDS_AND_OPERATIONAL_HARDENING.md) for full protocol throughput and enterprise architecture breakdown.
 
@@ -48,7 +48,7 @@ To maintain complete scientific and engineering integrity, performance metrics a
 | **Stripped Executable Size** | Single binary on disk (`stat -c %s`) | ~38 MB | **7.70 MB** *(8,080,104 bytes, ultra-dense)* |
 
 ```text
-🏎️ FaizDB High-Throughput Benchmark (Release Binary Verified)
+🏎️ TapisaurusDB High-Throughput Benchmark (Release Binary Verified)
 
 ⚡ INSERT (In-Memory MemTable):  50,000 docs in 813.91ms ( 61,432 ops/sec )
 ⚡ INSERT (Durable Disk + WAL):  20,000 docs in 619.10ms ( 32,305 ops/sec )
@@ -85,14 +85,14 @@ Execute the following commands from the workspace root:
 cargo test --workspace
 
 # Run dedicated integration test suites:
-cargo test -p faizdb-server --test test_auth_flow             # EdDSA JWT & Argon2id Auth Flow
-cargo test -p faizdb-server --test test_document_crud          # High-Volume Document CRUD & WAL Crash Safety
-cargo test -p faizdb-server --test test_vector_search          # HNSW Vector Indexing & Distance Metrics
-cargo test -p faizdb-server --test test_jepsen_distributed_chaos # Jepsen Distributed Chaos, Split-Brain & Torn-Write Recovery
+cargo test -p tapisaurus-server --test test_auth_flow             # EdDSA JWT & Argon2id Auth Flow
+cargo test -p tapisaurus-server --test test_document_crud          # High-Volume Document CRUD & WAL Crash Safety
+cargo test -p tapisaurus-server --test test_vector_search          # HNSW Vector Indexing & Distance Metrics
+cargo test -p tapisaurus-server --test test_jepsen_distributed_chaos # Jepsen Distributed Chaos, Split-Brain & Torn-Write Recovery
 
 # Run tests for a specific module (e.g., CRDTs & Geo-Replication):
-cargo test -p faizdb-core -- cluster::crdt
-cargo test -p faizdb-query -- parser::tests::test_parse_cypher # openCypher Graph Syntax Tests
+cargo test -p tapisaurus-core -- cluster::crdt
+cargo test -p tapisaurus-query -- parser::tests::test_parse_cypher # openCypher Graph Syntax Tests
 ```
 
 ---
@@ -102,16 +102,16 @@ cargo test -p faizdb-query -- parser::tests::test_parse_cypher # openCypher Grap
 ### Option A: Via Built-in CLI Subcommand
 ```bash
 # Run a 50,000-document benchmark in release mode:
-cargo run --release --bin faizdb -- benchmark --count 50000
+cargo run --release --bin tapisaurus -- benchmark --count 50000
 
 # Or execute the compiled release binary directly:
-./target/release/faizdb benchmark --count 100000
+./target/release/tapisaurus benchmark --count 100000
 ```
 
 ### Option B: Via Automated Python Benchmark Suite
 ```bash
-# 1. Start the FaizDB Multi-Protocol Gateway daemon:
-./target/release/faizdb serve
+# 1. Start the TapisaurusDB Multi-Protocol Gateway daemon:
+./target/release/tapisaurus serve
 
 # 2. In a separate terminal, launch the benchmark runner:
 python scripts/benchmark.py
@@ -128,11 +128,11 @@ bash scripts/run_verification_suite.sh
 
 ## 4. Running Multi-Protocol E2E Integration Tests
 
-FaizDB provides automated integration test suites located in `tests/`:
+TapisaurusDB provides automated integration test suites located in `tests/`:
 
 ```bash
 # 1. MySQL Wire Protocol Test (Port 3306)
-cargo test --package faizdb-server --test test_mysql_wire_protocol
+cargo test --package tapisaurus-server --test test_mysql_wire_protocol
 
 # 2. PostgreSQL Wire Protocol Test (Port 5432)
 python tests/integration/test_postgres_wire.py
@@ -160,9 +160,9 @@ python tests/test_aggregation_pipeline.py
 To measure CPU cycles, memory allocations, and nanosecond latency distributions:
 
 ```bash
-cargo bench -p faizdb-core
+cargo bench -p tapisaurus-core
 ```
-Benchmark source file: [`faizdb-core/benches/storage_bench.rs`](../faizdb-core/benches/storage_bench.rs).
+Benchmark source file: [`tapisaurus-core/benches/storage_bench.rs`](../tapisaurus-core/benches/storage_bench.rs).
 
 ---
 
@@ -172,16 +172,16 @@ Validate system resilience against mid-flight power failures, network partitions
 
 ```bash
 # Run automated Chaos Engineering test suite:
-cargo test -p faizdb-server --test test_chaos_fault_tolerance
+cargo test -p tapisaurus-server --test test_chaos_fault_tolerance
 ```
 
-Test source file: [`faizdb-server/tests/test_chaos_fault_tolerance.rs`](../faizdb-server/tests/test_chaos_fault_tolerance.rs).
+Test source file: [`tapisaurus-server/tests/test_chaos_fault_tolerance.rs`](../tapisaurus-server/tests/test_chaos_fault_tolerance.rs).
 
 ---
 
 ## 7. Official YCSB (Yahoo! Cloud Serving Benchmark) Runner
 
-Execute multi-threaded industry-standard workload suites against a live FaizDB instance:
+Execute multi-threaded industry-standard workload suites against a live TapisaurusDB instance:
 
 ```bash
 # Workload A (50% Read / 50% Update):

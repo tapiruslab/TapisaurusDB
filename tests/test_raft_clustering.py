@@ -5,7 +5,7 @@ import time
 def test_cluster():
     base_url = "http://127.0.0.1:27018"
     
-    print("1. Fetching initial FaizDB Raft cluster status...")
+    print("1. Fetching initial TapisaurusDB Raft cluster status...")
     req = urllib.request.Request(f"{base_url}/v1/cluster/status")
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read().decode())

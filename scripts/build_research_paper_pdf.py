@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FaizDB-Mind Research Paper PDF Builder
-Converts docs/FAIZDB_MIND_RESEARCH_PAPER.md into a high-grade publication-ready PDF
+Tapisaurus-Mind Research Paper PDF Builder
+Converts docs/TAPISAURUS_MIND_RESEARCH_PAPER.md into a high-grade publication-ready PDF
 complete with rendered KaTeX formulas, academic typography, and booktabs tables.
 """
 
@@ -12,9 +12,9 @@ import sys
 
 def main():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    md_path = os.path.join(repo_root, "docs", "FAIZDB_MIND_RESEARCH_PAPER.md")
-    html_path = os.path.join(repo_root, "docs", "FAIZDB_MIND_RESEARCH_PAPER.html")
-    pdf_path = os.path.join(repo_root, "docs", "FAIZDB_MIND_RESEARCH_PAPER.pdf")
+    md_path = os.path.join(repo_root, "docs", "TAPISAURUS_MIND_RESEARCH_PAPER.md")
+    html_path = os.path.join(repo_root, "docs", "TAPISAURUS_MIND_RESEARCH_PAPER.html")
+    pdf_path = os.path.join(repo_root, "docs", "TAPISAURUS_MIND_RESEARCH_PAPER.pdf")
 
     if not os.path.exists(md_path):
         print(f"Error: Markdown file not found at {md_path}")
@@ -29,7 +29,7 @@ def main():
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>FaizDB-Mind: Zero-Backpropagation Edge Intelligence</title>
+  <title>Tapisaurus-Mind: Zero-Backpropagation Edge Intelligence</title>
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,7 +55,7 @@ def main():
         color: #64748b;
       }}
       @bottom-left {{
-        content: "FaizDB-Mind: Zero-Backpropagation Cognitive Architecture";
+        content: "Tapisaurus-Mind: Zero-Backpropagation Cognitive Architecture";
         font-family: 'Inter', sans-serif;
         font-size: 8pt;
         color: #64748b;

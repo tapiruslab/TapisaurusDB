@@ -1,4 +1,4 @@
-package faizdb
+package tapisaurus
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// GrpcClient connects to FaizDB via gRPC / Protocol Buffers
+// GrpcClient connects to TapisaurusDB via gRPC / Protocol Buffers
 type GrpcClient struct {
 	target  string
 	host    string

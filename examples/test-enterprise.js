@@ -1,9 +1,9 @@
 async function test() {
-  console.log('🚀 Connecting to FaizDB for Enterprise Verification...');
+  console.log('🚀 Connecting to TapisaurusDB for Enterprise Verification...');
   const loginRes = await fetch('http://127.0.0.1:27018/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'faizdb-admin-2026' })
+    body: JSON.stringify({ username: 'admin', password: 'tapisaurus-admin-2026' })
   });
   const { data: { token } } = await loginRes.json();
   const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
@@ -18,11 +18,11 @@ async function test() {
   console.log('Index Result:', await idxRes.json());
 
   // 2. Insert document 1
-  console.log('\n2. Inserting first user with faiz@ict.house...');
+  console.log('\n2. Inserting first user with faiz@tapirusdb.com...');
   const ins1 = await fetch('http://127.0.0.1:27018/v1/collections/users/insert', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ name: 'Faiz', email: 'faiz@ict.house' })
+    body: JSON.stringify({ name: 'Faiz', email: 'faiz@tapirusdb.com' })
   });
   console.log('Insert 1:', await ins1.json());
 
@@ -31,16 +31,16 @@ async function test() {
   const ins2 = await fetch('http://127.0.0.1:27018/v1/collections/users/insert', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ name: 'Imposter', email: 'faiz@ict.house' })
+    body: JSON.stringify({ name: 'Imposter', email: 'faiz@tapirusdb.com' })
   });
   console.log('Insert 2 (Duplicate Blocked):', await ins2.json());
 
   // 4. Test EXPLAIN query execution plan
-  console.log('\n4. Running EXPLAIN SELECT * FROM users WHERE email = "faiz@ict.house"...');
+  console.log('\n4. Running EXPLAIN SELECT * FROM users WHERE email = "faiz@tapirusdb.com"...');
   const explainRes = await fetch('http://127.0.0.1:27018/v1/query', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ query: 'EXPLAIN SELECT * FROM users WHERE email = "faiz@ict.house"' })
+    body: JSON.stringify({ query: 'EXPLAIN SELECT * FROM users WHERE email = "faiz@tapirusdb.com"' })
   });
   console.log('Explain Plan Result:', JSON.stringify(await explainRes.json(), null, 2));
 

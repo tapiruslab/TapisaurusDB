@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/home/faizaziz/cargo_target}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 mkdir -p "$CARGO_TARGET_DIR"
 
 GREEN='\033[0;32m'
@@ -12,7 +12,7 @@ NC='\033[0m'
 
 echo -e "${CYAN}${BOLD}"
 echo "================================================================================"
-echo "  🏆 FAIZDB OFFICIAL ENTERPRISE ARCHITECTURE VERIFICATION SUITE"
+echo "  🏆 TAPISAURUS OFFICIAL ENTERPRISE ARCHITECTURE VERIFICATION SUITE"
 echo "================================================================================"
 echo -e "${NC}"
 
@@ -20,13 +20,13 @@ echo -e "${YELLOW}[1/4] Running Comprehensive Rust Workspace Tests (Unit + Integ
 cargo test --workspace
 
 echo -e "\n${YELLOW}[2/4] Verifying Storage & Raft Durability Integration Tests...${NC}"
-cargo test -p faizdb-core --test test_storage_durability
-cargo test -p faizdb-core --test test_raft_consensus
-cargo test -p faizdb-core --test test_backup_pitr
-cargo test -p faizdb-core --test test_fuzz_storage
+cargo test -p tapisaurus-core --test test_storage_durability
+cargo test -p tapisaurus-core --test test_raft_consensus
+cargo test -p tapisaurus-core --test test_backup_pitr
+cargo test -p tapisaurus-core --test test_fuzz_storage
 
 echo -e "\n${YELLOW}[3/4] Verifying Cost-Based Optimizer (CBO) & Histograms...${NC}"
-cargo test -p faizdb-query --test test_query_cbo
+cargo test -p tapisaurus-query --test test_query_cbo
 
 echo -e "\n${YELLOW}[4/4] Running Independent Comparative Load Benchmark vs SQLite (YCSB)...${NC}"
 python3 "$(dirname "$0")/benchmarks/benchmark_comparison.py"

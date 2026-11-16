@@ -1,5 +1,5 @@
 """
-Integration test for FaizDB MongoDB Wire Protocol (Port 27017)
+Integration test for TapisaurusDB MongoDB Wire Protocol (Port 27017)
 Tests TCP connection, 16-byte header framing, OP_MSG handshake, Insert, and Find queries.
 """
 
@@ -32,7 +32,7 @@ def parse_op_msg(data: bytes) -> dict:
     return bson.decode(body_bson)
 
 def main():
-    print("🍃 Connecting to FaizDB MongoDB Wire Protocol on 127.0.0.1:27017 ...")
+    print("🍃 Connecting to TapisaurusDB MongoDB Wire Protocol on 127.0.0.1:27017 ...")
     
     # Check if pymongo or bson is installed, if not we test with raw TCP handshake
     try:
@@ -50,7 +50,7 @@ def main():
     print("✅ Connected to TCP port 27017")
 
     # 1. Handshake `isMaster`
-    handshake_msg = make_op_msg(1, {"isMaster": 1, "client": {"driver": {"name": "FaizDB-Test"}}})
+    handshake_msg = make_op_msg(1, {"isMaster": 1, "client": {"driver": {"name": "TapisaurusDB-Test"}}})
     s.sendall(handshake_msg)
     resp_header = s.recv(16)
     resp_len = struct.unpack('<i', resp_header[:4])[0]
@@ -63,8 +63,8 @@ def main():
     insert_msg = make_op_msg(2, {
         "insert": "products",
         "documents": [
-            {"title": "FaizDB Enterprise", "price": 999, "category": "database"},
-            {"title": "FaizDB Cloud", "price": 29, "category": "cloud"}
+            {"title": "TapisaurusDB Enterprise", "price": 999, "category": "database"},
+            {"title": "TapisaurusDB Cloud", "price": 29, "category": "cloud"}
         ]
     })
     s.sendall(insert_msg)
@@ -89,7 +89,7 @@ def main():
     
     first_batch = resp_doc.get("cursor", {}).get("firstBatch", [])
     assert len(first_batch) == 1
-    assert first_batch[0]["title"] == "FaizDB Enterprise"
+    assert first_batch[0]["title"] == "TapisaurusDB Enterprise"
     print("🎉 ALL MONGODB WIRE PROTOCOL INTEGRATION TESTS PASSED!")
 
     s.close()

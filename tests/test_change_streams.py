@@ -4,7 +4,7 @@ import websockets
 from pymongo import MongoClient
 
 async def main():
-    print("Connecting to FaizDB WebSocket Change Stream on ws://127.0.0.1:27018/v1/subscribe...")
+    print("Connecting to TapisaurusDB WebSocket Change Stream on ws://127.0.0.1:27018/v1/subscribe...")
     async with websockets.connect("ws://127.0.0.1:27018/v1/subscribe") as ws:
         welcome_msg = await ws.recv()
         print(f"✅ Received Welcome Frame: {welcome_msg}")
@@ -12,7 +12,7 @@ async def main():
         # Now connect with official MongoDB driver and insert a document
         print("Inserting document via pymongo (mongodb://127.0.0.1:27017)...")
         client = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
-        db = client["faizdb"]
+        db = client["tapisaurus"]
         col = db["realtime_orders"]
 
         insert_res = col.insert_one({"item": "Quantum Supercomputer", "price": 99999, "currency": "MYR"})

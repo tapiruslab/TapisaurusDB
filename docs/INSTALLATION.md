@@ -1,6 +1,6 @@
-# 🚀 FaizDB — Universal Multi-Platform Installation Guide
+# 🚀 TapisaurusDB — Universal Multi-Platform Installation Guide
 
-This guide covers installing and deploying **FaizDB** across Linux servers, macOS workstations, Windows PCs, and containerized Docker environments.
+This guide covers installing and deploying **TapisaurusDB** across Linux servers, macOS workstations, Windows PCs, and containerized Docker environments.
 
 ---
 
@@ -10,12 +10,12 @@ This guide covers installing and deploying **FaizDB** across Linux servers, macO
 Open your terminal and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | bash
 ```
 
 * **What it does:**
   - Auto-detects OS (`Linux` / `macOS`) and CPU architecture (`x86_64` / `aarch64` / `arm64`).
-  - Installs the optimized `faizdb` binary to `/usr/local/bin` (or `~/.local/bin`).
+  - Installs the optimized `tapisaurus` binary to `/usr/local/bin` (or `~/.local/bin`).
   - Configures shell `PATH` in `.bashrc` / `.zshrc`.
   - On Linux servers (with root/sudo), automatically sets up and starts the **systemd 24/7 background service**.
 
@@ -25,53 +25,53 @@ curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/ins
 Open **PowerShell** (Run as Administrator for system-wide access) and execute:
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex
 ```
 
 * **What it does:**
-  - Installs `faizdb.exe` to `$HOME\.faizdb\bin`.
-  - Adds FaizDB permanently to your User `PATH` environment variable.
+  - Installs `tapisaurus.exe` to `$HOME\.tapisaurus\bin`.
+  - Adds TapisaurusDB permanently to your User `PATH` environment variable.
 
 ---
 
 ### 3. Docker & Containerized Environments
 
-Deploy FaizDB Server + Web Management Studio in one command:
+Deploy TapisaurusDB Server + Web Management Studio in one command:
 
 ```bash
 # Clone repository
-git clone https://github.com/ictdothouse/faizdb.git
-cd faizdb
+git clone https://github.com/tapiruslab/TapisaurusDB.git
+cd tapisaurus
 
 # Launch complete stack via Docker Compose
 docker compose up -d
 ```
 
 * **Exposed Endpoints:**
-  - **MySQL Wire Protocol**: `mysql -h localhost -P 3306 -u root faizdb`
-  - **PostgreSQL Wire Protocol**: `psql -h localhost -p 5432 -U postgres -d faizdb`
+  - **MySQL Wire Protocol**: `mysql -h localhost -P 3306 -u root tapisaurus`
+  - **PostgreSQL Wire Protocol**: `psql -h localhost -p 5432 -U postgres -d tapisaurus`
   - **MongoDB Wire Protocol**: `mongodb://localhost:27017`
   - **gRPC / Protocol Buffers**: `localhost:50051`
   - **HTTP REST & WebSocket API**: `http://localhost:27018`
-  - **FaizDB Web Studio**: `http://localhost:27020`
+  - **TapisaurusDB Web Studio**: `http://localhost:27020`
 
 ---
 
 ## 🛠️ Linux Production Daemon Setup (`systemd`)
 
-For production Linux servers (Ubuntu, Debian, RHEL, CentOS), FaizDB can be run as a managed system daemon:
+For production Linux servers (Ubuntu, Debian, RHEL, CentOS), TapisaurusDB can be run as a managed system daemon:
 
 ### Create Systemd Service File
 ```bash
-sudo tee /etc/systemd/system/faizdb.service <<EOF
+sudo tee /etc/systemd/system/tapisaurus.service <<EOF
 [Unit]
-Description=FaizDB AI-Native NoSQL Database Server
+Description=TapisaurusDB AI-Native NoSQL Database Server
 After=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/faizdb serve --host 0.0.0.0 --mysql-port 3306 --pg-port 5432 --mongo-port 27017 --http-port 27018 --grpc-port 50051 --data-dir /var/lib/faizdb
+ExecStart=/usr/local/bin/tapisaurus serve --host 0.0.0.0 --mysql-port 3306 --pg-port 5432 --mongo-port 27017 --http-port 27018 --grpc-port 50051 --data-dir /var/lib/tapisaurus
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -81,22 +81,22 @@ WantedBy=multi-user.target
 EOF
 ```
 
-### Manage FaizDB Service
+### Manage TapisaurusDB Service
 ```bash
 # Reload daemon definitions
 sudo systemctl daemon-reload
 
-# Start FaizDB
-sudo systemctl start faizdb
+# Start TapisaurusDB
+sudo systemctl start tapisaurus
 
 # Enable auto-start on server reboot
-sudo systemctl enable faizdb
+sudo systemctl enable tapisaurus
 
 # Check live server status
-sudo systemctl status faizdb
+sudo systemctl status tapisaurus
 
 # View real-time logs
-sudo journalctl -u faizdb -f
+sudo journalctl -u tapisaurus -f
 ```
 
 ---
@@ -110,29 +110,29 @@ If you prefer building from source:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 2. Clone repository
-git clone https://github.com/ictdothouse/faizdb.git
-cd faizdb
+git clone https://github.com/tapiruslab/TapisaurusDB.git
+cd tapisaurus
 
 # 3. Build optimized release binary
 cargo build --release
 
 # 4. Install globally
-sudo cp target/release/faizdb /usr/local/bin/
+sudo cp target/release/tapisaurus /usr/local/bin/
 ```
 
 ---
 
 ## 🌐 Verify Installation
 
-After installation, verify that FaizDB is ready:
+After installation, verify that TapisaurusDB is ready:
 
 ```bash
 # Check version and engine information
-faizdb --version
-faizdb info
+tapisaurus --version
+tapisaurus info
 
 # Start interactive multi-dialect shell
-faizdb shell
+tapisaurus shell
 
 # Test HTTP Health endpoint
 curl http://localhost:27018/v1/health
@@ -142,7 +142,7 @@ Output:
 ```json
 {
   "status": "healthy",
-  "engine": "FaizDB",
+  "engine": "TapisaurusDB",
   "version": "0.1.0"
 }
 ```
@@ -156,15 +156,15 @@ Output:
 For lightweight, embedded, or edge environments (Raspberry Pi, IoT gateways, smart TVs, desktop tools, Android/iOS apps) where you do **not** want a separate background server daemon or open network ports:
 
 ### 1. Embedded in Rust Applications (`Cargo.toml`)
-Add `faizdb-core` directly to your Rust project:
+Add `tapisaurus-core` directly to your Rust project:
 
 ```toml
 [dependencies]
-faizdb-core = { git = "https://github.com/ictdothouse/faizdb.git" }
+tapisaurus-core = { git = "https://github.com/tapiruslab/TapisaurusDB.git" }
 ```
 
 ```rust
-use faizdb_core::storage::engine::{StorageConfig, StorageEngine};
+use tapisaurus_core::storage::engine::{StorageConfig, StorageEngine};
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -188,19 +188,19 @@ Download or cross-compile standalone static MUSL binaries for ARM / Raspberry Pi
 
 ```bash
 # Cross-compile static MUSL binary for ARM64 (Raspberry Pi 4/5, Orange Pi):
-cross build --target aarch64-unknown-linux-musl --release -p faizdb-cli
+cross build --target aarch64-unknown-linux-musl --release -p tapisaurus-cli
 
 # Cross-compile for ARMv7 (Raspberry Pi 2/3, 32-bit IoT boards):
-cross build --target armv7-unknown-linux-musleabihf --release -p faizdb-cli
+cross build --target armv7-unknown-linux-musleabihf --release -p tapisaurus-cli
 ```
 
 ### 3. Mobile Library Compilation (Android NDK & iOS XCFramework)
 ```bash
 # Android ARM64 (.so shared object):
-cargo build --target aarch64-linux-android --release -p faizdb-core
+cargo build --target aarch64-linux-android --release -p tapisaurus-core
 
 # iOS Static Framework (.xcframework):
-cargo build --target aarch64-apple-ios --release -p faizdb-core
+cargo build --target aarch64-apple-ios --release -p tapisaurus-core
 ```
 
 ---
@@ -209,11 +209,11 @@ cargo build --target aarch64-apple-ios --release -p faizdb-core
 
 | Artifact | Source / Method | Target Use Case |
 |:---|:---|:---|
-| **Server Binaries (.tar.gz / .zip)** | [**GitHub Releases**](https://github.com/ictdothouse/faizdb/releases) | Linux, macOS, Windows Production Servers |
-| **Rust In-Process Crate** | `cargo add faizdb-core` / GitHub | Embedded Desktop, CLI, & In-Process Applications |
+| **Server Binaries (.tar.gz / .zip)** | [**GitHub Releases**](https://github.com/tapiruslab/TapisaurusDB/releases) | Linux, macOS, Windows Production Servers |
+| **Rust In-Process Crate** | `cargo add tapisaurus-core` / GitHub | Embedded Desktop, CLI, & In-Process Applications |
 | **Python SDK** | `pip install .` / `pyproject.toml` | Python AI / Microservice Apps |
 | **Node.js / TypeScript SDK** | `npm install ./bindings/node` | TypeScript backend microservices |
-| **Docker Image** | `docker pull ictdothouse/faizdb:latest` | Kubernetes, Docker Compose, Cloud Clusters |
+| **Docker Image** | `docker pull tapiruslab/TapisaurusDB:latest` | Kubernetes, Docker Compose, Cloud Clusters |
 | **1-Line Shell Script** | `curl -fsSL ... | bash` | Fast automated terminal setup |
 
 ---
@@ -226,5 +226,5 @@ cargo build --target aarch64-apple-ios --release -p faizdb-core
 | **5432 / 5433** | **🐘 PostgreSQL Wire Protocol** | Native wire connection for `psql`, DBeaver, TablePlus, Grafana, SQL ORMs |
 | **27017** | **🍃 MongoDB Wire Protocol** | Native wire connection for PyMongo, Mongoose, Prisma, PHP |
 | **50051** | **⚡ gRPC & Protocol Buffers** | Ultra low-latency microservices and high-throughput Vector ANN streaming |
-| **27018** | **🌐 HTTP REST & WebSockets** | FaizQL queries, Change Streams, Health check, Backups, Geo-Replication |
-| **27020** | **🎛️ HTTP (FaizDB Studio)** | Visual Management Dashboard & Query Explorer |
+| **27018** | **🌐 HTTP REST & WebSockets** | TapisaurusQL queries, Change Streams, Health check, Backups, Geo-Replication |
+| **27020** | **🎛️ HTTP (TapisaurusDB Studio)** | Visual Management Dashboard & Query Explorer |

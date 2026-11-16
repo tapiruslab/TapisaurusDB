@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Scientific Performance & Latency Benchmark Runner for FaizDB
+Scientific Performance & Latency Benchmark Runner for TapisaurusDB
 Conducts empirical measurement of:
 1. Ingestion Throughput (docs/sec, avg latency µs)
 2. Sequential Scan & Secondary Filter Latency (µs)
@@ -42,7 +42,7 @@ def request(method, path, body=None):
 def main():
     global TOKEN
     print("=" * 70)
-    print("🔬 FAIZDB SCIENTIFIC SYSTEMS PERFORMANCE AUDIT (EMPIRICAL VERIFICATION)")
+    print("🔬 TAPISAURUS SCIENTIFIC SYSTEMS PERFORMANCE AUDIT (EMPIRICAL VERIFICATION)")
     print("=" * 70)
 
     # 1. Health check
@@ -52,7 +52,7 @@ def main():
     # 2. Authenticate
     login_resp = request("POST", "/v1/auth/login", {
         "username": "admin",
-        "password": "faizdb-admin-2026"
+        "password": "tapisaurus-admin-2026"
     })
     if not login_resp.get("success"):
         print(f"[!] Authentication failed: {login_resp}")

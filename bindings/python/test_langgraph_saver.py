@@ -1,8 +1,8 @@
 """
-Unit test for native FaizDbSaver LangGraph checkpointer.
+Unit test for native TapisaurusSaver LangGraph checkpointer.
 """
 import unittest
-from faizdb.langgraph import FaizDbSaver
+from tapisaurus.langgraph import TapisaurusSaver
 
 
 class MockCollection:
@@ -32,7 +32,7 @@ class MockCollection:
         return results
 
 
-class MockFaizClient:
+class MockTapisaurusClient:
     def __init__(self):
         self.collections = {}
 
@@ -42,10 +42,10 @@ class MockFaizClient:
         return self.collections[name]
 
 
-class TestFaizDbSaver(unittest.TestCase):
+class TestTapisaurusSaver(unittest.TestCase):
     def setUp(self):
-        self.client = MockFaizClient()
-        self.saver = FaizDbSaver(self.client, collection_prefix="test_lg")
+        self.client = MockTapisaurusClient()
+        self.saver = TapisaurusSaver(self.client, collection_prefix="test_lg")
 
     def test_put_and_get_checkpoint(self):
         config = {"configurable": {"thread_id": "thread_42"}}

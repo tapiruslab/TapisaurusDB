@@ -1,6 +1,6 @@
-# Contributing to FaizDB
+# Contributing to TapisaurusDB
 
-Thank you for considering contributing to **FaizDB**! We welcome contributions of all kinds — bug fixes, new features, documentation, benchmarks, and more.
+Thank you for considering contributing to **TapisaurusDB**! We welcome contributions of all kinds — bug fixes, new features, documentation, benchmarks, and more.
 
 ---
 
@@ -14,8 +14,8 @@ Be respectful. We follow the [Contributor Covenant Code of Conduct](https://www.
 
 ### 1. Fork & Clone
 ```sh
-git clone https://github.com/ictdothouse/faizdb.git
-cd faizdb
+git clone https://github.com/tapiruslab/TapisaurusDB.git
+cd tapisaurus
 ```
 
 ### 2. Create a Branch
@@ -63,7 +63,7 @@ chore(deps): bump tokio to 1.53
 
 ### Running the Server Locally
 ```sh
-cargo run --bin faizdb-server
+cargo run --bin tapisaurus-server
 ```
 
 ### Running Benchmarks
@@ -82,20 +82,20 @@ cargo doc --all --no-deps --open
 
 | Crate | Purpose |
 |:------|:--------|
-| `faizdb-core` | LSM-Tree storage engine, WAL, MemTable, SSTable, Raft, CRDT |
-| `faizdb-query` | SQL/MongoDB/FaizQL parser and executor |
-| `faizdb-vector` | HNSW vector index with multiple distance metrics |
-| `faizdb-graph` | Adjacency-list property graph engine |
-| `faizdb-security` | Argon2id auth, EdDSA JWT, AES-256-GCM encryption |
-| `faizdb-server` | Axum REST/WS + MongoDB Wire + PostgreSQL Wire + gRPC |
-| `faizdb-cli` | REPL and benchmark tool |
+| `tapisaurus-core` | LSM-Tree storage engine, WAL, MemTable, SSTable, Raft, CRDT |
+| `tapisaurus-query` | SQL/MongoDB/TapisaurusQL parser and executor |
+| `tapisaurus-vector` | HNSW vector index with multiple distance metrics |
+| `tapisaurus-graph` | Adjacency-list property graph engine |
+| `tapisaurus-security` | Argon2id auth, EdDSA JWT, AES-256-GCM encryption |
+| `tapisaurus-server` | Axum REST/WS + MongoDB Wire + PostgreSQL Wire + gRPC |
+| `tapisaurus-cli` | REPL and benchmark tool |
 
 ---
 
 ## Reporting Bugs
 
-Open an [Issue](https://github.com/ictdothouse/faizdb/issues/new) with:
-- FaizDB version (`faizdb-cli --version`)
+Open an [Issue](https://github.com/tapiruslab/TapisaurusDB/issues/new) with:
+- TapisaurusDB version (`tapisaurus-cli --version`)
 - OS and Rust version
 - Steps to reproduce
 - Expected vs. actual behaviour

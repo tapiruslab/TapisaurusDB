@@ -3,7 +3,7 @@ Business Source License 1.1
 Parameters
 
 Licensor:             Ahmad Faiz
-Licensed Work:        FaizDB v0.1.0
+Licensed Work:        TapisaurusDB v0.1.0
                       The Licensed Work is (c) 2026 Ahmad Faiz.
 Additional Use Grant: You may make production use of the Licensed Work,
                       provided Your use does not include offering the
@@ -21,7 +21,7 @@ Additional Use Grant: You may make production use of the Licensed Work,
                       - Academic research and educational use
                       - Open-source application integration
                       - Local AI agents, edge computing, and IoT devices
-                      - Commercial proprietary products that embed FaizDB
+                      - Commercial proprietary products that embed TapisaurusDB
                         as an internal component (not exposed as a database
                         service to third-party end users)
 
@@ -32,9 +32,9 @@ For information about alternative licensing arrangements for the Licensed Work,
 please contact:
 
   Ahmad Faiz
-  ICT House (ictdothouse)
-  Email: faiz@ict.house
-  Web:   https://github.com/ictdothouse/faizdb
+  Tapirus Tech Lab (tapiruslab)
+  Email: faiz@tapirusdb.com
+  Web:   https://github.com/tapiruslab/TapisaurusDB
 
 Notice
 

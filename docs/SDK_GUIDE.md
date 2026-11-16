@@ -1,6 +1,6 @@
-# 📦 FaizDB Official Polyglot Client SDKs Guide
+# 📦 TapisaurusDB Official Polyglot Client SDKs Guide
 
-FaizDB provides zero-dependency, type-safe official SDKs with dual-mode support (**HTTP/REST & WebSockets** + **gRPC & Protocol Buffers**) for **Node.js/TypeScript**, **Python**, and **Go**.
+TapisaurusDB provides zero-dependency, type-safe official SDKs with dual-mode support (**HTTP/REST & WebSockets** + **gRPC & Protocol Buffers**) for **Node.js/TypeScript**, **Python**, and **Go**.
 
 ---
 
@@ -13,10 +13,10 @@ npm install ./bindings/node  # or pnpm add ./bindings/node
 
 ### High-Performance gRPC Client (Port 50051)
 ```typescript
-import { FaizDbGrpcClient } from '@faizdb/client';
+import { TapisaurusGrpcClient } from '@tapisaurus/client';
 
 async function main() {
-  const client = new FaizDbGrpcClient({ target: 'localhost:50051' });
+  const client = new TapisaurusGrpcClient({ target: 'localhost:50051' });
 
   // 1. Health Check
   const health = await client.healthCheck();
@@ -49,9 +49,9 @@ Supported with modern PEP 517/518 build standards (`pyproject.toml`).
 
 ### gRPC Client Usage (Port 50051)
 ```python
-from faizdb import FaizDbGrpcClient
+from tapisaurus import TapisaurusGrpcClient
 
-client = FaizDbGrpcClient(target="localhost:50051")
+client = TapisaurusGrpcClient(target="localhost:50051")
 
 # 1. Health Check
 health = client.health_check()
@@ -78,11 +78,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/ictdothouse/faizdb/bindings/go"
+	"github.com/tapiruslab/TapisaurusDB/bindings/go"
 )
 
 func main() {
-	client := faizdb.NewGrpcClient("localhost:50051")
+	client := tapisaurus.NewGrpcClient("localhost:50051")
 
 	// 1. Health check
 	health, err := client.HealthCheck(context.Background())
@@ -106,19 +106,19 @@ func main() {
 
 For rapid prototyping without compiling native gRPC extensions, use the zero-dependency REST clients located in `examples/sdk-quickstart/`:
 
-- **Python Quickstart Client:** `examples/sdk-quickstart/python/faizdb_client.py`
+- **Python Quickstart Client:** `examples/sdk-quickstart/python/tapisaurus_client.py`
   ```python
-  from faizdb_client import FaizDBClient
-  client = FaizDBClient("http://127.0.0.1:27018")
+  from tapisaurus_client import TapisaurusClient
+  client = TapisaurusClient("http://127.0.0.1:27018")
   doc_id = client.insert("articles", {"title": "AI & Graphs", "tags": ["rust", "ai"]})
   results = client.vector_search("article_embeddings", [0.1, 0.2, 0.9], top_k=3)
   graph_context = client.extract_graphrag_context(root_id=doc_id, max_depth=2)
   ```
 
-- **Node.js Quickstart Client (Native fetch):** `examples/sdk-quickstart/nodejs/faizdb_client.js`
+- **Node.js Quickstart Client (Native fetch):** `examples/sdk-quickstart/nodejs/tapisaurus_client.js`
   ```javascript
-  const { FaizDBClient } = require('./faizdb_client');
-  const client = new FaizDBClient('http://127.0.0.1:27018');
+  const { TapisaurusClient } = require('./tapisaurus_client');
+  const client = new TapisaurusClient('http://127.0.0.1:27018');
   await client.insert('articles', { title: 'AI & Graphs' });
   const hits = await client.vectorSearch('article_embeddings', [0.1, 0.2, 0.9]);
   ```

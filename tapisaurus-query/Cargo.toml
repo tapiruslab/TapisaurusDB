@@ -1,0 +1,22 @@
+[package]
+name = "tapisaurus-query"
+description = "Query engine for TapisaurusDB — TapisaurusQL parser, optimizer, and executor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tapisaurus-core = { path = "../tapisaurus-core" }
+tapisaurus-vector = { path = "../tapisaurus-vector" }
+tapisaurus-graph = { path = "../tapisaurus-graph" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+

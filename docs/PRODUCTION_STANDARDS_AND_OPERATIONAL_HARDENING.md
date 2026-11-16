@@ -1,4 +1,4 @@
-# 🛡️ FaizDB Enterprise Production Standards & Operational Hardening Reference
+# 🛡️ TapisaurusDB Enterprise Production Standards & Operational Hardening Reference
 
 > **Technical Specification & Mission-Critical Operational Hardening Standards**  
 > **Verification Status:** 100% Workspace Test Pass Rate, Zero Compiler Warnings (`-D warnings`), 100% Safe Rust  
@@ -11,31 +11,31 @@
 
 In mission-critical enterprise environments, raw engine speed alone is insufficient. A database system must withstand connection bursts, prevent cascading failures, integrate natively with cloud orchestration (Kubernetes), execute autonomous backups, ensure disaster recovery, and eliminate vendor lock-in.
 
-This document details the **Standalone-First Engine Architecture**, the **CAP Theorem Consistency Duality**, and the **19 Enterprise Production Standards** built directly into the FaizDB kernel.
+This document details the **Standalone-First Engine Architecture**, the **CAP Theorem Consistency Duality**, and the **19 Enterprise Production Standards** built directly into the TapisaurusDB kernel.
 
 ---
 
 ## 🏛️ Architectural Doctrine: Independent Standalone Engine with Automatic Protocol Comprehension
 
-FaizDB is engineered around concrete, real-world systems principles:
+TapisaurusDB is engineered around concrete, real-world systems principles:
 
-1. **FaizDB is a 100% Standalone Database Kernel:**
-   - FaizDB does **not** require PostgreSQL, MongoDB, Redis, Neo4j, or any external database engine to operate.
-   - From top to bottom, FaizDB consists of native components:
-     * **Native Storage Engine** (`faizdb-core`): Lock-free MemTable SkipList, LSM-Tree SSTables, and atomic Write-Ahead Log (WAL) written in 100% Safe Rust.
-     * **Native Query Engine** (`faizdb-query`): FaizQL query language, openCypher Cypher parser, full-text Okapi BM25 tokenizer, Cost-Based Optimizer (CBO), and vectorized execution pipelines.
+1. **TapisaurusDB is a 100% Standalone Database Kernel:**
+   - TapisaurusDB does **not** require PostgreSQL, MongoDB, Redis, Neo4j, or any external database engine to operate.
+   - From top to bottom, TapisaurusDB consists of native components:
+     * **Native Storage Engine** (`tapisaurus-core`): Lock-free MemTable SkipList, LSM-Tree SSTables, and atomic Write-Ahead Log (WAL) written in 100% Safe Rust.
+     * **Native Query Engine** (`tapisaurus-query`): TapisaurusQL query language, openCypher Cypher parser, full-text Okapi BM25 tokenizer, Cost-Based Optimizer (CBO), and vectorized execution pipelines.
      * **Native Cryptographic Security & Consensus**: Argon2id password hashing, Ed25519 asymmetric JWT identity, embedded Raft distributed quorum, and multi-master CRDTs.
      * **Native High-Performance Gateways**: Native gRPC (Port 50051) and REST/WebSocket API (Port 27018).
 
 2. **Automatic Protocol Comprehension:**
-   - While operating completely standalone, FaizDB understands standard external wire protocols natively without intermediate proxies:
+   - While operating completely standalone, TapisaurusDB understands standard external wire protocols natively without intermediate proxies:
      * **MySQL / MariaDB Wire Ingress (Port 3306):** Ingests MySQL HandshakeV10 and Command packets, executes SQL bootstrap queries (`SELECT @@version`, `SHOW TABLES`), and handles CRUD operations for standard MySQL CLI, Laravel Eloquent (`DB_CONNECTION=mysql`), and PHP PDO/mysqli drivers.
      * **PostgreSQL Wire Ingress (Port 5432 / 5433):** Ingests PostgreSQL frontend packets, executes simple and extended queries (`$1`, `$2`), and synthesizes virtual system catalogs (`pg_catalog.*`, `information_schema.*`) for seamless ORM compatibility (Prisma, Drizzle, SQLAlchemy, DBeaver).
      * **MongoDB Wire Ingress (Port 27017):** Ingests MongoDB OP_MSG wire packets, handling document CRUD, aggregation pipelines, and cursor pagination for standard client drivers (PyMongo, Mongoose).
      * **Open-Format CDC Streaming:** Automatically streams mutation envelopes directly to downstream analytical platforms (Kafka, Snowflake, ClickHouse, Apache Spark) in standard JSONL and ANSI SQL.
 
 3. **CAP Theorem Consistency Duality (CP vs. AP):**
-   - **Strong Consistency (CP Mode — Required for Financial Ledgers & Audited Balances):** Strict linearizability backed by Raft Consensus ($N/2 + 1$ quorum), local multi-document MVCC, and atomic WAL logging. In network partitions, minority partitions reject writes to prevent double-spending. **FaizDB never uses CRDTs for financial account balances or seat ticketing.**
+   - **Strong Consistency (CP Mode — Required for Financial Ledgers & Audited Balances):** Strict linearizability backed by Raft Consensus ($N/2 + 1$ quorum), local multi-document MVCC, and atomic WAL logging. In network partitions, minority partitions reject writes to prevent double-spending. **TapisaurusDB never uses CRDTs for financial account balances or seat ticketing.**
    - **Eventual Consistency (AP Mode — Multi-Region Active-Active Mesh):** Optimized for non-monetary collaborative documents (Notion/Figma style), presence indicators, and IoT telemetry using Conflict-Free Replicated Data Types (CRDTs: PN-Counters, LWW-Registers, OR-Sets) with sub-millisecond local writes and zero distributed lock overhead.
 
 4. **Collection-Level Paradigm Isolation:**
@@ -44,7 +44,7 @@ FaizDB is engineered around concrete, real-world systems principles:
 
 5. **Multiplayer Gaming Architecture Demarcation:**
    - In 64Hz–128Hz multiplayer gaming servers (Unreal Engine 5, Unity), spatial vectors and tick-loop physics execute strictly in volatile memory.
-   - FaizDB is **never** placed in the synchronous physics rendering path; instead, it serves as the **in-process persistent state tier** (`faizdb-core`) for match outcome commitments, persistent inventory wallets, and vector matchmaking (SBMM) with **zero Garbage Collection (GC) pauses**.
+   - TapisaurusDB is **never** placed in the synchronous physics rendering path; instead, it serves as the **in-process persistent state tier** (`tapisaurus-core`) for match outcome commitments, persistent inventory wallets, and vector matchmaking (SBMM) with **zero Garbage Collection (GC) pauses**.
 
 ---
 
@@ -52,7 +52,7 @@ FaizDB is engineered around concrete, real-world systems principles:
 
 ```
                                   ┌────────────────────────────────────────────────────────┐
-                                  │            FaizDB Production Hardening                 │
+                                  │            TapisaurusDB Production Hardening                 │
                                   │            Mission-Critical Standards                  │
                                   └──────────────────────────┬─────────────────────────────┘
                                                              │
@@ -100,7 +100,7 @@ FaizDB is engineered around concrete, real-world systems principles:
 ### Standard 1: Connection Overload Governor (`Max Connections`)
 * **Problem:** Connection leaks or distributed traffic spikes exhaust OS file descriptors, leading to process crashes via Out-Of-Memory (OOM).
 * **Architecture:** Enforces asynchronous admission control via `tokio::sync::Semaphore` across all ingress TCP listeners.
-* **Configuration:** `FAIZDB_MAX_CONNECTIONS=10000` (Default: 10,000 concurrent sockets).
+* **Configuration:** `TAPISAURUS_MAX_CONNECTIONS=10000` (Default: 10,000 concurrent sockets).
 * **Rejection Semantics:**
   - **PostgreSQL:** Responds with official SQLSTATE `53300` (`too_many_clients_already`) message before cleanly closing the connection.
   - **MongoDB:** Sockets terminate cleanly without leaking buffers or query processing threads.
@@ -118,29 +118,29 @@ FaizDB is engineered around concrete, real-world systems principles:
 * **Problem:** Traditional databases require external sidecar containers or complex Kubernetes Operators to report health.
 * **Architecture:** Built directly into the HTTP management listener (Port 27018):
   - **Liveness (`GET /v1/health/liveness`):** Validates the server event loop is active and not deadlocked (`HTTP 200 {"status": "alive"}`).
-  - **Readiness (`GET /v1/health/readiness`):** Verifies the storage engine is fully initialized and accepting queries (`HTTP 200 {"status": "ready", "database": "faizdb"}`).
+  - **Readiness (`GET /v1/health/readiness`):** Verifies the storage engine is fully initialized and accepting queries (`HTTP 200 {"status": "ready", "database": "tapisaurus"}`).
 
 ---
 
-### Standard 4: Automated Snapshot Daemon (`FAIZDB_AUTO_BACKUP`)
+### Standard 4: Automated Snapshot Daemon (`TAPISAURUS_AUTO_BACKUP`)
 * **Problem:** Cron-driven backup scripts introduce external failure points and brittle shell dependencies.
 * **Architecture:** Autonomous in-process background daemon periodically triggers atomic collection snapshots:
-  - `FAIZDB_AUTO_BACKUP=true`
-  - `FAIZDB_BACKUP_INTERVAL_SECS=3600` (Default: 1 hour)
-  - `FAIZDB_BACKUP_DIR=./backups`
+  - `TAPISAURUS_AUTO_BACKUP=true`
+  - `TAPISAURUS_BACKUP_INTERVAL_SECS=3600` (Default: 1 hour)
+  - `TAPISAURUS_BACKUP_DIR=./backups`
 * **Integrity:** Snapshots record collection state with exact LSN markers for seamless Point-In-Time Recovery (PITR).
 
 ---
 
 ### Standard 5: Open-Format Data Portability (Anti-Vendor Lock-in)
 * **Problem:** Proprietary binary dump formats trap customer data inside specific database engines.
-* **Architecture:** Official streaming dump tool (`faizdb dump`) reads directly from the storage engine via zero-copy iterators ($O(1)$ memory consumption):
+* **Architecture:** Official streaming dump tool (`tapisaurus dump`) reads directly from the storage engine via zero-copy iterators ($O(1)$ memory consumption):
   ```bash
   # Stream to JSONL (BigQuery, Snowflake, ClickHouse, Apache Spark)
-  faizdb dump --data-dir ./faizdb_data --format jsonl --output dump.jsonl
+  tapisaurus dump --data-dir ./tapisaurus_data --format jsonl --output dump.jsonl
 
   # Stream to standard ANSI SQL (PostgreSQL, MySQL, SQLite)
-  faizdb dump --data-dir ./faizdb_data --format sql --output dump.sql
+  tapisaurus dump --data-dir ./tapisaurus_data --format sql --output dump.sql
   ```
 
 ---
@@ -166,7 +166,7 @@ FaizDB is engineered around concrete, real-world systems principles:
 
 ### Standard 9: MVCC Idle-Transaction Autonomous Reaper Daemon
 * **Problem:** Abandoned client transactions (`BEGIN` without `COMMIT` or `ROLLBACK`) retain snapshot references, preventing MVCC garbage collection and causing memory bloat.
-* **Architecture:** Background daemon sweeps every 30 seconds, automatically aborting and cleaning up transactions that exceed the idle threshold (`FAIZDB_TXN_TIMEOUT_SECS`, default 300s).
+* **Architecture:** Background daemon sweeps every 30 seconds, automatically aborting and cleaning up transactions that exceed the idle threshold (`TAPISAURUS_TXN_TIMEOUT_SECS`, default 300s).
 
 ---
 
@@ -247,7 +247,7 @@ FaizDB is engineered around concrete, real-world systems principles:
 ### Standard 19: Safe Binary Deserialization & Bounded Memory Limits
 * **Problem:** Malformed WAL logs or corrupted SSTables with invalid length prefixes can cause integer overflows or unbounded memory allocation during deserialization.
 * **Architecture:**
-  1. All binary slice offsets use safe arithmetic (`checked_add`), immediately rejecting malformed offsets with structured `FaizError::Storage` errors before attempting any byte slicing.
+  1. All binary slice offsets use safe arithmetic (`checked_add`), immediately rejecting malformed offsets with structured `TapisaurusError::Storage` errors before attempting any byte slicing.
   2. WAL reader enforces an explicit `MAX_WAL_SIZE` bound (128 MB per log segment) and checked field lengths.
   3. Atomic document counters employ `fetch_update` with `saturating_sub(1)` to mathematically prevent integer wrap-around under concurrent delete races.
 
@@ -257,17 +257,17 @@ FaizDB is engineered around concrete, real-world systems principles:
 
 | Verification Domain | Test Suite File | Status | Scope |
 | :--- | :--- | :---: | :--- |
-| **Out-of-Core Pagination & Disk Fallback** | [`tests/test_pagination_and_disk_fallback.rs`](../faizdb-core/tests/test_pagination_and_disk_fallback.rs) | **PASS (9/9)** | Cursor Pagination, Bounded Memory Eviction, Transparent Disk Fallback, Saturating Counter |
-| **Query Engine Drop & Storage Purge** | [`tests/test_executor_drop_collection_purges_storage.rs`](../faizdb-query/tests/test_executor_drop_collection_purges_storage.rs) | **PASS (1/1)** | SQL DROP TABLE, DROP COLLECTION, Prefix Purge Verification |
-| **Enterprise Production Hardening** | [`tests/test_production_hardening_and_features.rs`](../faizdb-server/tests/test_production_hardening_and_features.rs) | **PASS (9/9)** | WAL Checkpoints, Limit Pushdown, Reaper, Float Clamping, Graph Budget, K8s Probes, Connection Governor |
-| **Distributed Chaos & Jepsen Verification** | [`tests/test_jepsen_distributed_chaos.rs`](../faizdb-server/tests/test_jepsen_distributed_chaos.rs) | **PASS (5/5)** | Torn-Write Recovery, Raft Split-Brain, CRDT Clock Skew, LSM Anti-Stall, Catalog Introspection |
-| **Extended Query & Hash Joins** | [`tests/test_enterprise_engine_capabilities.rs`](../faizdb-server/tests/test_enterprise_engine_capabilities.rs) | **PASS (6/6)** | PG Extended Wire ($1, $2), Mongo Stateful Cursors, HNSW Tombstones, Raft Quorum |
-| **Multi-Protocol Security & Throughput** | [`tests/test_wire_security_and_performance.rs`](../faizdb-server/tests/test_wire_security_and_performance.rs) | **PASS (3/3)** | gRPC RBAC, Mongo RBAC, Multi-Protocol Benchmark |
-| **Storage Durability & Crash Recovery** | [`tests/test_durability_and_mvcc.rs`](../faizdb-server/tests/test_durability_and_mvcc.rs) | **PASS (5/5)** | WAL Replay, Crash Safety, Snapshot Isolation |
-| **Security & Protocol Correctness** | [`tests/test_security_and_system_correctness.rs`](../faizdb-server/tests/test_security_and_system_correctness.rs) | **PASS (3/3)** | CBO Float Bounds, Safe System Table Routing, Vector Validation |
+| **Out-of-Core Pagination & Disk Fallback** | [`tests/test_pagination_and_disk_fallback.rs`](../tapisaurus-core/tests/test_pagination_and_disk_fallback.rs) | **PASS (9/9)** | Cursor Pagination, Bounded Memory Eviction, Transparent Disk Fallback, Saturating Counter |
+| **Query Engine Drop & Storage Purge** | [`tests/test_executor_drop_collection_purges_storage.rs`](../tapisaurus-query/tests/test_executor_drop_collection_purges_storage.rs) | **PASS (1/1)** | SQL DROP TABLE, DROP COLLECTION, Prefix Purge Verification |
+| **Enterprise Production Hardening** | [`tests/test_production_hardening_and_features.rs`](../tapisaurus-server/tests/test_production_hardening_and_features.rs) | **PASS (9/9)** | WAL Checkpoints, Limit Pushdown, Reaper, Float Clamping, Graph Budget, K8s Probes, Connection Governor |
+| **Distributed Chaos & Jepsen Verification** | [`tests/test_jepsen_distributed_chaos.rs`](../tapisaurus-server/tests/test_jepsen_distributed_chaos.rs) | **PASS (5/5)** | Torn-Write Recovery, Raft Split-Brain, CRDT Clock Skew, LSM Anti-Stall, Catalog Introspection |
+| **Extended Query & Hash Joins** | [`tests/test_enterprise_engine_capabilities.rs`](../tapisaurus-server/tests/test_enterprise_engine_capabilities.rs) | **PASS (6/6)** | PG Extended Wire ($1, $2), Mongo Stateful Cursors, HNSW Tombstones, Raft Quorum |
+| **Multi-Protocol Security & Throughput** | [`tests/test_wire_security_and_performance.rs`](../tapisaurus-server/tests/test_wire_security_and_performance.rs) | **PASS (3/3)** | gRPC RBAC, Mongo RBAC, Multi-Protocol Benchmark |
+| **Storage Durability & Crash Recovery** | [`tests/test_durability_and_mvcc.rs`](../tapisaurus-server/tests/test_durability_and_mvcc.rs) | **PASS (5/5)** | WAL Replay, Crash Safety, Snapshot Isolation |
+| **Security & Protocol Correctness** | [`tests/test_security_and_system_correctness.rs`](../tapisaurus-server/tests/test_security_and_system_correctness.rs) | **PASS (3/3)** | CBO Float Bounds, Safe System Table Routing, Vector Validation |
 | **Workspace Test Suite Total** | `cargo test --workspace` | **100% PASS** | **220+ Tests Across All Workspace Crates** |
-| **Static Executable Density** | `target/release/faizdb` (LTO, Stripped) | **7.70 MB** | Standalone Single Binary with 0 External Dependencies |
+| **Static Executable Density** | `target/release/tapisaurus` (LTO, Stripped) | **7.70 MB** | Standalone Single Binary with 0 External Dependencies |
 
 ---
-*FaizDB — Engineered for Maximum Stability, Absolute Memory Safety, and Global Production Readiness.*
+*TapisaurusDB — Engineered for Maximum Stability, Absolute Memory Safety, and Global Production Readiness.*
 

@@ -1,5 +1,5 @@
 """
-Integration test for FaizDB Multi-Region Geo-Replication (Active-Active CRDTs).
+Integration test for TapisaurusDB Multi-Region Geo-Replication (Active-Active CRDTs).
 Verifies region discovery, peer registration, and delta sync endpoints.
 """
 
@@ -9,7 +9,7 @@ import urllib.error
 
 def test_geo_replication():
     print("=" * 65)
-    print("🌍 Testing FaizDB Multi-Region Geo-Replication & Active-Active CRDTs")
+    print("🌍 Testing TapisaurusDB Multi-Region Geo-Replication & Active-Active CRDTs")
     print("=" * 65)
 
     base_url = "http://127.0.0.1:27018"
@@ -26,7 +26,7 @@ def test_geo_replication():
         # 2. Register Remote Region (e.g. us-east-1)
         payload = json.dumps({
             "region_id": "us-east-1",
-            "endpoint": "http://us.faizdb.io:27018"
+            "endpoint": "http://us.tapirusdb.com:27018"
         }).encode("utf-8")
         req = urllib.request.Request(
             f"{base_url}/v1/cluster/regions",
@@ -71,8 +71,8 @@ def test_geo_replication():
         print("=" * 65)
 
     except ConnectionRefusedError:
-        print("ℹ️ Note: FaizDB server is not running on 127.0.0.1:27018.")
-        print("Run 'faizdb serve' to launch live server and execute test.")
+        print("ℹ️ Note: TapisaurusDB server is not running on 127.0.0.1:27018.")
+        print("Run 'tapisaurus serve' to launch live server and execute test.")
     except Exception as e:
         print(f"Test output / note: {e}")
 

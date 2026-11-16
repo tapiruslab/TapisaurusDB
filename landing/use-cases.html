@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Use Cases & Solutions Spectrum — FaizDB</title>
-  <meta name="description" content="Explore the full 20-solution enterprise spectrum of FaizDB: Frontier AI & Agentic Memory, Real-time Multiplayer Gaming, Edge & Robotics, Core Banking ACID, GraphRAG, and Multi-Region CRDTs.">
+  <title>Use Cases & Solutions Spectrum — TapisaurusDB</title>
+  <meta name="description" content="Explore the full 20-solution enterprise spectrum of TapisaurusDB: Frontier AI & Agentic Memory, Real-time Multiplayer Gaming, Edge & Robotics, Core Banking ACID, GraphRAG, and Multi-Region CRDTs.">
   
   <link rel="preconnect" href="https://api.fontshare.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -132,7 +132,7 @@
     <div class="container nav-inner">
       <a href="index.html" class="logo">
         <div class="logo-mark">⚡</div>
-        <span>FaizDB</span>
+        <span>TapisaurusDB</span>
       </a>
       <ul class="nav-menu">
         <li><a href="index.html">Home</a></li>
@@ -144,7 +144,7 @@
       </ul>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="themeToggle" class="btn btn-secondary" aria-label="Toggle Theme">☀️</button>
-        <a href="https://github.com/ictdothouse/faizdb" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
+        <a href="https://github.com/tapiruslab/TapisaurusDB" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
       </div>
     </div>
   </header>
@@ -155,10 +155,10 @@
       <span class="type-overline">Comprehensive Solutions Matrix</span>
       <h1 class="type-display" style="margin: 8px 0 16px;">The 20-Solution Enterprise Spectrum</h1>
       <p class="type-body" style="font-size: 17px; margin-bottom: 12px;">
-        FaizDB is not a one-trick database. By unifying <strong>Document (JSON/BSON), HNSW Vectors, Directional Knowledge Graphs, and Relational SQL</strong> within a single <strong>7.70 MB</strong> Safe Rust binary, FaizDB eliminates database sprawl across 20 distinct mission-critical industries.
+        TapisaurusDB is not a one-trick database. By unifying <strong>Document (JSON/BSON), HNSW Vectors, Directional Knowledge Graphs, and Relational SQL</strong> within a single <strong>7.70 MB</strong> Safe Rust binary, TapisaurusDB eliminates database sprawl across 20 distinct mission-critical industries.
       </p>
       <div style="padding: 12px 16px; background: var(--primary-subtle); border-left: 3px solid var(--primary); border-radius: 4px; font-size: 13.5px; color: var(--text-primary); line-height: 1.5;">
-        🎯 <strong>Standalone-First with Native FaizQL:</strong> FaizDB is an independent, native database with its own unified query language (FaizQL), native gRPC (port 50051), and in-process embedded library mode. The MySQL (3306), PostgreSQL (5432), and MongoDB (27017) wire ports are <em>optional compatibility bridges</em> for seamless tool adoption (Laravel Eloquent, Prisma, DBeaver, PyMongo, MySQL CLI).
+        🎯 <strong>Standalone-First with Native TapisaurusQL:</strong> TapisaurusDB is an independent, native database with its own unified query language (TapisaurusQL), native gRPC (port 50051), and in-process embedded library mode. The MySQL (3306), PostgreSQL (5432), and MongoDB (27017) wire ports are <em>optional compatibility bridges</em> for seamless tool adoption (Laravel Eloquent, Prisma, DBeaver, PyMongo, MySQL CLI).
       </div>
     </div>
 
@@ -241,7 +241,7 @@
             </div>
             <h2 class="type-subhead">2. Semantic Caching (Slash 70%+ LLM Bills)</h2>
             <p class="type-body" style="margin-top: 8px;">
-              Caches prompt embeddings in sub-millisecond in-memory vector space via built-in <code>SemanticCache</code>. When incoming prompts have cosine similarity $\ge 0.90$, FaizDB immediately serves the response from memory with auto-TTL, slashing expensive OpenAI, Anthropic, Google, Meta, DeepSeek, and other LLM token costs by over 70%–85%.
+              Caches prompt embeddings in sub-millisecond in-memory vector space via built-in <code>SemanticCache</code>. When incoming prompts have cosine similarity $\ge 0.90$, TapisaurusDB immediately serves the response from memory with auto-TTL, slashing expensive OpenAI, Anthropic, Google, Meta, DeepSeek, and other LLM token costs by over 70%–85%.
             </p>
             <div class="code-snippet">
               <span class="code-comment">// Query built-in SemanticCache before hitting LLM API</span><br/>
@@ -295,7 +295,7 @@
             </p>
             <div class="code-snippet">
               <span class="code-comment"># Native PyTorch IterableDataset connection</span><br/>
-              loader = DataLoader(FaizDbDataset("imagenet_embeds",<br/>
+              loader = DataLoader(TapisaurusDataset("imagenet_embeds",<br/>
               &nbsp;&nbsp;target="10.0.0.1:50051"), batch_size=2048)
             </div>
           </div>
@@ -382,7 +382,7 @@
             </div>
             <h2 class="type-subhead">7. Multiplayer Game State &amp; Leaderboards</h2>
             <p class="type-body" style="margin-top: 8px;">
-              Physics calculations execute in game server volatile RAM. FaizDB embedded mode (<code style="color:var(--primary);">faizdb-core</code>) acts as the zero-network, zero-GC-stall state persistence layer for match session snapshots, anti-duplication inventory, and HNSW skill matchmaking.
+              Physics calculations execute in game server volatile RAM. TapisaurusDB embedded mode (<code style="color:var(--primary);">tapisaurus-core</code>) acts as the zero-network, zero-GC-stall state persistence layer for match session snapshots, anti-duplication inventory, and HNSW skill matchmaking.
             </p>
             <div class="code-snippet">
               <span class="code-comment"># Atomic score update + Top-10 leaderboard</span><br/>
@@ -558,7 +558,7 @@
             </p>
             <div class="code-snippet">
               <span class="code-comment"># Point-In-Time Disaster Recovery to exact microsecond</span><br/>
-              <span class="code-accent">faizdb restore</span> --snapshot snap_20260904.enc \<br/>
+              <span class="code-accent">tapisaurus restore</span> --snapshot snap_20260904.enc \<br/>
               &nbsp;&nbsp;--replay-wal --target-lsn 849204820
             </div>
           </div>
@@ -624,7 +624,7 @@
             </p>
             <div class="code-snippet">
               <span class="code-comment"># On-device visual landmark vector localization</span><br/>
-              landmark = faizdb_embedded.vector_search(<br/>
+              landmark = tapisaurus_embedded.vector_search(<br/>
               &nbsp;&nbsp;"visual_landmarks", camera_embedding, top_k=1)
             </div>
           </div>
@@ -649,7 +649,7 @@
             </p>
             <div class="code-snippet">
               <span class="code-comment"># Verified: Zero data corruption on abrupt power cut / torn write</span><br/>
-              $ pkill -9 faizdb &amp;&amp; ./faizdb --recover<br/>
+              $ pkill -9 tapisaurus &amp;&amp; ./tapisaurus --recover<br/>
               <span class="code-accent">[INFO] WAL Replay: Corrupted tail truncated safely; 100% committed restored.</span>
             </div>
           </div>
@@ -741,7 +741,7 @@
             <div class="code-snippet">
               <span class="code-comment"># GPU Dictionary Attacks stall on memory-hard Argon2id</span><br/>
               <span class="code-accent">Attack Attempt:</span> 10,000 req/s<br/>
-              <span class="code-accent">FaizDB Defense:</span> TCP Layer drop + IP auto-quarantine!
+              <span class="code-accent">TapisaurusDB Defense:</span> TCP Layer drop + IP auto-quarantine!
             </div>
           </div>
           <div class="card-meta">
@@ -784,7 +784,7 @@
 
   <footer>
     <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
-      <span>© 2026 FaizDB Project · Genesis Design System · Enterprise Production Ready</span>
+      <span>© 2026 TapisaurusDB Project · Genesis Design System · Enterprise Production Ready</span>
       <a href="index.html" style="color: var(--primary); text-decoration: none; font-weight: 600;">Back to Home ➔</a>
     </div>
   </footer>
@@ -793,7 +793,7 @@
     // Theme Switcher
     const toggleBtn = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
-    const saved = localStorage.getItem('faizdb-theme') || 'light';
+    const saved = localStorage.getItem('tapisaurus-theme') || 'light';
     htmlEl.className = saved;
     toggleBtn.textContent = saved === 'dark' ? '🌙' : '☀️';
 
@@ -801,7 +801,7 @@
       const next = htmlEl.classList.contains('light') ? 'dark' : 'light';
       htmlEl.className = next;
       toggleBtn.textContent = next === 'dark' ? '🌙' : '☀️';
-      localStorage.setItem('faizdb-theme', next);
+      localStorage.setItem('tapisaurus-theme', next);
     });
 
     // Category Filter

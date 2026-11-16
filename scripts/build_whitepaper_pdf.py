@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FaizDB Whitepaper PDF Builder
-Converts docs/FAIZDB_ARCHITECTURE_WHITEPAPER.md into a high-grade publication-ready PDF
+TapisaurusDB Whitepaper PDF Builder
+Converts docs/TAPISAURUS_ARCHITECTURE_WHITEPAPER.md into a high-grade publication-ready PDF
 complete with rendered Mermaid diagrams, KaTeX formulas, and academic typography.
 """
 
@@ -13,9 +13,9 @@ import time
 
 def main():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    md_path = os.path.join(repo_root, "docs", "FAIZDB_ARCHITECTURE_WHITEPAPER.md")
-    html_path = os.path.join(repo_root, "docs", "FAIZDB_ARCHITECTURE_WHITEPAPER.html")
-    pdf_path = os.path.join(repo_root, "docs", "FAIZDB_ARCHITECTURE_WHITEPAPER.pdf")
+    md_path = os.path.join(repo_root, "docs", "TAPISAURUS_ARCHITECTURE_WHITEPAPER.md")
+    html_path = os.path.join(repo_root, "docs", "TAPISAURUS_ARCHITECTURE_WHITEPAPER.html")
+    pdf_path = os.path.join(repo_root, "docs", "TAPISAURUS_ARCHITECTURE_WHITEPAPER.pdf")
 
     if not os.path.exists(md_path):
         print(f"Error: Markdown file not found at {md_path}")
@@ -30,7 +30,7 @@ def main():
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>FaizDB: Technical Architecture Whitepaper</title>
+  <title>TapisaurusDB: Technical Architecture Whitepaper</title>
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,7 +59,7 @@ def main():
         color: #718096;
       }}
       @bottom-left {{
-        content: "FaizDB Architecture Whitepaper v1.0";
+        content: "TapisaurusDB Architecture Whitepaper v1.0";
         font-family: 'Inter', sans-serif;
         font-size: 8.5pt;
         color: #718096;
@@ -413,8 +413,8 @@ def main():
 
     // Explicit academic figure captions
     const figureCaptions = [
-      "Figure 1: Architectural Comparison: Fragile Polyglot Persistence Sprawl vs. FaizDB Unified In-Memory Convergence Engine",
-      "Figure 2: FaizDB Modular 7-Layer Architecture and Monorepo Internal Pipeline Topology",
+      "Figure 1: Architectural Comparison: Fragile Polyglot Persistence Sprawl vs. TapisaurusDB Unified In-Memory Convergence Engine",
+      "Figure 2: TapisaurusDB Modular 7-Layer Architecture and Monorepo Internal Pipeline Topology",
       "Figure 3: End-to-End Write Transaction & Durability Lifecycle (Gateway -> WAL fsync -> SkipList MemTable -> SSTable Compaction)",
       "Figure 4: Four-Tier Read Path Hierarchy: Active MemTable, Immutable MemTable, ARC Block Cache, and Bloom Filter",
       "Figure 5: Single-Pass Converged Multi-Model Query Pipeline (Graph Topo Filter -> SIMD Vector ANN -> Document Projection)",

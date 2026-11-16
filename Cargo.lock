@@ -703,168 +703,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "faizdb-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "faizdb-core",
- "faizdb-graph",
- "faizdb-query",
- "faizdb-security",
- "faizdb-server",
- "faizdb-vector",
- "parking_lot",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "faizdb-core"
-version = "0.1.0"
-dependencies = [
- "bson",
- "bytes",
- "chrono",
- "crc32fast",
- "criterion",
- "crossbeam-skiplist",
- "dashmap",
- "lz4_flex",
- "memmap2",
- "parking_lot",
- "proptest",
- "rand 0.9.5",
- "ring",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "faizdb-graph"
-version = "0.1.0"
-dependencies = [
- "crc32fast",
- "faizdb-core",
- "faizdb-vector",
- "parking_lot",
- "serde",
- "serde_json",
- "thiserror",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "faizdb-query"
-version = "0.1.0"
-dependencies = [
- "dashmap",
- "faizdb-core",
- "faizdb-graph",
- "faizdb-vector",
- "parking_lot",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "faizdb-security"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "chrono",
- "faizdb-core",
- "jsonwebtoken",
- "parking_lot",
- "pem",
- "rand_core 0.6.4",
- "rcgen",
- "ring",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "thiserror",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "faizdb-server"
-version = "0.1.0"
-dependencies = [
- "axum 0.8.9",
- "axum-server",
- "base64",
- "bson",
- "bytes",
- "chrono",
- "dashmap",
- "faizdb-core",
- "faizdb-graph",
- "faizdb-query",
- "faizdb-security",
- "faizdb-vector",
- "futures-util",
- "parking_lot",
- "prost",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tonic",
- "tower 0.5.3",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "faizdb-vector"
-version = "0.1.0"
-dependencies = [
- "faizdb-core",
- "parking_lot",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "faizdb-wasm"
-version = "0.1.0"
-dependencies = [
- "faizdb-core",
- "faizdb-query",
- "faizdb-vector",
- "parking_lot",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2126,6 +1964,168 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "tapisaurus-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tapisaurus-graph",
+ "tapisaurus-query",
+ "tapisaurus-security",
+ "tapisaurus-server",
+ "tapisaurus-vector",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "tapisaurus-core"
+version = "0.1.0"
+dependencies = [
+ "bson",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "criterion",
+ "crossbeam-skiplist",
+ "dashmap",
+ "lz4_flex",
+ "memmap2",
+ "parking_lot",
+ "proptest",
+ "rand 0.9.5",
+ "ring",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "tapisaurus-graph"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tapisaurus-vector",
+ "thiserror",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "tapisaurus-query"
+version = "0.1.0"
+dependencies = [
+ "dashmap",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tapisaurus-graph",
+ "tapisaurus-vector",
+ "tempfile",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "tapisaurus-security"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "chrono",
+ "jsonwebtoken",
+ "parking_lot",
+ "pem",
+ "rand_core 0.6.4",
+ "rcgen",
+ "ring",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "thiserror",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "tapisaurus-server"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.9",
+ "axum-server",
+ "base64",
+ "bson",
+ "bytes",
+ "chrono",
+ "dashmap",
+ "futures-util",
+ "parking_lot",
+ "prost",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tapisaurus-graph",
+ "tapisaurus-query",
+ "tapisaurus-security",
+ "tapisaurus-vector",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tonic",
+ "tower 0.5.3",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "tapisaurus-vector"
+version = "0.1.0"
+dependencies = [
+ "parking_lot",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tempfile",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "tapisaurus-wasm"
+version = "0.1.0"
+dependencies = [
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tapisaurus-query",
+ "tapisaurus-vector",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
 
 [[package]]
 name = "tempfile"

@@ -1,21 +1,21 @@
 /**
- * 🔥 FaizDB Official Client SDK for Node.js, Bun, Deno, and Browser.
+ * 🔥 TapisaurusDB Official Client SDK for Node.js, Bun, Deno, and Browser.
  *
- * Universal, Zero-Dependency, Type-Safe Client for FaizDB.
+ * Universal, Zero-Dependency, Type-Safe Client for TapisaurusDB.
  * Supports Document Operations, HNSW Vector ANN, Okapi BM25 Search,
  * TTL In-Memory Cache, Real-Time Change Streams, and JWT RBAC.
  *
  * @example
  * ```typescript
- * import { FaizClient } from 'faizdb';
+ * import { TapisaurusClient } from 'tapisaurus';
  *
- * const db = new FaizClient({
+ * const db = new TapisaurusClient({
  *   endpoint: 'http://localhost:27018',
- *   token: process.env.FAIZDB_TOKEN,
+ *   token: process.env.TAPISAURUS_TOKEN,
  * });
  *
  * // Or login dynamically:
- * await db.auth.login('admin', 'faizdb-admin-2026');
+ * await db.auth.login('admin', 'tapisaurus-admin-2026');
  *
  * // 1. Document Operations (MongoDB style)
  * const users = db.collection('users');
@@ -28,7 +28,7 @@
  * // 3. Okapi BM25 Fuzzy Full-Text Search
  * const searchResults = await users.search('Ahmad Faiz', { fuzzy: true, topK: 10 });
  *
- * // 4. Raw FaizQL / SQL Queries
+ * // 4. Raw TapisaurusQL / SQL Queries
  * const sqlData = await db.query('SELECT * FROM users WHERE active = true');
  *
  * // 5. Real-Time Change Stream (WebSocket)
@@ -38,7 +38,7 @@
  * ```
  */
 
-export interface FaizClientOptions {
+export interface TapisaurusClientOptions {
   endpoint?: string;
   token?: string;
   apiKey?: string;
@@ -75,9 +75,9 @@ export interface ChangeEvent<T = any> {
   updated_fields?: Record<string, any>;
 }
 
-export class FaizCollection<T extends Record<string, any> = Record<string, any>> {
+export class TapisaurusCollection<T extends Record<string, any> = Record<string, any>> {
   constructor(
-    private client: FaizClient,
+    private client: TapisaurusClient,
     public readonly name: string
   ) {}
 
@@ -227,7 +227,7 @@ export class FaizCollection<T extends Record<string, any> = Record<string, any>>
 }
 
 export class AuthNamespace {
-  constructor(private client: FaizClient) {}
+  constructor(private client: TapisaurusClient) {}
 
   /**
    * Login with username and password to obtain a signed JWT
@@ -288,12 +288,12 @@ export class AuthNamespace {
   }
 }
 
-export class FaizClient {
+export class TapisaurusClient {
   private baseUrl: string;
   private token?: string;
   public readonly auth: AuthNamespace;
 
-  constructor(options: string | FaizClientOptions = 'http://localhost:27018') {
+  constructor(options: string | TapisaurusClientOptions = 'http://localhost:27018') {
     if (typeof options === 'string') {
       this.baseUrl = options.replace(/\/+$/, '');
     } else {
@@ -314,12 +314,12 @@ export class FaizClient {
   /**
    * Access a specific collection
    */
-  collection<T extends Record<string, any> = Record<string, any>>(name: string): FaizCollection<T> {
-    return new FaizCollection<T>(this, name);
+  collection<T extends Record<string, any> = Record<string, any>>(name: string): TapisaurusCollection<T> {
+    return new TapisaurusCollection<T>(this, name);
   }
 
   /**
-   * Execute any query string (SQL, MongoDB JSON, or FaizQL)
+   * Execute any query string (SQL, MongoDB JSON, or TapisaurusQL)
    */
   async query<T = any>(queryString: string): Promise<T> {
     const res = await this.request<any>('/v1/query', 'POST', { query: queryString });
@@ -427,5 +427,5 @@ export class FaizClient {
   }
 }
 
-export default FaizClient;
+export default TapisaurusClient;
 export * from './grpc';

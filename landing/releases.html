@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Releases & Changelog — FaizDB</title>
-  <meta name="description" content="FaizDB official releases, changelog, and binary release assets for Linux, macOS, and Windows.">
+  <title>Releases & Changelog — TapisaurusDB</title>
+  <meta name="description" content="TapisaurusDB official releases, changelog, and binary release assets for Linux, macOS, and Windows.">
   
   <link rel="preconnect" href="https://api.fontshare.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,7 +75,7 @@
     <div class="container nav-inner">
       <a href="index.html" class="logo">
         <div class="logo-mark">⚡</div>
-        <span>FaizDB</span>
+        <span>TapisaurusDB</span>
       </a>
       <ul class="nav-menu">
         <li><a href="index.html">Home</a></li>
@@ -87,7 +87,7 @@
       </ul>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="themeToggle" class="btn btn-secondary">☀️</button>
-        <a href="https://github.com/ictdothouse/faizdb" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
+        <a href="https://github.com/tapiruslab/TapisaurusDB" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
       </div>
     </div>
   </header>
@@ -101,25 +101,25 @@
 
     <div class="content-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h2 class="type-subhead">FaizDB v0.1.0 — Universal Multi-Model & Lakehouse</h2>
+        <h2 class="type-subhead">TapisaurusDB v0.1.0 — Universal Multi-Model & Lakehouse</h2>
         <span style="font-family: var(--font-mono); font-size: 12px; color: var(--primary); font-weight: 700;">Latest Release</span>
       </div>
       <p class="type-body" style="margin-bottom: 16px;">
-        First official universal release of FaizDB featuring 8-Wide SIMD, 32x 1-bit Binary Quantization (BQ), Adaptive Replacement Cache (ARC), S3 Multipart Offloading, and Active-Active CRDTs.
+        First official universal release of TapisaurusDB featuring 8-Wide SIMD, 32x 1-bit Binary Quantization (BQ), Adaptive Replacement Cache (ARC), S3 Multipart Offloading, and Active-Active CRDTs.
       </p>
       <ul class="type-body" style="line-height: 1.8; margin-left: 20px;">
         <li>✨ <strong>Hybrid Storage:</strong> LSM-Tree + SkipList MemTable + Dynamic Bloom Filters.</li>
         <li>✨ <strong>AI Vectors:</strong> Native HNSW with SQ8 and 1-bit Binary Quantization with hardware POPCNT.</li>
         <li>✨ <strong>Wire Protocols:</strong> MongoDB Wire (27017), PostgreSQL Wire (5432), gRPC (50051), REST/WS (27018).</li>
         <li>✨ <strong>Big Data:</strong> ColumnarBatch Parquet scans and S3/GCS automated cold storage tiering.</li>
-        <li>✨ <strong>Embedded Mode:</strong> Zero-dependency in-process library mode (<code>faizdb-core</code>).</li>
+        <li>✨ <strong>Embedded Mode:</strong> Zero-dependency in-process library mode (<code>tapisaurus-core</code>).</li>
       </ul>
     </div>
   </main>
 
   <footer>
     <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
-      <span>© 2026 FaizDB Project · Genesis Design System</span>
+      <span>© 2026 TapisaurusDB Project · Genesis Design System</span>
       <a href="index.html" style="color: var(--primary); text-decoration: none;">Back to Home</a>
     </div>
   </footer>
@@ -127,7 +127,7 @@
   <script>
     const toggleBtn = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
-    const saved = localStorage.getItem('faizdb-theme') || 'light';
+    const saved = localStorage.getItem('tapisaurus-theme') || 'light';
     htmlEl.className = saved;
     toggleBtn.textContent = saved === 'dark' ? '🌙' : '☀️';
 
@@ -135,7 +135,7 @@
       const next = htmlEl.classList.contains('light') ? 'dark' : 'light';
       htmlEl.className = next;
       toggleBtn.textContent = next === 'dark' ? '🌙' : '☀️';
-      localStorage.setItem('faizdb-theme', next);
+      localStorage.setItem('tapisaurus-theme', next);
     });
   </script>
 </body>

@@ -1,83 +1,83 @@
-# 📖 FaizDB Universal Commands & Syntax Reference Manual
+# 📖 TapisaurusDB Universal Commands & Syntax Reference Manual
 
-This is the definitive, exhaustive command and syntax manual for **FaizDB**. It covers all **5 query dialects**, the **CLI toolchain**, the **HTTP REST endpoints**, the **gRPC Protocol Buffers RPCs**, and the **Embedded In-Process Engine**.
+This is the definitive, exhaustive command and syntax manual for **TapisaurusDB**. It covers all **5 query dialects**, the **CLI toolchain**, the **HTTP REST endpoints**, the **gRPC Protocol Buffers RPCs**, and the **Embedded In-Process Engine**.
 
 ---
 
 ## 📑 Table of Contents
 
-1. [CLI Toolchain Commands (`faizdb`)](#1-cli-toolchain-commands)
+1. [CLI Toolchain Commands (`tapisaurus`)](#1-cli-toolchain-commands)
 2. [Relational SQL Syntax (Port 5432 / 3306 / REST / Shell)](#2-relational-sql-syntax)
 3. [openCypher Knowledge Graph Syntax (Port 5432 / 3306 / REST)](#3-opencypher-knowledge-graph-syntax)
-4. [FaizQL Native Multi-Model Syntax (REST / gRPC / Shell)](#4-faizql-native-multi-model-syntax)
+4. [TapisaurusQL Native Multi-Model Syntax (REST / gRPC / Shell)](#4-tapisaurusql-native-multi-model-syntax)
 5. [MongoDB Wire & Shell Syntax (Port 27017 / REST)](#5-mongodb-wire--shell-syntax)
 6. [HTTP REST API Endpoints Reference (Port 27018)](#6-http-rest-api-endpoints-reference)
 7. [gRPC Protocol Buffers RPC Reference (Port 50051)](#7-grpc-protocol-buffers-rpc-reference)
 8. [Python SDK & LangGraph Native Saver](#8-python-sdk--langgraph-native-saver)
-9. [Embedded In-Process Rust Engine (`faizdb-core`)](#9-embedded-in-process-rust-engine)
+9. [Embedded In-Process Rust Engine (`tapisaurus-core`)](#9-embedded-in-process-rust-engine)
 10. [Developer Tools & Observability Assets](#10-developer-tools--observability-assets)
 
 ---
 
 ## 1. CLI Toolchain Commands
 
-All commands can be run via the compiled binary `faizdb` (or `./target/release/faizdb`):
+All commands can be run via the compiled binary `tapisaurus` (or `./target/release/tapisaurus`):
 
 ```bash
-faizdb [SUBCOMMAND] [OPTIONS]
+tapisaurus [SUBCOMMAND] [OPTIONS]
 ```
 
 ### Core Subcommands
 
 | Command | Description | Key Options / Flags |
 | :--- | :--- | :--- |
-| `faizdb serve` | Starts the 5-way universal database daemon | `--host 0.0.0.0`, `--http-port 27018`, `--grpc-port 50051`, `--mongo-port 27017`, `--pg-port 5432`, `--mysql-port 3306`, `--data-dir ./faizdb_data` |
-| `faizdb doctor` | Runs preflight system diagnostics across 5 gateways, storage, WAL & security | `--host 127.0.0.1`, `--http-port 27018`, `--wire-port 27017`, `--pg-port 5432`, `--mysql-port 3306`, `--grpc-port 50051`, `--data-dir ./faizdb_data` |
-| `faizdb seed` | Seeds multi-model datasets for instant evaluation (Relational, Vector, Graph) | `--dataset ecommerce\|agent-memory\|social-graph`, `--data-dir ./faizdb_data` |
-| `faizdb shell` | Starts the interactive multi-dialect REPL | `--endpoint http://localhost:27018`, `--token <jwt>`, `--username <user>`, `--password <pass>` |
-| `faizdb query "<query>"` | Runs a one-shot query from terminal | `--endpoint http://localhost:27018`, `--format json\|table\|csv` |
-| `faizdb backup` | Creates a non-blocking snapshot archive | `--output ./backups/snap.enc.json`, `--encrypt`, `--key <aes_key>` |
-| `faizdb restore` | Restores snapshot & replays WAL logs | `--input ./backups/snap.enc.json`, `--replay-wal`, `--target-lsn <lsn>` |
-| `faizdb benchmark` | Executes high-concurrency throughput stress test | `--threads 16`, `--operations 100000`, `--workload read_heavy\|write_heavy\|mixed` |
-| `faizdb ycsb` | Runs official standard YCSB benchmarks | `--workload A\|B\|C\|D\|E\|F`, `--recordcount 100000`, `--operationcount 500000` |
-| `faizdb cluster join` | Joins node to a distributed Raft cluster | `--peer 10.0.0.1:27018`, `--node-id node_02`, `--raft-port 7000` |
-| `faizdb cluster status` | Displays cluster topology and shard heatmaps | `--endpoint http://localhost:27018` |
-| `faizdb version` | Prints binary version, git commit, and build info | None |
-| `faizdb help` | Prints general or subcommand help screen | `faizdb help [subcommand]` |
+| `tapisaurus serve` | Starts the 5-way universal database daemon | `--host 0.0.0.0`, `--http-port 27018`, `--grpc-port 50051`, `--mongo-port 27017`, `--pg-port 5432`, `--mysql-port 3306`, `--data-dir ./tapisaurus_data` |
+| `tapisaurus doctor` | Runs preflight system diagnostics across 5 gateways, storage, WAL & security | `--host 127.0.0.1`, `--http-port 27018`, `--wire-port 27017`, `--pg-port 5432`, `--mysql-port 3306`, `--grpc-port 50051`, `--data-dir ./tapisaurus_data` |
+| `tapisaurus seed` | Seeds multi-model datasets for instant evaluation (Relational, Vector, Graph) | `--dataset ecommerce\|agent-memory\|social-graph`, `--data-dir ./tapisaurus_data` |
+| `tapisaurus shell` | Starts the interactive multi-dialect REPL | `--endpoint http://localhost:27018`, `--token <jwt>`, `--username <user>`, `--password <pass>` |
+| `tapisaurus query "<query>"` | Runs a one-shot query from terminal | `--endpoint http://localhost:27018`, `--format json\|table\|csv` |
+| `tapisaurus backup` | Creates a non-blocking snapshot archive | `--output ./backups/snap.enc.json`, `--encrypt`, `--key <aes_key>` |
+| `tapisaurus restore` | Restores snapshot & replays WAL logs | `--input ./backups/snap.enc.json`, `--replay-wal`, `--target-lsn <lsn>` |
+| `tapisaurus benchmark` | Executes high-concurrency throughput stress test | `--threads 16`, `--operations 100000`, `--workload read_heavy\|write_heavy\|mixed` |
+| `tapisaurus ycsb` | Runs official standard YCSB benchmarks | `--workload A\|B\|C\|D\|E\|F`, `--recordcount 100000`, `--operationcount 500000` |
+| `tapisaurus cluster join` | Joins node to a distributed Raft cluster | `--peer 10.0.0.1:27018`, `--node-id node_02`, `--raft-port 7000` |
+| `tapisaurus cluster status` | Displays cluster topology and shard heatmaps | `--endpoint http://localhost:27018` |
+| `tapisaurus version` | Prints binary version, git commit, and build info | None |
+| `tapisaurus help` | Prints general or subcommand help screen | `tapisaurus help [subcommand]` |
 
 ### Practical CLI Examples
 
 ```bash
 # Run comprehensive health preflight & port audit
-faizdb doctor
+tapisaurus doctor
 
 # Seed rich multi-model ecommerce dataset (products, orders, 64-dim HNSW, knowledge graph)
-faizdb seed --dataset ecommerce
+tapisaurus seed --dataset ecommerce
 
 # Seed autonomous AI agent memory tier (episodic, semantic, working, 64-dim embeddings)
-faizdb seed --dataset agent-memory
+tapisaurus seed --dataset agent-memory
 
 # Seed social knowledge graph (profiles, posts, followers relationships)
-faizdb seed --dataset social-graph
+tapisaurus seed --dataset social-graph
 
 # Start full multi-gateway daemon in production mode
-faizdb serve --pg-port 5432 --mysql-port 3306 --mongo-port 27017 --http-port 27018 --grpc-port 50051
+tapisaurus serve --pg-port 5432 --mysql-port 3306 --mongo-port 27017 --http-port 27018 --grpc-port 50051
 
 # Execute a one-shot SQL query and output as formatted table
-faizdb query "SELECT * FROM users WHERE score > 9000 LIMIT 5;" --format table
+tapisaurus query "SELECT * FROM users WHERE score > 9000 LIMIT 5;" --format table
 
 # Generate an encrypted disaster recovery backup
-faizdb backup --output /var/backups/faizdb_20260906.enc.json --encrypt
+tapisaurus backup --output /var/backups/tapisaurus_20260906.enc.json --encrypt
 
 # Point-In-Time Disaster Recovery to exact microsecond LSN
-faizdb restore --input /var/backups/faizdb_20260906.enc.json --replay-wal --target-lsn 849204820
+tapisaurus restore --input /var/backups/tapisaurus_20260906.enc.json --replay-wal --target-lsn 849204820
 ```
 
 ---
 
 ## 2. Relational SQL Syntax
 
-FaizDB parses standard ANSI SQL with Cost-Based Optimization (`faizdb-query`), available over **Port 5432 (Postgres)**, **Port 3306 (MySQL)**, **Port 27018 (`/v1/query`)**, and **CLI shell**.
+TapisaurusDB parses standard ANSI SQL with Cost-Based Optimization (`tapisaurus-query`), available over **Port 5432 (Postgres)**, **Port 3306 (MySQL)**, **Port 27018 (`/v1/query`)**, and **CLI shell**.
 
 ### A. Data Definition Language (DDL)
 
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP
 );
 
--- Create a collection (FaizQL / SQL)
+-- Create a collection (TapisaurusQL / SQL)
 CREATE COLLECTION users;
 
 -- Drop a table or collection (purges both RAM and persistent disk storage)
@@ -117,7 +117,7 @@ ANALYZE users;
 ```sql
 -- Insert Row using standard SQL syntax
 INSERT INTO users (name, email, role, score) 
-VALUES ('Ahmad Faiz', 'faiz@ict.house', 'Architect', 9900);
+VALUES ('Ahmad Faiz', 'faiz@tapirusdb.com', 'Architect', 9900);
 
 -- Insert Row using native JSON document syntax
 INSERT INTO users {"name": "Alice Vance", "role": "Engineer", "score": 9200};
@@ -150,13 +150,13 @@ WHERE (role = 'Architect' OR role = 'Principal') AND score >= 9000;
 
 -- String Matching Operators
 SELECT * FROM users WHERE name LIKE '%Faiz%';
-SELECT * FROM users WHERE email ENDS_WITH '@ict.house';
+SELECT * FROM users WHERE email ENDS_WITH '@tapirusdb.com';
 SELECT * FROM users WHERE role STARTS_WITH 'Lead';
 
 -- Update Records (Arithmetic & Assignment)
 UPDATE users 
 SET role = 'Distinguished Architect', score = score + 500 
-WHERE email = 'faiz@ict.house';
+WHERE email = 'faiz@tapirusdb.com';
 
 -- Delete Records
 DELETE FROM users 
@@ -216,14 +216,14 @@ FROM orders
 INNER JOIN customers ON orders.customer_id = customers.id;
 
 -- Output verbose cost scoring, selectivity percentages, and index rationales
-EXPLAIN VERBOSE SELECT * FROM users WHERE email = 'faiz@ict.house';
+EXPLAIN VERBOSE SELECT * FROM users WHERE email = 'faiz@tapirusdb.com';
 ```
 
 ---
 
 ## 3. openCypher Knowledge Graph Syntax
 
-FaizDB provides a high-performance in-memory and disk-backed **Directional Graph Engine** with native openCypher support.
+TapisaurusDB provides a high-performance in-memory and disk-backed **Directional Graph Engine** with native openCypher support.
 
 ### A. Graph Edge Creation
 
@@ -275,9 +275,9 @@ DELETE EDGE FROM 'p1' TO 'p2' VIA 'KNOWS';
 
 ---
 
-## 4. FaizQL Native Multi-Model Syntax
+## 4. TapisaurusQL Native Multi-Model Syntax
 
-FaizQL is FaizDB's proprietary unified query syntax that allows executing relational queries, HNSW vector search, and graph traversal within a single statement.
+TapisaurusQL is TapisaurusDB's proprietary unified query syntax that allows executing relational queries, HNSW vector search, and graph traversal within a single statement.
 
 ### A. Search & Traversal Clauses
 
@@ -316,7 +316,7 @@ TRAVERSE FROM "root_doc" DEPTH 3 VIA "references";
 
 ## 5. MongoDB Wire & Shell Syntax
 
-FaizDB speaks native MongoDB wire protocol on **Port 27017**. All standard MongoDB commands, Compass queries, PyMongo, and Mongoose operations work out of the box.
+TapisaurusDB speaks native MongoDB wire protocol on **Port 27017**. All standard MongoDB commands, Compass queries, PyMongo, and Mongoose operations work out of the box.
 
 ### A. Inserting Documents
 
@@ -453,7 +453,7 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "faizdb-admin-2026"
+  "password": "tapisaurus-admin-2026"
 }
 ```
 
@@ -545,14 +545,14 @@ Connect a standard WebSocket client to receive sub-millisecond mutation events:
 # Create non-blocking snapshot
 POST /v1/backup
 {
-  "output_path": "./backups/faizdb_snapshot.json",
+  "output_path": "./backups/tapisaurus_snapshot.json",
   "encrypt": false
 }
 
 # Restore from snapshot
 POST /v1/restore
 {
-  "input_path": "./backups/faizdb_snapshot.json"
+  "input_path": "./backups/tapisaurus_snapshot.json"
 }
 ```
 
@@ -563,7 +563,7 @@ GET /v1/cluster/regions
 POST /v1/cluster/regions
 {
   "region_id": "eu-central-1",
-  "endpoint": "http://eu.faizdb.io:27018"
+  "endpoint": "http://eu.tapirusdb.com:27018"
 }
 
 POST /v1/cluster/geo-sync
@@ -576,11 +576,11 @@ POST /v1/cluster/geo-sync
 
 ## 7. gRPC Protocol Buffers RPC Reference
 
-Port: `50051`. Protobuf definition: `proto/faizdb.proto`.
+Port: `50051`. Protobuf definition: `proto/tapisaurus.proto`.
 
 ```protobuf
-service FaizDbService {
-  // 1. Execute SQL, MongoDB JSON, or FaizQL query
+service TapisaurusDbService {
+  // 1. Execute SQL, MongoDB JSON, or TapisaurusQL query
   rpc ExecuteQuery (QueryRequest) returns (QueryResponse);
 
   // 2. High-speed HNSW dense vector ANN search (< 1ms)
@@ -604,13 +604,13 @@ service FaizDbService {
 Install or use local Python SDK from `bindings/python`:
 
 ```python
-from faizdb import FaizDB
-from faizdb.langgraph import FaizDbSaver
+from tapisaurus import TapisaurusDB
+from tapisaurus.langgraph import TapisaurusSaver
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
 
-# 1. Initialize Native FaizDB Client
-db = FaizDB("http://localhost:27018")
+# 1. Initialize Native TapisaurusDB Client
+db = TapisaurusDB("http://localhost:27018")
 
 # 2. Document CRUD
 users = db.collection("users")
@@ -624,7 +624,7 @@ vectors = users.vector_search([0.95, 0.88, 0.12, 0.04], top_k=5)
 matches = users.search("Faiz", fuzzy=True, top_k=10)
 
 # 5. Native LangGraph Checkpointer (Zero PostgreSQL Dependency)
-checkpointer = FaizDbSaver(db, collection_prefix="production_agents")
+checkpointer = TapisaurusSaver(db, collection_prefix="production_agents")
 
 class AgentState(TypedDict):
     query: str
@@ -639,7 +639,7 @@ workflow.add_node("agent", agent_step)
 workflow.set_entry_point("agent")
 workflow.add_edge("agent", END)
 
-# Compile LangGraph with native FaizDbSaver
+# Compile LangGraph with native TapisaurusSaver
 app = workflow.compile(checkpointer=checkpointer)
 
 # Sub-millisecond snapshot persistence & time-travel enabled
@@ -650,14 +650,14 @@ print(result)
 
 ---
 
-## 9. Embedded In-Process Rust Engine (`faizdb-core`)
+## 9. Embedded In-Process Rust Engine (`tapisaurus-core`)
 
-Use FaizDB directly inside your Rust binaries without running any server process.
+Use TapisaurusDB directly inside your Rust binaries without running any server process.
 
 ```rust
-use faizdb_core::storage::engine::{StorageConfig, StorageEngine};
-use faizdb_vector::{HnswConfig, HnswIndex, DistanceMetric, QuantizationType};
-use faizdb_core::storage::columnar::ColumnarBatch;
+use tapisaurus_core::storage::engine::{StorageConfig, StorageEngine};
+use tapisaurus_vector::{HnswConfig, HnswIndex, DistanceMetric, QuantizationType};
+use tapisaurus_core::storage::columnar::ColumnarBatch;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -691,10 +691,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 10. Developer Tools & Observability Assets
 
-FaizDB ships with official, production-ready observability and testing assets in the repository:
+TapisaurusDB ships with official, production-ready observability and testing assets in the repository:
 
 ### A. Official Grafana Dashboard Template
-- **File**: [`dashboards/faizdb-overview.json`](file:///c:/Users/afaiz/Documents/2006/PERSONAL2026/ICTHOUSE2026/FAIZDB/dashboards/faizdb-overview.json)
+- **File**: [`dashboards/tapisaurus-overview.json`](../dashboards/tapisaurus-overview.json)
 - **Features**:
   - Real-time engine health, uptime, and active connection tracking
   - Total QPS throughput and operation breakdown by command type
@@ -705,21 +705,21 @@ FaizDB ships with official, production-ready observability and testing assets in
 - **How to Use**:
   1. Open Grafana (`http://localhost:3000`).
   2. Navigate to **Dashboards** → **New** → **Import**.
-  3. Upload or paste the contents of `dashboards/faizdb-overview.json`.
-  4. Select your Prometheus data source (configured to scrape FaizDB at `http://localhost:27018/metrics`).
+  3. Upload or paste the contents of `dashboards/tapisaurus-overview.json`.
+  4. Select your Prometheus data source (configured to scrape TapisaurusDB at `http://localhost:27018/metrics`).
 
 ### B. Official Postman Collection
-- **File**: [`faizdb.postman_collection.json`](file:///c:/Users/afaiz/Documents/2006/PERSONAL2026/ICTHOUSE2026/FAIZDB/faizdb.postman_collection.json)
+- **File**: [`docs/tapisaurus.postman_collection.json`](tapisaurus.postman_collection.json)
 - **Features**:
-  - Covers all 8 core API modules: Authentication, Health & Telemetry, Collections, FaizQL Engine, Vector HNSW, Knowledge Graph, MVCC Transactions, and Backups.
+  - Covers all 8 core API modules: Authentication, Health & Telemetry, Collections, TapisaurusQL Engine, Vector HNSW, Knowledge Graph, MVCC Transactions, and Backups.
   - Automatic JWT Bearer token capture and injection into collection variables upon login.
   - Pre-populated JSON payloads for instant verification.
 - **How to Use**:
   1. Open Postman or Insomnia.
-  2. Click **Import** and select `faizdb.postman_collection.json`.
+  2. Click **Import** and select `tapisaurus.postman_collection.json`.
   3. Run the **01. Authentication & Security / Login** request to authenticate.
   4. Test any query, vector search, or graph traversal with a single click.
 
 ---
 
-*© 2026 FaizDB Project · Created by Ahmad Faiz · All Rights Reserved.*
+*© 2026 TapisaurusDB Project · Created by Ahmad Faiz · All Rights Reserved.*

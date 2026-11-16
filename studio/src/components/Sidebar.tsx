@@ -42,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: string }[] = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'tables', label: 'Table Explorer', icon: <Table2 className="w-4 h-4" /> },
-    { id: 'query', label: 'FaizQL Console', icon: <Terminal className="w-4 h-4" />, badge: 'Multi' },
+    { id: 'query', label: 'TapisaurusQL Console', icon: <Terminal className="w-4 h-4" />, badge: 'Multi' },
     { id: 'robot', label: 'Robot & Edge Chip', icon: <Bot className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />, badge: 'IoT' },
     { id: 'stream', label: 'Live Streams', icon: <Radio className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />, badge: 'WS' },
     { id: 'cluster', label: 'Cluster & Shards', icon: <Globe className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />, badge: 'Raft' },
@@ -64,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm text-slate-900 dark:text-zinc-100 tracking-tight">FaizDB</span>
+              <span className="font-bold text-sm text-slate-900 dark:text-zinc-100 tracking-tight">TapisaurusDB</span>
               <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-400 dark:border-emerald-800/60 rounded font-semibold">
                 Studio
               </span>

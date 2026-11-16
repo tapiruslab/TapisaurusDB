@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 27020, // Dedicated FaizDB Studio Port
+    port: 27020, // Dedicated TapisaurusDB Studio Port
     host: '0.0.0.0',
     proxy: {
       '/v1': {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FaizDB Live Demo — Static Web App</title>
+  <title>TapisaurusDB Live Demo — Static Web App</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -293,13 +293,13 @@
     <div class="brand">
       <div class="brand-icon">🔥</div>
       <div>
-        <div class="brand-title">FaizDB Live Web App</div>
+        <div class="brand-title">TapisaurusDB Live Web App</div>
         <div style="font-size: 0.75rem; color: var(--text-muted);">Pure Static HTML + JS (Zero Backend Required)</div>
       </div>
     </div>
     <div class="status-badge" id="conn-status">
       <div class="pulse"></div>
-      <span>Connected to FaizDB (Port 27018)</span>
+      <span>Connected to TapisaurusDB (Port 27018)</span>
     </div>
   </header>
 
@@ -308,7 +308,7 @@
     <!-- Left Column: Insert Form -->
     <div class="card">
       <div class="card-title">
-        <span>📝 Save Data into FaizDB</span>
+        <span>📝 Save Data into TapisaurusDB</span>
         <span class="badge badge-primary">Direct REST API</span>
       </div>
 
@@ -378,7 +378,7 @@
           <tbody id="table-body">
             <tr>
               <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                Loading documents from FaizDB...
+                Loading documents from TapisaurusDB...
               </td>
             </tr>
           </tbody>
@@ -389,14 +389,14 @@
 
   <!-- Frontend JavaScript Logic -->
   <script>
-    const FAIZDB_HOST = 'http://localhost:27018';
-    const FAIZDB_WS = 'ws://localhost:27018/v1/subscribe';
+    const TAPISAURUS_HOST = 'http://localhost:27018';
+    const TAPISAURUS_WS = 'ws://localhost:27018/v1/subscribe';
     const COLLECTION = 'gaming_leaderboard';
 
     // 1. Fetch and render all documents
     async function loadDocuments() {
       try {
-        const res = await fetch(`${FAIZDB_HOST}/v1/collections/${COLLECTION}/documents`);
+        const res = await fetch(`${TAPISAURUS_HOST}/v1/collections/${COLLECTION}/documents`);
         const json = await res.json();
         const tbody = document.getElementById('table-body');
         const countSpan = document.getElementById('doc-count');
@@ -422,11 +422,11 @@
         }
       } catch (err) {
         console.error("Error loading documents:", err);
-        document.getElementById('conn-status').innerHTML = `<span style="color: #f87171;">⚠️ Offline / Start 'faizdb serve'</span>`;
+        document.getElementById('conn-status').innerHTML = `<span style="color: #f87171;">⚠️ Offline / Start 'tapisaurus serve'</span>`;
       }
     }
 
-    // 2. Insert Document to FaizDB via REST API
+    // 2. Insert Document to TapisaurusDB via REST API
     document.getElementById('save-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('player_name').value;
@@ -446,7 +446,7 @@
       }
 
       try {
-        const res = await fetch(`${FAIZDB_HOST}/v1/collections/${COLLECTION}/documents`, {
+        const res = await fetch(`${TAPISAURUS_HOST}/v1/collections/${COLLECTION}/documents`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -459,7 +459,7 @@
           loadDocuments();
         }
       } catch (err) {
-        alert("Failed to connect to FaizDB: " + err.message);
+        alert("Failed to connect to TapisaurusDB: " + err.message);
       }
     });
 
@@ -467,7 +467,7 @@
     async function deleteDocument(id) {
       if (!confirm("Are you sure you want to delete this record?")) return;
       try {
-        await fetch(`${FAIZDB_HOST}/v1/collections/${COLLECTION}/documents/${id}`, {
+        await fetch(`${TAPISAURUS_HOST}/v1/collections/${COLLECTION}/documents/${id}`, {
           method: 'DELETE'
         });
         loadDocuments();
@@ -478,11 +478,11 @@
 
     // 4. Real-Time WebSocket Change Streams (Reactive Live Updates!)
     function connectWebSocket() {
-      const ws = new WebSocket(FAIZDB_WS);
+      const ws = new WebSocket(TAPISAURUS_WS);
       const logContainer = document.getElementById('event-log');
 
       ws.onopen = () => {
-        console.log("Connected to FaizDB Real-Time Change Stream");
+        console.log("Connected to TapisaurusDB Real-Time Change Stream");
       };
 
       ws.onmessage = (event) => {

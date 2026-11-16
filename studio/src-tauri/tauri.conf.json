@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "FaizDB Studio",
+  "productName": "TapisaurusDB Studio",
   "version": "0.1.0",
-  "identifier": "com.ictdothouse.faizdb.studio",
+  "identifier": "com.tapiruslab.tapisaurus.studio",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:27020",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "FaizDB Studio — Enterprise & Robotics Control Center",
+        "title": "TapisaurusDB Studio — Enterprise & Robotics Control Center",
         "width": 1280,
         "height": 820,
         "minWidth": 960,

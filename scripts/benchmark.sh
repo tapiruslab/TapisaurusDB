@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🔥 FaizDB Official Automated Benchmark Suite (Universal High-Speed Engine)
+# 🔥 TapisaurusDB Official Automated Benchmark Suite (Universal High-Speed Engine)
 # Measures: High-concurrency Ingestion, Lock-free Scans, HNSW Vectors, BM25 Search.
 # ==============================================================================
 
@@ -13,12 +13,12 @@ MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-ENDPOINT="${FAIZDB_ENDPOINT:-http://127.0.0.1:27018}"
+ENDPOINT="${TAPISAURUS_ENDPOINT:-http://127.0.0.1:27018}"
 DOCS_COUNT="${1:-10000}"
 
 echo -e "${CYAN}${BOLD}"
 echo "╔══════════════════════════════════════════════════════════════════╗"
-echo "║      🔥 FaizDB High-Velocity Performance Benchmark Suite         ║"
+echo "║      🔥 TapisaurusDB High-Velocity Performance Benchmark Suite         ║"
 echo "╠══════════════════════════════════════════════════════════════════╣"
 echo "║  Target Endpoint: $ENDPOINT                            ║"
 echo "║  Workload Batch : $DOCS_COUNT operations per test stage                ║"
@@ -26,19 +26,19 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 # Check server health
-echo -e "${YELLOW}👉 Checking FaizDB engine health...${NC}"
+echo -e "${YELLOW}👉 Checking TapisaurusDB engine health...${NC}"
 HEALTH=$(curl -s "$ENDPOINT/v1/health" || echo "")
 if [[ -z "$HEALTH" ]]; then
-  echo -e "\033[0;31m❌ Error: Cannot connect to FaizDB at $ENDPOINT. Please start the server first.\033[0m"
+  echo -e "\033[0;31m❌ Error: Cannot connect to TapisaurusDB at $ENDPOINT. Please start the server first.\033[0m"
   exit 1
 fi
-echo -e "${GREEN}✅ FaizDB is online and healthy!${NC}\n"
+echo -e "${GREEN}✅ TapisaurusDB is online and healthy!${NC}\n"
 
 # Authenticate
 echo -e "${YELLOW}👉 Authenticating with master JWT...${NC}"
 LOGIN_JSON=$(curl -s -X POST "$ENDPOINT/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"faizdb-admin-2026"}')
+  -d '{"username":"admin","password":"tapisaurus-admin-2026"}')
 TOKEN=$(echo "$LOGIN_JSON" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
 AUTH_HEADER="Authorization: Bearer $TOKEN"
 
@@ -84,4 +84,4 @@ echo -e "${GREEN}✅ BM25 Search Completed in ${ELAPSED_MS} ms (${OPS_SEC} QPS)$
 echo -e "${MAGENTA}${BOLD}STAGE 3: Real-Time Prometheus Metrics (/v1/metrics)...${NC}"
 curl -s "$ENDPOINT/v1/metrics" | grep -v '^#' | sed '/^$/d'
 
-echo -e "\n${CYAN}${BOLD}🎉 Benchmark suite finished successfully! FaizDB operates with predictable sub-millisecond latency.${NC}"
+echo -e "\n${CYAN}${BOLD}🎉 Benchmark suite finished successfully! TapisaurusDB operates with predictable sub-millisecond latency.${NC}"

@@ -1,17 +1,17 @@
-//! # FaizDB WebAssembly (WASM) Headless In-Browser Engine
+//! # TapisaurusDB WebAssembly (WASM) Headless In-Browser Engine
 //!
 //! Exposes a standalone, memory-safe database microkernel compiling down to WebAssembly.
 //! Allows running Document JSON collections, SQL queries, and HNSW high-dimensional
 //! vector similarity search directly inside browser web workers, Cloudflare Workers,
 //! Deno, and Node.js without any background network daemons.
 
-use faizdb_core::document::collection::Collection;
-use faizdb_core::document::model::{Document, Value};
-use faizdb_vector::{DistanceMetric, HnswConfig, HnswIndex};
 use parking_lot::RwLock;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tapisaurus_core::document::collection::Collection;
+use tapisaurus_core::document::model::{Document, Value};
+use tapisaurus_vector::{DistanceMetric, HnswConfig, HnswIndex};
 use wasm_bindgen::prelude::*;
 
 /// Vector search hit structure for JSON serialization in WASM
@@ -24,14 +24,14 @@ pub struct WasmVectorHit {
 
 /// Standalone In-Memory WebAssembly Database Instance
 #[wasm_bindgen]
-pub struct FaizDbWasm {
+pub struct TapisaurusWasm {
     collections: Arc<RwLock<HashMap<String, Collection>>>,
     vector_indexes: Arc<RwLock<HashMap<String, HnswIndex>>>,
 }
 
 #[wasm_bindgen]
-impl FaizDbWasm {
-    /// Initialize a new in-memory FaizDB WebAssembly engine
+impl TapisaurusWasm {
+    /// Initialize a new in-memory TapisaurusDB WebAssembly engine
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -249,11 +249,12 @@ impl FaizDbWasm {
     /// Return engine version and capabilities
     #[wasm_bindgen]
     pub fn version(&self) -> String {
-        "FaizDB WebAssembly Engine v0.1.0 (Headless universal browser/edge persistence)".to_string()
+        "TapisaurusDB WebAssembly Engine v0.1.0 (Headless universal browser/edge persistence)"
+            .to_string()
     }
 }
 
-impl Default for FaizDbWasm {
+impl Default for TapisaurusWasm {
     fn default() -> Self {
         Self::new()
     }
@@ -265,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_wasm_engine_document_lifecycle() {
-        let db = FaizDbWasm::new();
+        let db = TapisaurusWasm::new();
         assert!(db.create_collection("users").unwrap());
 
         let doc_json = r#"{"name": "Ahmad Faiz", "role": "Architect", "score": 9900}"#;
@@ -281,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_wasm_engine_vector_lifecycle() {
-        let db = FaizDbWasm::new();
+        let db = TapisaurusWasm::new();
         assert!(db.create_vector_index("embeddings", 4, "cosine").unwrap());
 
         assert!(db
@@ -299,7 +300,7 @@ mod tests {
 
     #[test]
     fn test_wasm_engine_persistence_export_import() {
-        let db = FaizDbWasm::new();
+        let db = TapisaurusWasm::new();
         db.create_collection("products").unwrap();
         db.insert("products", r#"{"title": "Database Book", "price": 49}"#)
             .unwrap();
@@ -310,7 +311,7 @@ mod tests {
         assert!(exported_json.contains("Database Book"));
 
         // Hydrate into fresh DB instance
-        let new_db = FaizDbWasm::new();
+        let new_db = TapisaurusWasm::new();
         assert!(new_db.import_state(&exported_json).unwrap());
         assert_eq!(new_db.count("products").unwrap(), 1);
     }

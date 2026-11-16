@@ -1,5 +1,5 @@
 /**
- * FaizDB Official TypeScript / Node.js gRPC Client.
+ * TapisaurusDB Official TypeScript / Node.js gRPC Client.
  *
  * Provides high-speed gRPC / Protocol Buffers client communication (Port 50051),
  * HNSW AI vector similarity search, and reactive change stream listeners.
@@ -26,7 +26,7 @@ export interface QueryResponse {
   error?: string;
 }
 
-export class FaizDbGrpcClient {
+export class TapisaurusGrpcClient {
   private host: string;
   private port: number;
   private token: string;
@@ -77,7 +77,7 @@ export class FaizDbGrpcClient {
   /**
    * Execute an AST SQL or Mongo query
    */
-  async executeQuery(query: string, database = 'faizdb'): Promise<QueryResponse> {
+  async executeQuery(query: string, database = 'tapisaurus'): Promise<QueryResponse> {
     const res = await fetch(`http://${this.host}:27018/v1/query`, {
       method: 'POST',
       headers: {

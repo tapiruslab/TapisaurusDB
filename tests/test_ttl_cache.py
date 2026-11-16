@@ -5,9 +5,9 @@ from pymongo import MongoClient
 
 def test_ttl_cache():
     base_url = "http://127.0.0.1:27018"
-    print("1. Connecting via pymongo to FaizDB (mongodb://127.0.0.1:27017)...")
+    print("1. Connecting via pymongo to TapisaurusDB (mongodb://127.0.0.1:27017)...")
     client = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
-    db = client["faizdb"]
+    db = client["tapisaurus"]
     col = db["session_tokens"]
 
     print("2. Inserting 2-second expiring OTP token (Redis-like TTL)...")

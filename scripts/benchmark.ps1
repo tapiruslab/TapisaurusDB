@@ -4,7 +4,7 @@ param (
 )
 
 Write-Host "==================================================================" -ForegroundColor Cyan
-Write-Host "         FaizDB High-Velocity Performance Benchmark Suite         " -ForegroundColor Cyan
+Write-Host "         TapisaurusDB High-Velocity Performance Benchmark Suite         " -ForegroundColor Cyan
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host "  Target Endpoint : $Endpoint" -ForegroundColor Cyan
 Write-Host "  Batch Iterations: $Iterations operations" -ForegroundColor Cyan
@@ -12,12 +12,12 @@ Write-Host "==================================================================" 
 Write-Host ""
 
 # 1. Health check
-Write-Host "-> Checking FaizDB engine health..." -ForegroundColor Yellow
+Write-Host "-> Checking TapisaurusDB engine health..." -ForegroundColor Yellow
 try {
     $health = Invoke-RestMethod -Uri "$Endpoint/v1/health" -Method Get
     Write-Host "[OK] Engine Online: $($health.engine) v$($health.version)" -ForegroundColor Green
 } catch {
-    Write-Host "[ERROR] Failed to connect to FaizDB at $Endpoint" -ForegroundColor Red
+    Write-Host "[ERROR] Failed to connect to TapisaurusDB at $Endpoint" -ForegroundColor Red
     exit 1
 }
 
@@ -25,7 +25,7 @@ try {
 Write-Host "-> Authenticating with master JWT credentials..." -ForegroundColor Yellow
 $loginBody = @{
     username = "admin"
-    password = "faizdb-admin-2026"
+    password = "tapisaurus-admin-2026"
 } | ConvertTo-Json
 
 $loginRes = Invoke-RestMethod -Uri "$Endpoint/v1/auth/login" -Method Post -ContentType "application/json" -Body $loginBody

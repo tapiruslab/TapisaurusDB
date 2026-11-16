@@ -36,7 +36,7 @@ export interface SnapshotManifest {
 export const BackupManager: React.FC = () => {
   const [snapshots, setSnapshots] = useState<SnapshotManifest[]>([
     {
-      engine: 'FaizDB Engine',
+      engine: 'TapisaurusDB Engine',
       version: '0.1.0',
       created_at: new Date(Date.now() - 3600000).toISOString(),
       collections: ['users', 'articles', 'analytics_sales'],

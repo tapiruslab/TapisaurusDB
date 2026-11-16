@@ -4,5 +4,5 @@
 fn main() {
     tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("error while running FaizDB Studio desktop application");
+        .expect("error while running TapisaurusDB Studio desktop application");
 }

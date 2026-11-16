@@ -1,9 +1,9 @@
-# 🏛️ FaizDB: Latest System Capabilities, Architecture & Verification Reference
+# 🏛️ TapisaurusDB: Latest System Capabilities, Architecture & Verification Reference
 **Label:** `[LATEST - SEPTEMBER 2026]`  
 **Classification:** Technical Reference & Empirical Verification Record  
-**Target System:** FaizDB Multi-Model AI-Native Database Engine (`ictdothouse/faizdb`)  
+**Target System:** TapisaurusDB Multi-Model AI-Native Database Engine (`tapiruslab/TapisaurusDB`)  
 **Workspace Test Suite:** `cargo test --workspace` (196+ Tests Passing — 100% Certified)  
-**Primary Test Suites:** [`test_wire_security_and_performance.rs`](../faizdb-server/tests/test_wire_security_and_performance.rs) & [`test_storage_consistency_and_indexing.rs`](../faizdb-server/tests/test_storage_consistency_and_indexing.rs)
+**Primary Test Suites:** [`test_wire_security_and_performance.rs`](../tapisaurus-server/tests/test_wire_security_and_performance.rs) & [`test_storage_consistency_and_indexing.rs`](../tapisaurus-server/tests/test_storage_consistency_and_indexing.rs)
 
 ---
 
@@ -21,11 +21,11 @@
 
 ## 1. Executive Architectural Overview
 
-FaizDB is an AI-native, multi-model database engine written in memory-safe Rust. It provides unified, high-throughput access across relational (SQL), document (MongoDB), RPC (gRPC), and REST/WebSocket interfaces backed by a single unified storage architecture (LSM-Tree + Write-Ahead Log + MVCC Snapshot Isolation + HNSW Vector Indexing).
+TapisaurusDB is an AI-native, multi-model database engine written in memory-safe Rust. It provides unified, high-throughput access across relational (SQL), document (MongoDB), RPC (gRPC), and REST/WebSocket interfaces backed by a single unified storage architecture (LSM-Tree + Write-Ahead Log + MVCC Snapshot Isolation + HNSW Vector Indexing).
 
 ```
                               ┌─────────────────────────────────────────────────────────┐
-                              │            FaizDB Unified Security & UserStore          │
+                              │            TapisaurusDB Unified Security & UserStore          │
                               │    (Argon2id Hash + Ed25519 JWT + RBAC: Admin/RO/RW)   │
                               └────────────────────────────┬────────────────────────────┘
                                                            │
@@ -43,7 +43,7 @@ FaizDB is an AI-native, multi-model database engine written in memory-safe Rust.
                                                            │
                                                            ▼
                               ┌─────────────────────────────────────────────────────────┐
-                              │                FaizQL Query Engine & AST                │
+                              │                TapisaurusQL Query Engine & AST                │
                               │ • SQL: SELECT, INSERT, UPDATE, DELETE, ORDER BY ASC/DESC│
                               │ • Arithmetic Mutation: score = score + 500              │
                               │ • Mongo: find(), insert(), updateOne(), sort(), count() │
@@ -52,7 +52,7 @@ FaizDB is an AI-native, multi-model database engine written in memory-safe Rust.
                                                            │
                                                            ▼
                               ┌─────────────────────────────────────────────────────────┐
-                              │            FaizDB LSM-Tree Engine & Indexing            │
+                              │            TapisaurusDB LSM-Tree Engine & Indexing            │
                               │ • Lock-Free MemTable (Crossbeam SkipList)               │
                               │ • Level-0 to Level-1 SSTable Compaction (Auto >= 4)     │
                               │ • CRC32 Framed Append-Only WAL + MVCC Transactions      │
@@ -64,7 +64,7 @@ FaizDB is an AI-native, multi-model database engine written in memory-safe Rust.
 
 ## 2. Unified Multi-Protocol Gateway Security & RBAC
 
-All inbound connection gateways in FaizDB converge on a centralized, cryptographically secure credential store:
+All inbound connection gateways in TapisaurusDB converge on a centralized, cryptographically secure credential store:
 
 ### Gateway Security Specifications
 
@@ -80,7 +80,7 @@ All inbound connection gateways in FaizDB converge on a centralized, cryptograph
 
 ## 3. Query Engine & Multi-Model Compatibility
 
-FaizDB provides native parsing and execution for both relational SQL and MongoDB document manipulation syntax.
+TapisaurusDB provides native parsing and execution for both relational SQL and MongoDB document manipulation syntax.
 
 ### A. Relational SQL Capabilities
 1. **Arithmetic Updates:**
@@ -118,7 +118,7 @@ FaizDB provides native parsing and execution for both relational SQL and MongoDB
 
 ## 4. Storage Engine & LSM-Tree Compaction
 
-FaizDB employs a Log-Structured Merge-tree (LSM-tree) storage architecture optimized for durable, concurrent writes and low-latency point lookups.
+TapisaurusDB employs a Log-Structured Merge-tree (LSM-tree) storage architecture optimized for durable, concurrent writes and low-latency point lookups.
 
 ### A. Write Path & Durability
 1. **MemTable:** Lock-free SkipList based on `crossbeam-skiplist`, enabling zero-lock concurrent reads and writes.
@@ -126,7 +126,7 @@ FaizDB employs a Log-Structured Merge-tree (LSM-tree) storage architecture optim
 3. **SSTable Generation:** MemTable flushes to immutable disk SSTables ordered by key with embedded Bloom filters (0.01 false-positive rate).
 
 ### B. Level-0 Multi-Way Compaction
-* **Engine-Level Merging:** `StorageEngine::compact(&self) -> FaizResult<usize>` consolidates multiple SSTables into a single sorted, deduplicated SSTable.
+* **Engine-Level Merging:** `StorageEngine::compact(&self) -> TapisaurusResult<usize>` consolidates multiple SSTables into a single sorted, deduplicated SSTable.
 * **Automatic Compaction Trigger:** When Level-0 accumulates $\ge 4$ SSTables during routine MemTable flushes, background compaction is automatically triggered to constrain disk read amplification.
 * **Administrative REST Trigger:** Manual compaction can be invoked via `POST /v1/system/compact`.
 
@@ -185,7 +185,7 @@ The entire monorepo test suite executes cleanly with a **100% pass rate** across
 ================================================================================
   Crate / Test Suite                                  | Result
   ----------------------------------------------------|-------------------------
-  faizdb_core (Unit Tests)                            | 75 passed
+  tapisaurus_core (Unit Tests)                            | 75 passed
   test_backup_pitr (PITR & AES-256-GCM Recovery)      | 3 passed
   test_chaos_fault_tolerance (CRDT & Partition Heals) | 3 passed
   test_document_crud (CRUD Lifecycle & WAL Crash)     | 5 passed
@@ -193,13 +193,13 @@ The entire monorepo test suite executes cleanly with a **100% pass rate** across
   test_fuzz_storage (WAL Corruption & Bitflip Fuzz)   | 3 passed
   test_raft_consensus (Distributed Leader Election)   | 2 passed
   test_storage_durability (Bloom Filter & Durability) | 3 passed
-  faizdb_graph (Knowledge Graph & Shortest Path)      | 2 passed
-  faizdb_query (Parser, AST & Aggregations)           | 15 passed
+  tapisaurus_graph (Knowledge Graph & Shortest Path)      | 2 passed
+  tapisaurus_query (Parser, AST & Aggregations)           | 15 passed
   test_query_cbo (Cost-Based Optimizer & Histograms)  | 1 passed
-  faizdb_security (Argon2id, AES-GCM, Ed25519, TLS)   | 7 passed
+  tapisaurus_security (Argon2id, AES-GCM, Ed25519, TLS)   | 7 passed
   test_auth_flow (Tamper Rejection & Expiration)      | 5 passed
   test_tls_transport (Self-Signed & PEM Server Config)| 2 passed
-  faizdb_server (Prometheus & Wire Handshake)         | 5 passed
+  tapisaurus_server (Prometheus & Wire Handshake)         | 5 passed
   test_storage_consistency_and_indexing (UPDATE, Sort, Compact)  | 5 passed
   test_security_and_system_correctness (Zero Regression) | 3 passed
   test_enterprise_engine_capabilities (Joins, Wire, Raft) | 6 passed
@@ -211,8 +211,8 @@ The entire monorepo test suite executes cleanly with a **100% pass rate** across
   test_wire_security_and_performance (Wire & Bench)   | 3 passed (18 sub-tests)
   test_pagination_and_disk_fallback (Out-of-Core & Disk)| 9 passed
   test_executor_drop_storage_purge (Zero-Leak Storage) | 1 passed
-  faizdb_vector (HNSW, Scalar & 32x Binary Quant)     | 15 passed
-  faizdb_core (Doc-tests)                             | 2 passed
+  tapisaurus_vector (HNSW, Scalar & 32x Binary Quant)     | 15 passed
+  tapisaurus_core (Doc-tests)                             | 2 passed
   ----------------------------------------------------|-------------------------
   TOTAL COMPLIANCE:                                   | 220+ PASSED (0 FAILED)
 ================================================================================
@@ -231,17 +231,17 @@ All verifications are 100% reproducible directly from the source repository:
 cargo test --workspace
 
 # 2. Run the Multi-Protocol Security & Performance benchmark suite:
-cargo test -p faizdb-server --test test_wire_security_and_performance -- --nocapture
+cargo test -p tapisaurus-server --test test_wire_security_and_performance -- --nocapture
 
 # 3. Run the Storage Consistency, Compaction, and Pagination verification suite:
-cargo test -p faizdb-server --test test_storage_consistency_and_indexing -- --nocapture
+cargo test -p tapisaurus-server --test test_storage_consistency_and_indexing -- --nocapture
 
 # 4. Run the Chaos & WAL Fault-Tolerance test suite:
-cargo test -p faizdb-server --test test_chaos_fault_tolerance -- --nocapture
+cargo test -p tapisaurus-server --test test_chaos_fault_tolerance -- --nocapture
 
 # 5. Run storage durability & fuzz testing:
-cargo test -p faizdb-core --test test_fuzz_storage -- --nocapture
+cargo test -p tapisaurus-core --test test_fuzz_storage -- --nocapture
 ```
 
 ---
-*FaizDB Engineering Team — Standard Reference Documentation (September 2026)*
+*TapisaurusDB Engineering Team — Standard Reference Documentation (September 2026)*

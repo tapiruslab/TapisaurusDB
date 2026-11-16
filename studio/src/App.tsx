@@ -46,7 +46,7 @@ export const App: React.FC = () => {
   const [loadingDocs, setLoadingDocs] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('faizdb_theme');
+    const saved = localStorage.getItem('tapisaurus_theme');
     return saved === 'dark' ? 'dark' : 'light'; // Default is Light Mode!
   });
 
@@ -67,7 +67,7 @@ export const App: React.FC = () => {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('faizdb_theme', theme);
+    localStorage.setItem('tapisaurus_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -95,7 +95,7 @@ export const App: React.FC = () => {
       setIsConnected(true);
       await loadCollectionDocuments(selectedCollection);
     } catch (e) {
-      console.warn('FaizDB Engine connecting/offline:', e);
+      console.warn('TapisaurusDB Engine connecting/offline:', e);
       setIsConnected(false);
       if (documents.length === 0) {
         setDocuments([

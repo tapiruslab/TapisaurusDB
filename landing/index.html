@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FaizDB — The AI-Native Universal Multi-Model & Lakehouse Database Engine</title>
-  <meta name="description" content="FaizDB is an editorial-grade, ultra-fast multi-model database engine combining Document, Vector, Graph, Relational SQL, and Petabyte Lakehouse Parquet in one native binary.">
+  <title>TapisaurusDB — The AI-Native Universal Multi-Model & Lakehouse Database Engine</title>
+  <meta name="description" content="TapisaurusDB is an editorial-grade, ultra-fast multi-model database engine combining Document, Vector, Graph, Relational SQL, and Petabyte Lakehouse Parquet in one native binary.">
   
   <!-- Genesis Typography: General Sans (Display), DM Sans (Body), JetBrains Mono (Code) -->
   <link rel="preconnect" href="https://api.fontshare.com">
@@ -630,24 +630,24 @@
     <div class="container nav-inner">
       <a href="#" class="logo">
         <div class="logo-mark">⚡</div>
-        <span>FaizDB</span>
+        <span>TapisaurusDB</span>
       </a>
 
       <ul class="nav-menu">
         <li><a href="#features">Architecture</a></li>
         <li><a href="tutorial.html">Tutorial &amp; Demos</a></li>
         <li><a href="#spectrum">Spectrum</a></li>
-        <li><a href="https://github.com/ictdothouse/faizdb/blob/main/docs/COMMANDS_AND_SYNTAX_REFERENCE.md" target="_blank" style="color:var(--primary); font-weight:600;">Docs &amp; Commands ↗</a></li>
+        <li><a href="https://github.com/tapiruslab/TapisaurusDB/blob/main/docs/COMMANDS_AND_SYNTAX_REFERENCE.md" target="_blank" style="color:var(--primary); font-weight:600;">Docs &amp; Commands ↗</a></li>
         <li><a href="#benchmarks">Benchmarks</a></li>
         <li><a href="#comparison">Matrix</a></li>
-        <li><a href="https://github.com/ictdothouse/faizdb" target="_blank">GitHub</a></li>
+        <li><a href="https://github.com/tapiruslab/TapisaurusDB" target="_blank">GitHub</a></li>
       </ul>
 
       <div class="nav-actions">
         <button id="themeToggle" class="btn btn-secondary btn-sm" title="Toggle Light / Dark Mode" aria-label="Toggle Theme">
           ☀️
         </button>
-        <a href="https://github.com/ictdothouse/faizdb" class="btn btn-secondary btn-sm" target="_blank">⭐ Star</a>
+        <a href="https://github.com/tapiruslab/TapisaurusDB" class="btn btn-secondary btn-sm" target="_blank">⭐ Star</a>
         <a href="#install" class="btn btn-primary btn-sm">Get Started</a>
       </div>
     </div>
@@ -685,13 +685,13 @@
         </div>
         <div class="terminal-code">
           <div class="c-muted"># 1. Install official standalone binary (Linux / macOS / Windows)</div>
-          <div><span class="c-pri">curl</span> -sSf https://faizdb.ict.house/install.sh | sh</div>
+          <div><span class="c-pri">curl</span> -sSf https://tapisaurus.tapirusdb.com/install.sh | sh</div>
           
           <div class="c-muted" style="margin-top: 12px;"># 2. Run 5-way multi-protocol server (Ports: 3306 MySQL, 5432 Postgres, 27017 Mongo, 50051 gRPC, 27018 HTTP)</div>
-          <div><span class="c-pri">faizdb</span> server --data-dir ./faizdb_data</div>
+          <div><span class="c-pri">tapisaurus</span> server --data-dir ./tapisaurus_data</div>
 
           <div class="c-muted" style="margin-top: 12px;"># 3. Or use directly as an embedded zero-dependency SQLite-style library:</div>
-          <div><span class="c-sec">cargo add</span> faizdb-core <span class="c-muted"># In-process engine, zero daemon, zero network ports</span></div>
+          <div><span class="c-sec">cargo add</span> tapisaurus-core <span class="c-muted"># In-process engine, zero daemon, zero network ports</span></div>
         </div>
       </div>
 
@@ -731,7 +731,7 @@
         <div class="card-icon">🧠</div>
         <h3 class="card-title">Transactional GraphRAG: Single Query & Single Binary</h3>
         <p class="card-text">
-          Eliminate the painful <strong>Neo4j + Qdrant synchronization tax</strong>. Traverse multi-hop knowledge graph relationships and rank matching context by high-dimensional vector embeddings with built-in sub-millisecond <strong>Semantic Caching</strong> in a single ACID transaction within one 7.70MB binary. Query using native openCypher <code>MATCH (a)-[:REL]->(b) WHERE a.id = 'p1' VECTOR NEAR [...] TOP 5 RETURN b</code>, FaizQL <code>FIND col TRAVERSE FROM 'id' DEPTH 2</code>, or MongoDB <code>$traverse</code>.
+          Eliminate the painful <strong>Neo4j + Qdrant synchronization tax</strong>. Traverse multi-hop knowledge graph relationships and rank matching context by high-dimensional vector embeddings with built-in sub-millisecond <strong>Semantic Caching</strong> in a single ACID transaction within one 7.70MB binary. Query using native openCypher <code>MATCH (a)-[:REL]->(b) WHERE a.id = 'p1' VECTOR NEAR [...] TOP 5 RETURN b</code>, TapisaurusQL <code>FIND col TRAVERSE FROM 'id' DEPTH 2</code>, or MongoDB <code>$traverse</code>.
         </p>
       </div>
 
@@ -750,7 +750,7 @@
         <div class="card-icon">🪶</div>
         <h3 class="card-title">23.05 MB Kernel RAM & Embedded Mode</h3>
         <p class="card-text">
-          Empirically verified <strong>23.05 MB idle VmRSS</strong> on Linux kernel while serving all 5 network protocols. Standalone release binary is only <strong>7.70 MB</strong> (8,080,104 bytes). Link <code>faizdb-core</code> directly into your process with zero background daemons.
+          Empirically verified <strong>23.05 MB idle VmRSS</strong> on Linux kernel while serving all 5 network protocols. Standalone release binary is only <strong>7.70 MB</strong> (8,080,104 bytes). Link <code>tapisaurus-core</code> directly into your process with zero background daemons.
         </p>
       </div>
 
@@ -759,7 +759,7 @@
         <div class="card-icon">🌐</div>
         <h3 class="card-title">5-Way Universal Wire Gateways (MySQL + Postgres + Mongo + gRPC + REST)</h3>
         <p class="card-text">
-          Connect existing tools with zero code rewrites. FaizDB speaks native <strong>MySQL / MariaDB Wire (Port 3306)</strong> for seamless PHP and Laravel Eloquent compatibility, <strong>PostgreSQL Wire (Port 5432/5433)</strong> with virtual catalog reflection (<code>pg_catalog.*</code>, <code>information_schema.*</code>) for native ORM introspection (Prisma, Drizzle, SQLAlchemy, DBeaver), <strong>MongoDB Wire (Port 27017)</strong> at 3,390 ops/s (p50: 262µs), <strong>gRPC (Port 50051)</strong> with Bearer JWT / Basic Auth, and <strong>REST CRUD &amp; WebSockets (Port 27018)</strong>.
+          Connect existing tools with zero code rewrites. TapisaurusDB speaks native <strong>MySQL / MariaDB Wire (Port 3306)</strong> for seamless PHP and Laravel Eloquent compatibility, <strong>PostgreSQL Wire (Port 5432/5433)</strong> with virtual catalog reflection (<code>pg_catalog.*</code>, <code>information_schema.*</code>) for native ORM introspection (Prisma, Drizzle, SQLAlchemy, DBeaver), <strong>MongoDB Wire (Port 27017)</strong> at 3,390 ops/s (p50: 262µs), <strong>gRPC (Port 50051)</strong> with Bearer JWT / Basic Auth, and <strong>REST CRUD &amp; WebSockets (Port 27018)</strong>.
         </p>
       </div>
 
@@ -795,7 +795,7 @@
         <div class="card-icon">📦</div>
         <h3 class="card-title">WAL Group Commit & Universal Data Portability</h3>
         <p class="card-text">
-          Single-buffer atomic batch persistence amortizes physical <code>fsync</code> overhead for 100k+ durable writes/sec. Built-in <code>faizdb dump</code> streams entire databases to standard JSONL and ANSI SQL with constant $O(1)$ memory usage.
+          Single-buffer atomic batch persistence amortizes physical <code>fsync</code> overhead for 100k+ durable writes/sec. Built-in <code>tapisaurus dump</code> streams entire databases to standard JSONL and ANSI SQL with constant $O(1)$ memory usage.
         </p>
       </div>
 
@@ -822,7 +822,7 @@
           </div>
           <div style="padding: 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border);">
             <strong style="color: var(--text-primary); font-size: 13px;">🤖 Binary HNSW Vector</strong>
-            <p class="type-small" style="margin-top: 4px;">Compact <code>FAIZHNSW</code> binary index format: 5x–8x smaller files, 50x faster load time, and backwards-compatible JSON fallback.</p>
+            <p class="type-small" style="margin-top: 4px;">Compact <code>TPSHNSW1</code> binary index format: 5x–8x smaller files, 50x faster load time, and backwards-compatible JSON fallback.</p>
           </div>
           <div style="padding: 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border);">
             <strong style="color: var(--text-primary); font-size: 13px;">🔒 Security & Governance</strong>
@@ -969,7 +969,7 @@
         <tbody>
           <tr class="featured-row">
             <td><span class="rank-badge rank-gold">#1 Top Tier · Grade A+</span></td>
-            <td><strong>⚡ FaizDB (v0.1.0)</strong></td>
+            <td><strong>⚡ TapisaurusDB (v0.1.0)</strong></td>
             <td><strong>61,432 ops/s</strong></td>
             <td><strong>0.18 ms</strong></td>
             <td><strong>192 MB (32x BQ)</strong></td>
@@ -1048,7 +1048,7 @@
   <section class="container" id="comparison">
     <div class="section-header">
       <span class="type-overline">Feature Matrix</span>
-      <h2 class="type-headline" style="margin-top: 4px;">Why Architects Choose FaizDB</h2>
+      <h2 class="type-headline" style="margin-top: 4px;">Why Architects Choose TapisaurusDB</h2>
       <p class="type-body" style="margin-top: 6px;">Eliminate complex database sprawl with a single cohesive engine.</p>
     </div>
 
@@ -1057,7 +1057,7 @@
         <thead>
           <tr>
             <th>Feature / Capability</th>
-            <th>⚡ FaizDB</th>
+            <th>⚡ TapisaurusDB</th>
             <th>MongoDB</th>
             <th>PostgreSQL</th>
             <th>Qdrant</th>
@@ -1083,7 +1083,7 @@
           </tr>
           <tr>
             <td><strong>Embedded SQLite-Style Mode</strong></td>
-            <td style="color: var(--secondary);">✅ In-Process (faizdb-core)</td>
+            <td style="color: var(--secondary);">✅ In-Process (tapisaurus-core)</td>
             <td style="color: var(--error);">❌ Server Only</td>
             <td style="color: var(--error);">❌ Server Only</td>
             <td style="color: var(--error);">❌ Server Only</td>
@@ -1123,7 +1123,7 @@
           </tr>
           <tr>
             <td><strong>Universal Anti-Lock-in Dump</strong></td>
-            <td style="color: var(--secondary);">✅ faizdb dump (JSONL &amp; ANSI SQL)</td>
+            <td style="color: var(--secondary);">✅ tapisaurus dump (JSONL &amp; ANSI SQL)</td>
             <td style="color: var(--warning);">⚠️ mongodump (BSON)</td>
             <td style="color: var(--warning);">⚠️ pg_dump (SQL dialect)</td>
             <td style="color: var(--error);">❌ Snapshot only</td>
@@ -1157,7 +1157,7 @@
         <div>
           <a href="#" class="logo" style="margin-bottom: 12px; display: inline-flex;">
             <div class="logo-mark">⚡</div>
-            <span>FaizDB</span>
+            <span>TapisaurusDB</span>
           </a>
           <p class="type-body" style="max-width: 320px;">
             The AI-Native Universal Multi-Model & Lakehouse Database Engine written in 100% Safe Rust.
@@ -1182,11 +1182,11 @@
           <h4>Documentation</h4>
           <ul>
             <li><a href="installation.html">Installation Guide</a></li>
-            <li><a href="https://github.com/ictdothouse/faizdb/blob/main/docs/COMPATIBILITY_MATRIX.md" target="_blank">Wire Compatibility Matrix</a></li>
+            <li><a href="https://github.com/tapiruslab/TapisaurusDB/blob/main/docs/COMPATIBILITY_MATRIX.md" target="_blank">Wire Compatibility Matrix</a></li>
             <li><a href="tier1.html">Tier-1 Engineering</a></li>
             <li><a href="api.html">Universal API Matrix</a></li>
             <li><a href="sdk.html">SDK Reference</a></li>
-            <li><a href="https://github.com/ictdothouse/faizdb/blob/main/docs/INTELLECTUAL_PROPERTY_AND_ANTI_POACHING.md" target="_blank">IP &amp; Anti-Poaching</a></li>
+            <li><a href="https://github.com/tapiruslab/TapisaurusDB/blob/main/docs/INTELLECTUAL_PROPERTY_AND_ANTI_POACHING.md" target="_blank">IP &amp; Anti-Poaching</a></li>
           </ul>
         </div>
 
@@ -1194,8 +1194,8 @@
         <div class="footer-col">
           <h4>Community</h4>
           <ul>
-            <li><a href="https://github.com/ictdothouse/faizdb" target="_blank">GitHub Repository</a></li>
-            <li><a href="https://github.com/ictdothouse/faizdb/issues" target="_blank">Issue Tracker</a></li>
+            <li><a href="https://github.com/tapiruslab/TapisaurusDB" target="_blank">GitHub Repository</a></li>
+            <li><a href="https://github.com/tapiruslab/TapisaurusDB/issues" target="_blank">Issue Tracker</a></li>
             <li><a href="../SECURITY.md">Security Policy</a></li>
             <li><a href="../CONTRIBUTING.md">Contributing</a></li>
           </ul>
@@ -1203,7 +1203,7 @@
       </div>
 
       <div class="footer-bottom">
-        <span>© 2026 FaizDB Project. Built for high-performance computing and AI-native applications.</span>
+        <span>© 2026 TapisaurusDB Project. Built for high-performance computing and AI-native applications.</span>
         <span>Genesis Design System</span>
       </div>
     </div>
@@ -1215,7 +1215,7 @@
     const htmlEl = document.documentElement;
 
     // Default to Light Mode as per Genesis System
-    const savedTheme = localStorage.getItem('faizdb-theme') || 'light';
+    const savedTheme = localStorage.getItem('tapisaurus-theme') || 'light';
     if (savedTheme === 'dark') {
       htmlEl.classList.remove('light');
       htmlEl.classList.add('dark');
@@ -1231,12 +1231,12 @@
         htmlEl.classList.remove('light');
         htmlEl.classList.add('dark');
         toggleBtn.textContent = '🌙';
-        localStorage.setItem('faizdb-theme', 'dark');
+        localStorage.setItem('tapisaurus-theme', 'dark');
       } else {
         htmlEl.classList.remove('dark');
         htmlEl.classList.add('light');
         toggleBtn.textContent = '☀️';
-        localStorage.setItem('faizdb-theme', 'light');
+        localStorage.setItem('tapisaurus-theme', 'light');
       }
     });
   </script>

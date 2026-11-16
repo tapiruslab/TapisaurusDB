@@ -1,15 +1,15 @@
-# 🔥 FaizDB — The Universal High-Performance Multi-Model Database Kernel
+# 🔥 TapisaurusDB — The Universal High-Performance Multi-Model Database Kernel
 
 <div align="center">
 
 [![Rust](https://img.shields.io/badge/rust-1.88+_|__edition_2024-orange.svg?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
-[![Status](https://img.shields.io/badge/status-v0.1.0--Developer_Preview-blue.svg?style=for-the-badge)](https://github.com/ictdothouse/faizdb)
+[![Status](https://img.shields.io/badge/status-v0.1.0--Developer_Preview-blue.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
 [![License](https://img.shields.io/badge/license-BSL_1.1-purple.svg?style=for-the-badge)](LICENSE)
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg?style=for-the-badge&logo=githubactions)](https://github.com/ictdothouse/faizdb/actions)
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg?style=for-the-badge&logo=githubactions)](https://github.com/tapiruslab/TapisaurusDB/actions)
 [![Audit](https://img.shields.io/badge/audit-Grade_A+_(98.5%2F100)-success.svg?style=for-the-badge)](CHANGELOG.md)
 [![Security](https://img.shields.io/badge/security-EdDSA_Ed25519_%7C_AES--256--GCM-red.svg?style=for-the-badge)](SECURITY.md)
-[![Protocols](https://img.shields.io/badge/gateways-MySQL_%7C_PostgreSQL_%7C_MongoDB_%7C_gRPC_%7C_REST-cyan.svg?style=for-the-badge)](https://github.com/ictdothouse/faizdb)
-[![Architecture](https://img.shields.io/badge/consensus-Raft_%7C_CRDT_Geo_Replication-purple.svg?style=for-the-badge)](https://github.com/ictdothouse/faizdb)
+[![Protocols](https://img.shields.io/badge/gateways-MySQL_%7C_PostgreSQL_%7C_MongoDB_%7C_gRPC_%7C_REST-cyan.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
+[![Architecture](https://img.shields.io/badge/consensus-Raft_%7C_CRDT_Geo_Replication-purple.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
 
 <br/>
 
@@ -22,46 +22,46 @@
 
 ## 🌟 Vision: Clean-Slate Engine with Automatic Multi-Database Comprehension
 
-**FaizDB is an independent, clean-slate multi-model database engine** engineered in 100% Safe Rust. It does **not** depend on or wrap PostgreSQL, MongoDB, Redis, or Qdrant to operate. It is a complete database kernel with its own native storage engine, native query language, and native protocol stack.
+**TapisaurusDB is an independent, clean-slate multi-model database engine** engineered in 100% Safe Rust. It does **not** depend on or wrap PostgreSQL, MongoDB, Redis, or Qdrant to operate. It is a complete database kernel with its own native storage engine, native query language, and native protocol stack.
 
 Its distinguishing engineering advantage is **Automatic Polyglot Comprehension** — the built-in ability to understand and communicate with external database protocols automatically without requiring plugins or middleware:
 
 * **1. What We Are (The Technology):** A pure Safe Rust microkernel compiling down to a single **7.70 MB machine executable** with zero C/C++ legacy runtime dependencies. It unites Document JSON, HNSW Vector embeddings, Knowledge Graph relations, and Relational SQL in one single process.
 * **2. What We Have (Native Components):**
-  - **Native Query Engine (FaizQL):** Our own built-in AST tokenizer, parser, and cost-based optimizer (`faizdb-query`) supporting multi-model queries in one unified syntax.
-  - **Native Storage Engine:** High-throughput MemTable SkipList, LSM-Tree SSTable, atomic WAL, and Multi-Document MVCC ACID transactions (`faizdb-core`).
+  - **Native Query Engine (TapisaurusQL):** Our own built-in AST tokenizer, parser, and cost-based optimizer (`tapisaurus-query`) supporting multi-model queries in one unified syntax.
+  - **Native Storage Engine:** High-throughput MemTable SkipList, LSM-Tree SSTable, atomic WAL, and Multi-Document MVCC ACID transactions (`tapisaurus-core`).
   - **Native Protocols:** Zero-copy binary Protocol Buffers over gRPC (Port 50051) and REST JSON API (Port 8080).
 * **3. Our Key Advantage — Automatic Comprehension of Other Databases:** Rather than forcing developers to migrate or rewrite application stacks:
-  - **Understands PostgreSQL Wire (Port 5432/5433) Automatically:** Connect with `psql`, Prisma, DBeaver, or SQLAlchemy directly; FaizDB parses the wire packets automatically into FaizQL AST.
+  - **Understands PostgreSQL Wire (Port 5432/5433) Automatically:** Connect with `psql`, Prisma, DBeaver, or SQLAlchemy directly; TapisaurusDB parses the wire packets automatically into TapisaurusQL AST.
   - **Understands MySQL / MariaDB Wire (Port 3306) Automatically:** Connect with MySQL CLI, PHP `mysqli`, PDO, or Laravel Eloquent directly with zero code rewrites.
   - **Understands MongoDB Wire (Port 27017) Automatically:** Connect with `mongosh`, PyMongo, Mongoose, or Compass out-of-the-box.
   - **Automatic Open-Format Streaming:** Built-in Change Data Capture (CDC) to stream data to Apache Kafka, BigQuery, Snowflake, and ClickHouse via JSONL and standard SQL.
 
-### 🎯 Standalone-First Architecture: Native FaizQL vs. Automatic Wire Ingress
-**FaizDB does not require any external database engine.** It operates as a fully independent engine:
-* **1. Native Unified Query Language (FaizQL):** FaizDB features its own built-in parser and query planner, giving you full multi-model capabilities natively.
+### 🎯 Standalone-First Architecture: Native TapisaurusQL vs. Automatic Wire Ingress
+**TapisaurusDB does not require any external database engine.** It operates as a fully independent engine:
+* **1. Native Unified Query Language (TapisaurusQL):** TapisaurusDB features its own built-in parser and query planner, giving you full multi-model capabilities natively.
 * **2. Native High-Performance gRPC Engine (Port 50051):** Direct, zero-copy Protocol Buffers serialization for high-throughput AI microservices and inter-service telemetry.
-* **3. In-Process Embedded Library Mode (`faizdb-core`):** Like SQLite or RocksDB, embed FaizDB directly inside your Rust application with zero network daemons and zero background services.
-* **4. Automatic Wire Ingress Gateways (Ports 5432, 3306 & 27017):** Built-in listeners that automatically decode incoming PostgreSQL, MySQL, and MongoDB traffic into FaizQL AST on-the-fly, giving you zero-code-change wire-protocol compatibility.
+* **3. In-Process Embedded Library Mode (`tapisaurus-core`):** Like SQLite or RocksDB, embed TapisaurusDB directly inside your Rust application with zero network daemons and zero background services.
+* **4. Automatic Wire Ingress Gateways (Ports 5432, 3306 & 27017):** Built-in listeners that automatically decode incoming PostgreSQL, MySQL, and MongoDB traffic into TapisaurusQL AST on-the-fly, giving you zero-code-change wire-protocol compatibility.
 
 #### 🛡️ Pragmatic Engineering: Collection-Level Paradigm Isolation
 > **Do NOT mix arbitrary unstructured JSON into strongly-typed relational SQL tables.**  
-> FaizDB's multi-wire gateways are built for **organizational ergonomics and ecosystem compatibility**, not haphazard schema mixing:
+> TapisaurusDB's multi-wire gateways are built for **organizational ergonomics and ecosystem compatibility**, not haphazard schema mixing:
 > * **Relational Collections (SQL Mode via Port 5432):** Governed by strict relational schemas, foreign keys, and typed constraints for financial ledgers, transactional records, and BI reporting tools (e.g., DBeaver, Prisma SQL, SQLAlchemy).
 > * **Document Collections (JSON Mode via Port 27017):** Governed by flexible schema BSON/JSON semantics for rapid prototyping, dynamic user profiles, and event logs (e.g., PyMongo, Mongoose).
-> * Rather than forcing an enterprise to deploy, patch, and maintain two separate database servers, FaizDB allows different teams to access their respective data paradigms within a single unified storage engine.
+> * Rather than forcing an enterprise to deploy, patch, and maintain two separate database servers, TapisaurusDB allows different teams to access their respective data paradigms within a single unified storage engine.
 
 ### 🏛️ The PostgreSQL Extension Tax vs. Native Safe Rust Microkernel
 A common question from seasoned architects is: *"Why not just run PostgreSQL with pgvector, JSONB, and extensions?"* While PostgreSQL is a magnificent general-purpose database, modern high-scale AI, robotics, and edge applications frequently encounter the **PostgreSQL Extension Tax**:
-* **1. Memory Isolation & Cascading Failures:** PostgreSQL extensions (like `pgvector`, `timescaledb`, and `age`) are compiled C shared libraries executing inside PostgreSQL's shared memory space. A memory corruption or segmentation fault in an extension crashes the entire PostgreSQL database cluster. FaizDB's 100% Safe Rust borrow checker guarantees compile-time memory safety without raw pointer crashes.
-* **2. WAL Write Amplification in Vector Search:** Building and mutating HNSW vector indexes via `pgvector` produces massive Write-Ahead Log (WAL) bloat (often 10x–50x the vector data size) because relational WAL engines are designed for small row tuples, not dense high-dimensional graph updates. FaizDB features a native vector storage subsystem with direct index persistence and 32x binary quantization.
-* **3. Process-per-Connection Overhead:** PostgreSQL's 1980s UNIX architecture allocates a separate OS process (`fork()`) for every client connection, consuming several megabytes of RAM per idle connection. FaizDB utilizes modern asynchronous I/O (`tokio`) handling 10,000+ concurrent connections on a fraction of the memory.
-* **4. Edge & Chip Deployment:** PostgreSQL requires an entire operating system environment, user accounts, system daemons, and hundreds of megabytes. FaizDB is a self-contained **7.70 MB binary** (or ~3.5 MB embedded static library) that boots in 1 millisecond on edge silicon, automotive computers, and microcontrollers.
+* **1. Memory Isolation & Cascading Failures:** PostgreSQL extensions (like `pgvector`, `timescaledb`, and `age`) are compiled C shared libraries executing inside PostgreSQL's shared memory space. A memory corruption or segmentation fault in an extension crashes the entire PostgreSQL database cluster. TapisaurusDB's 100% Safe Rust borrow checker guarantees compile-time memory safety without raw pointer crashes.
+* **2. WAL Write Amplification in Vector Search:** Building and mutating HNSW vector indexes via `pgvector` produces massive Write-Ahead Log (WAL) bloat (often 10x–50x the vector data size) because relational WAL engines are designed for small row tuples, not dense high-dimensional graph updates. TapisaurusDB features a native vector storage subsystem with direct index persistence and 32x binary quantization.
+* **3. Process-per-Connection Overhead:** PostgreSQL's 1980s UNIX architecture allocates a separate OS process (`fork()`) for every client connection, consuming several megabytes of RAM per idle connection. TapisaurusDB utilizes modern asynchronous I/O (`tokio`) handling 10,000+ concurrent connections on a fraction of the memory.
+* **4. Edge & Chip Deployment:** PostgreSQL requires an entire operating system environment, user accounts, system daemons, and hundreds of megabytes. TapisaurusDB is a self-contained **7.70 MB binary** (or ~3.5 MB embedded static library) that boots in 1 millisecond on edge silicon, automotive computers, and microcontrollers.
 
 
 ```
                          ┌───────────────────────────────────────────────────────────┐
-                         │                      FaizDB Engine                        │
+                         │                      TapisaurusDB Engine                        │
                          │             5-Way Multi-Protocol Gateways                 │
                          └─────────────────────────────┬─────────────────────────────┘
                                                        │
@@ -77,7 +77,7 @@ A common question from seasoned architects is: *"Why not just run PostgreSQL wit
                                                        │
                                                        ▼
                                      ┌───────────────────────────────────┐
-                                     │       faizdb-query (Parser)       │
+                                     │       tapisaurus-query (Parser)       │
                                      │       AST & Cost-Based Optimizer  │
                                      └─────────────────┬─────────────────┘
                                                        │
@@ -100,27 +100,27 @@ A common question from seasoned architects is: *"Why not just run PostgreSQL wit
 
 ---
 
-## 💎 Architectural Comparison: FaizDB vs. Incumbent Databases
+## 💎 Architectural Comparison: TapisaurusDB vs. Incumbent Databases
 
 ### 🏛️ Design Philosophy, Architectural Niche & Non-Goals
 
-To maintain rigorous engineering integrity and establish transparent expectations for developers and enterprise architects, FaizDB defines its operational sweet spot and explicit non-goals:
+To maintain rigorous engineering integrity and establish transparent expectations for developers and enterprise architects, TapisaurusDB defines its operational sweet spot and explicit non-goals:
 
-#### 🎯 Where FaizDB Excels (The Sweet Spot):
+#### 🎯 Where TapisaurusDB Excels (The Sweet Spot):
 * **AI Agent & Autonomous Systems Memory:** Eliminates "database sprawl" by consolidating dense HNSW Vector embeddings, episodic Knowledge Graphs (openCypher), and Relational State into a single 7.7 MB zero-dependency binary.
 * **Resource-Constrained Edge & Microservices:** Boots in < 2ms with an idle physical memory footprint under 25 MB RAM, running natively on edge silicon, single-board computers, robotics, and containerized microservices without multi-gigabyte daemon bloat.
 * **Unified Multi-Wire Ingress:** Enables polyglot engineering teams to query and mutate data simultaneously using their existing client libraries (`psql`, `mongosh`, `mysql`, Prisma, Drizzle, SQLAlchemy, PyMongo) without maintaining and syncing three separate database clusters.
 
-#### 🚫 Non-Goals (What FaizDB is NOT):
-* **Not a Multi-Petabyte Analytical Warehouse:** FaizDB is not designed to replace column-oriented OLAP engines (e.g., ClickHouse, Snowflake, BigQuery) for multi-terabyte data warehousing scans.
-* **Not Aiming for 100% Legacy Procedural Emulation:** FaizDB does not implement vendor-specific legacy procedural languages (e.g., PL/pgSQL, Oracle PL/SQL, or MySQL triggers). Business logic belongs in modern application services or embedded Rust libraries.
-* **Not an In-Place Mainframe Banking Drop-In (v0.1.0):** While FaizDB guarantees WAL durability, CRC32 verification, and MVCC Serializable Snapshot Isolation (SSI), as a v0.1.0 developer preview, mission-critical Tier-1 core banking deployments should perform staging verification before v1.0 Enterprise GA.
+#### 🚫 Non-Goals (What TapisaurusDB is NOT):
+* **Not a Multi-Petabyte Analytical Warehouse:** TapisaurusDB is not designed to replace column-oriented OLAP engines (e.g., ClickHouse, Snowflake, BigQuery) for multi-terabyte data warehousing scans.
+* **Not Aiming for 100% Legacy Procedural Emulation:** TapisaurusDB does not implement vendor-specific legacy procedural languages (e.g., PL/pgSQL, Oracle PL/SQL, or MySQL triggers). Business logic belongs in modern application services or embedded Rust libraries.
+* **Not an In-Place Mainframe Banking Drop-In (v0.1.0):** While TapisaurusDB guarantees WAL durability, CRC32 verification, and MVCC Serializable Snapshot Isolation (SSI), as a v0.1.0 developer preview, mission-critical Tier-1 core banking deployments should perform staging verification before v1.0 Enterprise GA.
 
 ---
 
 ### 📊 Protocol Compatibility Matrix & Verified Integrations
 
-FaizDB publishes an official, transparent **[Wire Protocol Compatibility Matrix](docs/COMPATIBILITY_MATRIX.md)** detailing precisely what features are fully supported, partially implemented, and scheduled in the engineering roadmap:
+TapisaurusDB publishes an official, transparent **[Wire Protocol Compatibility Matrix](docs/COMPATIBILITY_MATRIX.md)** detailing precisely what features are fully supported, partially implemented, and scheduled in the engineering roadmap:
 
 * 🐘 **PostgreSQL (Port 5432 / 5433):** Full Extended Query Protocol (`P/B/D/E/S/C`), Pratt expression evaluation (`AND/OR/NOT/BETWEEN/IN/LIKE/IS NULL`), multi-column `ORDER BY`, MVCC SSI transactions, and virtual system catalogs (`pg_class`, `pg_attribute`, `pg_am`, `pg_type`) for ORM introspection.
 * 🍃 **MongoDB (Port 27017):** Wire BSON parsing (`OP_MSG`/`OP_QUERY`), full CRUD lifecycle, stateful cursor pagination, index management, and core aggregation pipeline stages (`$match`, `$project`, `$group`, `$sort`, `$limit`).
@@ -133,23 +133,23 @@ FaizDB publishes an official, transparent **[Wire Protocol Compatibility Matrix]
 
 ### 🛡️ Intellectual Property, Prior Art & Anti-Poaching Safeguards
 
-FaizDB is an independent, clean-slate computer system created and architected by **Ahmad Faiz (September 2026)**.
+TapisaurusDB is an independent, clean-slate computer system created and architected by **Ahmad Faiz (September 2026)**.
 
-* **Immutable Prior Art:** Novel architectural implementations—including *In-Graph Bitset HNSW traversal (`IdBitset`)*, *Multi-Wire Gateway over Single-Kernel LSM SkipMap*, and *Zero-Copy Hybrid MVCC SSI*—are publicly disclosed and cryptographically hashed in our [Architecture Whitepaper](docs/FAIZDB_ARCHITECTURE_WHITEPAPER.md) and [Research Paper](docs/FAIZDB_MIND_RESEARCH_PAPER.md), establishing definitive prior art under international patent law (PCT/EPO/USPTO § 102).
-* **Cloud Hyperscaler Anti-Poaching Policy:** FaizDB is 100% free for individual developers, startups, SaaS backends, edge devices, and internal enterprise software. However, commercial cloud providers are strictly prohibited from offering FaizDB as a hosted managed database service (DBaaS) to third parties without an explicit commercial license agreement.
-* **Trademark Protection:** **FaizDB™** and **FaizQL™** are proprietary marks.
+* **Immutable Prior Art:** Novel architectural implementations—including *In-Graph Bitset HNSW traversal (`IdBitset`)*, *Multi-Wire Gateway over Single-Kernel LSM SkipMap*, and *Zero-Copy Hybrid MVCC SSI*—are publicly disclosed and cryptographically hashed in our [Architecture Whitepaper](docs/TAPISAURUS_ARCHITECTURE_WHITEPAPER.md) and [Research Paper](docs/TAPISAURUS_MIND_RESEARCH_PAPER.md), establishing definitive prior art under international patent law (PCT/EPO/USPTO § 102).
+* **Cloud Hyperscaler Anti-Poaching Policy:** TapisaurusDB is 100% free for individual developers, startups, SaaS backends, edge devices, and internal enterprise software. However, commercial cloud providers are strictly prohibited from offering TapisaurusDB as a hosted managed database service (DBaaS) to third parties without an explicit commercial license agreement.
+* **Trademark Protection:** **TapisaurusDB™** and **TapisaurusQL™** are proprietary marks.
 
 *👉 Read the complete [docs/INTELLECTUAL_PROPERTY_AND_ANTI_POACHING.md](docs/INTELLECTUAL_PROPERTY_AND_ANTI_POACHING.md) for full licensing boundaries and commercial terms.*
 
 ---
 
-| Capability | Legacy MongoDB | PostgreSQL + Plugins | Redis | 🚀 **FaizDB (Unified)** |
+| Capability | Legacy MongoDB | PostgreSQL + Plugins | Redis | 🚀 **TapisaurusDB (Unified)** |
 |:---|:---:|:---:|:---:|:---:|
 | **Language & Engine Core** | C++ (Memory leak risks, GC jitter) | C (Manual memory management) | C (No strict type safety) | **100% Safe Rust (Zero memory leaks, 0 GC pauses, Borrow-Checker verified)** |
 | **Multi-Protocol Gateways** | MongoDB only | PostgreSQL only | Redis RESP only | **5-Way Native: MySQL (3306), Postgres (5432), MongoDB (27017), gRPC (50051), REST/WS (27018)** |
 | **Wire Protocol Security** | Mongo SCRAM-SHA | Postgres MD5/SCRAM | Redis AUTH | **Centralized Zero-Trust across all 5 Gateways (Argon2id + Ed25519 JWT RBAC: Admin/RO/RW)** |
 | **Document Memory & Payload** | 16 MB hard ceiling (C++ buffer bloat) | 1 GB (TOAST out-of-line disk overhead) | N/A | **Zero-Copy Byte Slices (Safe 16MB default, scalable for AI Context)** |
-| **AI Vector Search (ANN)** | Add-on / Atlas Cloud only | Requires `pgvector` extension | Requires RedisSearch | **Native HNSW (Cosine, L2, Dot) < 1ms with 8-Lane SIMD (AVX2/NEON), 32x Binary Quantization & Compact Binary `FAIZHNSW` Format (50x faster load)** |
+| **AI Vector Search (ANN)** | Add-on / Atlas Cloud only | Requires `pgvector` extension | Requires RedisSearch | **Native HNSW (Cosine, L2, Dot) < 1ms with 8-Lane SIMD (AVX2/NEON), 32x Binary Quantization & Compact Binary `TPSHNSW1` Format (50x faster load)** |
 | **Graph, openCypher & GraphRAG** | Separate graph DB needed | Requires AGE extension | Requires RedisGraph | **Transactional GraphRAG: Native openCypher MATCH parser + TRAVERSE + VECTOR ranking + In-Memory Semantic Caching in 1 ACID binary** |
 | **Storage Engine & Compaction** | WiredTiger (LRU only) | Shared buffers (Clock-sweep) | In-memory only | **Lock-Free MemTable SkipMap + Guaranteed `sync_data()` WAL + LZ4 SSTable Compression + Sharded ARC (16 shards) + Sparse O(log N) Prefix Scan** |
 | **Query Engine & Mutation** | JSON query language | SQL only | Key-Value commands | **Unified SQL + MongoDB + openCypher: BETWEEN / IN / OR / IS NULL, Columnar Batch Aggregations (AVG/MIN/MAX/COUNT), arithmetic UPDATE, multi-hop MATCH, .sort() & $set** |
@@ -167,8 +167,8 @@ FaizDB is an independent, clean-slate computer system created and architected by
 | **MVCC Autonomous Reaper** | WiredTiger sweep | Vacuum daemon (locks tables) | Single-threaded GC | **Zero-Bloat Background Reaper (30s interval) aborting orphaned transactions** |
 | **Scan Limit Pushdown** | Scan then limit | Scan then limit | SCAN COUNT | **Sub-millisecond short-circuit scan pushdown directly in document iterators** |
 | **Kubernetes Health Probes** | Requires K8s Operator / Agent | Requires sidecar / `pg_isready` | Requires Redis Sentinel / sidecar | **Built-in Cloud-Native HTTP Probes: `/v1/health/liveness` & `/readiness` (0 sidecars)** |
-| **Autonomous Snapshots** | Paid Atlas Cloud / OpsManager | Requires `pgBackRest` / cron daemon | Built-in `save` daemon | **Built-in Async Snapshot Daemon (`FAIZDB_AUTO_BACKUP`) with auto timestamp rotation** |
-| **Open Data Portability** | `mongodump` (BSON lock-in) | `pg_dump` (Postgres dialect only) | RDB dump (Key-Value only) | **Universal Anti-Lock-in: Streaming `faizdb dump` to standard JSONL & ANSI SQL** |
+| **Autonomous Snapshots** | Paid Atlas Cloud / OpsManager | Requires `pgBackRest` / cron daemon | Built-in `save` daemon | **Built-in Async Snapshot Daemon (`TAPISAURUS_AUTO_BACKUP`) with auto timestamp rotation** |
+| **Open Data Portability** | `mongodump` (BSON lock-in) | `pg_dump` (Postgres dialect only) | RDB dump (Key-Value only) | **Universal Anti-Lock-in: Streaming `tapisaurus dump` to standard JSONL & ANSI SQL** |
 
 *For a detailed competitive breakdown vs SurrealDB, CockroachDB, Qdrant, and ArangoDB, see [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md).*
 
@@ -176,11 +176,11 @@ FaizDB is an independent, clean-slate computer system created and architected by
 
 ## ⚖️ CAP Theorem & Distributed Consistency Duality (CP vs AP Modes)
 
-Distributed systems require explicit trade-offs. FaizDB does not make unrealistic claims of violating the **CAP Theorem**; instead, it provides **explicit consistency duality** based on workload requirements:
+Distributed systems require explicit trade-offs. TapisaurusDB does not make unrealistic claims of violating the **CAP Theorem**; instead, it provides **explicit consistency duality** based on workload requirements:
 
 ```
                                   ┌────────────────────────────────────────────────────────┐
-                                  │               FaizDB Consistency Engine                │
+                                  │               TapisaurusDB Consistency Engine                │
                                   └──────────────────────────┬─────────────────────────────┘
                                                              │
                               ┌──────────────────────────────┴──────────────────────────────┐
@@ -200,7 +200,7 @@ Distributed systems require explicit trade-offs. FaizDB does not make unrealisti
 ```
 
 * **Strong Consistency (CP Mode — Mandatory for Financial & Banking Ledgers):**
-  Enforces strict linearizability and serializable transactions across cluster nodes using **Raft Consensus** ($N/2 + 1$ quorum) and local MVCC Write-Ahead Logging (WAL). In this mode, writes are rejected if a network partition prevents quorum, guaranteeing zero double-spending, zero negative account balances, and absolute financial ledger correctness. **FaizDB never uses CRDTs for financial transactions, banking balances, or seat-ticketing inventory.**
+  Enforces strict linearizability and serializable transactions across cluster nodes using **Raft Consensus** ($N/2 + 1$ quorum) and local MVCC Write-Ahead Logging (WAL). In this mode, writes are rejected if a network partition prevents quorum, guaranteeing zero double-spending, zero negative account balances, and absolute financial ledger correctness. **TapisaurusDB never uses CRDTs for financial transactions, banking balances, or seat-ticketing inventory.**
 * **Eventual Consistency (AP Mode — Multi-Region Active-Active Mesh):**
   Leverages built-in **Conflict-Free Replicated Data Types (CRDTs)** such as Positive-Negative Counters (`PNCounter`), Last-Write-Wins Registers (`LWWRegister`), and Observed-Remove Sets (`ORSet`). This mode is strictly designed for **non-monetary collaborative data** — such as shared document workspaces (Notion/Figma style), real-time presence indicators, chat status, and edge IoT telemetry — where local sub-millisecond writes across WAN links are required without distributed locking overhead.
 
@@ -208,7 +208,7 @@ Distributed systems require explicit trade-offs. FaizDB does not make unrealisti
 
 ## 🛡️ Enterprise Production Hardening & Operational Standards (Highlights)
 
-FaizDB is engineered not only for laboratory speed, but for **uncompromising operational resilience under extreme real-world stress**. 
+TapisaurusDB is engineered not only for laboratory speed, but for **uncompromising operational resilience under extreme real-world stress**. 
 
 <div align="center">
 
@@ -222,7 +222,7 @@ FaizDB is engineered not only for laboratory speed, but for **uncompromising ope
 
 ### 🏛️ Production Audit Hardening (Grade A+, Score: 98.5/100)
 
-Prior to enterprise acquisition review, FaizDB underwent an exhaustive systems engineering audit across storage, concurrency, consensus, vector search, and security layers. **All 14 identified architectural enhancements have been fully implemented and verified**:
+Prior to enterprise acquisition review, TapisaurusDB underwent an exhaustive systems engineering audit across storage, concurrency, consensus, vector search, and security layers. **All 14 identified architectural enhancements have been fully implemented and verified**:
 
 #### 1. 💾 Storage Engine & Zero-Data-Loss Durability
 - **Lock-Free MemTable SkipList (`crossbeam_skiplist::SkipMap`)**: Replaced coarse `RwLock<BTreeMap>` with lock-free skip lists. Multiple threads insert concurrently with zero writer-lock contention under 100K+ req/s.
@@ -241,7 +241,7 @@ Prior to enterprise acquisition review, FaizDB underwent an exhaustive systems e
 - **Commit Index Reboot Recovery**: Reboots safely restore `commit_index = initial_snapshot_index` strictly adhering to textbook Raft invariants.
 
 #### 4. 🤖 Vector Search & Graph Persistence
-- **Binary HNSW Graph Format (`FAIZHNSW`)**: Compact binary persistence encoding raw 4-byte LE IEEE 754 floats. Index files are **5x–8x smaller** and load **50x faster** than legacy JSON format, with automatic backwards-compatible JSON fallback.
+- **Binary HNSW Graph Format (`TPSHNSW1`)**: Compact binary persistence encoding raw 4-byte LE IEEE 754 floats. Index files are **5x–8x smaller** and load **50x faster** than legacy JSON format, with automatic backwards-compatible JSON fallback.
 
 #### 5. 🔒 Security, Cryptography & Gateway Rate Limiting
 - **Strict IP Rate Limiter**: Built-in concurrent `DashMap` rate limiter on `/api/auth/login` (5 attempts / 60-second window) stopping distributed credential stuffing.
@@ -254,12 +254,12 @@ Prior to enterprise acquisition review, FaizDB underwent an exhaustive systems e
 
 In conventional AI architectures, implementing GraphRAG requires operating separate vector databases and graph databases linked by application scripts. This introduces network overhead (100ms–250ms), data drift, and synchronization complexity.
 
-**FaizDB provides an In-Memory VectorGraph Kernel.** Graph relationships and high-dimensional vector embeddings execute in a single memory pass within an ultra-lean **~8.0 MB binary**, enabling sub-millisecond GraphRAG context retrieval (< 1.5ms) with zero inter-database network round-trips.
+**TapisaurusDB provides an In-Memory VectorGraph Kernel.** Graph relationships and high-dimensional vector embeddings execute in a single memory pass within an ultra-lean **~8.0 MB binary**, enabling sub-millisecond GraphRAG context retrieval (< 1.5ms) with zero inter-database network round-trips.
 
 ### Multi-Hop Graph Traversal + Vector Search in One Query:
 
 ```sql
--- FaizQL / SQL: Traverse multi-hop knowledge graph, then rank matching context by vector similarity
+-- TapisaurusQL / SQL: Traverse multi-hop knowledge graph, then rank matching context by vector similarity
 FIND research_papers 
 TRAVERSE FROM "paper_01" DEPTH 2 VIA "cites" 
 VECTOR [0.12, 0.45, 0.88, 0.05] USING INDEX paper_embeddings 
@@ -288,13 +288,13 @@ db.research_papers.find({
 
 ## 🔬 Empirical Architecture & System Footprint (Measured on Linux Kernel)
 
-Unlike database marketing claims, FaizDB’s system footprint is mathematically verified directly via Linux Kernel metrics (`/proc/<pid>/status`), compiler object analyzers (`stat -c %s`, `size`), and strict crash injection suites:
+Unlike database marketing claims, TapisaurusDB’s system footprint is mathematically verified directly via Linux Kernel metrics (`/proc/<pid>/status`), compiler object analyzers (`stat -c %s`, `size`), and strict crash injection suites:
 
 ### 1. Physical Footprint Comparison (Disk & RAM):
 | Database Engine | Executable Size (*Disk / Flash*) | Baseline RAM (*Resident Set Size - VmRSS*) | Multi-Model Architecture |
 |:---|:---:|:---:|:---|
-| 🟢 **FaizDB (Full Server)** | **7.70 MB** *(8,080,104 bytes, 97.6% .text)* | **23.05 MB** *(23,608 kB idle, 69.9 MB peak)* | **Unified:** Document + HNSW Vector + Knowledge Graph + SQL + 5 Protocols |
-| 🟢 **FaizDB (Embedded Core)**| **~3.5 MB** *(Static/Shared lib)* | **~8 – 16 MB** | **In-Process:** LSM-Tree + MemTable + WAL + ACID MVCC |
+| 🟢 **TapisaurusDB (Full Server)** | **7.70 MB** *(8,080,104 bytes, 97.6% .text)* | **23.05 MB** *(23,608 kB idle, 69.9 MB peak)* | **Unified:** Document + HNSW Vector + Knowledge Graph + SQL + 5 Protocols |
+| 🟢 **TapisaurusDB (Embedded Core)**| **~3.5 MB** *(Static/Shared lib)* | **~8 – 16 MB** | **In-Process:** LSM-Tree + MemTable + WAL + ACID MVCC |
 | **SQLite (v3.46)** | ~2.3 MB *(libsqlite3 + CLI)* | ~4 – 8 MB | Relational SQL only (No vector, no graph, single-writer lock) |
 | **RocksDB (v9.x)** | ~18 – 25 MB *(C++ shared object)*| ~32 – 64 MB | Raw Key-Value only (No documents, no vector, no graph) |
 | **DuckDB (v1.x)** | ~35 – 42 MB *(Linux binary)* | ~64 – 128 MB | Columnar OLAP only |
@@ -302,7 +302,7 @@ Unlike database marketing claims, FaizDB’s system footprint is mathematically 
 | **SurrealDB (v2.0)** | ~95 – 110 MB *(Rust binary)* | ~256 – 512 MB | Document + Graph (15x larger binary) |
 | **MongoDB (v7/8)** | ~110 – 140 MB *(mongod binary)* | ~1.0 – 2.0 GB | Document only (Too heavy for edge/chip devices) |
 
-> **Chip & Edge Deployment:** Because the standalone binary is **only 7.70 MB**, FaizDB can be deployed directly on edge silicon, automotive computers, robotics, microcontrollers, and satellite compute payloads without requiring massive external storage.
+> **Chip & Edge Deployment:** Because the standalone binary is **only 7.70 MB**, TapisaurusDB can be deployed directly on edge silicon, automotive computers, robotics, microcontrollers, and satellite compute payloads without requiring massive external storage.
 
 ### 2. Multi-Model Crash Durability Verified (`pkill -9 / SIGKILL` Proof):
 * **Fsync by Default:** `sync_writes: true` with strict `sync_all()` system calls ensures data is flushed directly to non-volatile storage.
@@ -339,7 +339,7 @@ Measured over live TCP network sockets with authenticated pipelines:
 
 > 🔬 **Scientific Workload Methodology & Storage I/O Scope:**
 > * **Hot In-Memory Working Sets (< 1 ms):** The sub-millisecond figures (e.g., 262 µs MongoDB wire median, 880 µs HNSW vector search, 916 µs 3-hop graph traversal) reflect warm/hot working sets residing in memory (MemTable SkipList, resident HNSW graph layers, and ARC block cache) evaluated via Criterion and loopback TCP streams.
-> * **Cold NVMe Disk I/O Physics:** When dataset sizes exceed available RAM and require cold reads from secondary storage, random read latency is strictly bounded by physical NVMe/SSD hardware bounds (typically 10–50 µs per 4KB page fetch). FaizDB leverages Bloom filters (1% false positive rate) and SSTable block index binary search to minimize cold disk read amplification.
+> * **Cold NVMe Disk I/O Physics:** When dataset sizes exceed available RAM and require cold reads from secondary storage, random read latency is strictly bounded by physical NVMe/SSD hardware bounds (typically 10–50 µs per 4KB page fetch). TapisaurusDB leverages Bloom filters (1% false positive rate) and SSTable block index binary search to minimize cold disk read amplification.
 
 ### 🔬 Independent Benchmark Verification & Reproducibility
 
@@ -350,13 +350,13 @@ Anyone can independently reproduce and verify these performance numbers on their
 bash scripts/run_verification_suite.sh
 
 # 2. Run built-in 50,000 document release benchmark (in-memory + durable disk):
-./target/release/faizdb benchmark --count 50000
+./target/release/tapisaurus benchmark --count 50000
 
 # 3. Inspect Linux kernel physical memory footprint (VmRSS):
 bash scripts/measure_memory.sh
 
 # 4. Run multi-protocol wire gateway security and performance benchmark suite:
-cargo test -p faizdb-server --test test_wire_security_and_performance
+cargo test -p tapisaurus-server --test test_wire_security_and_performance
 
 # 5. Run full automated workspace test suite across all 26 suites (188/188 tests passing, 100% pass rate)
 cargo test --workspace
@@ -367,17 +367,17 @@ cargo test --workspace
 ## 📦 Workspace Architecture (Monorepo Crates)
 
 ```
-faizdb/
+tapisaurus/
 ├── .github/workflows/  # 🤖 Automated CI/CD Pipeline (fmt, clippy, test, cargo-audit, MSRV)
-├── proto/              # ⚡ Official Protocol Buffers v3 Schema (faizdb.proto)
+├── proto/              # ⚡ Official Protocol Buffers v3 Schema (tapisaurus.proto)
 ├── bindings/           # 📦 Polyglot SDKs: Python (pyproject.toml), Node.js (npm), Go, and PHP
-├── faizdb-core/        # 🌲 LSM-Tree, MemTable, Streaming Compaction, WAL, MVCC ACID, BM25, TTL, Raft, CRDTs, Automated Tiered Storage
-├── faizdb-vector/      # 🎯 HNSW Multi-Layer Vector Index with Persistence, 8-Lane SIMD (AVX2/NEON), 32x Binary Quantization
-├── faizdb-graph/       # 🕸️ Knowledge Graph, Multi-Hop Traversal & GraphRAG Engine + In-Memory Semantic Cache
-├── faizdb-query/       # 🧠 Multi-Dialect Parser (SQL, MongoDB JSON, openCypher, FaizQL), Columnar Batch Analytics & Cost Optimizer
-├── faizdb-security/    # 🔒 Zero-Trust AES-256-GCM Encryption, Argon2id & EdDSA (Ed25519) JWT RBAC
-├── faizdb-server/      # 🌐 Modular Multi-Protocol Server (MySQL 3306, Postgres 5432, MongoDB 27017, gRPC 50051, REST 27018)
-├── faizdb-cli/         # 💻 Production CLI, Interactive REPL Shell, Backup & Restore Tools
+├── tapisaurus-core/        # 🌲 LSM-Tree, MemTable, Streaming Compaction, WAL, MVCC ACID, BM25, TTL, Raft, CRDTs, Automated Tiered Storage
+├── tapisaurus-vector/      # 🎯 HNSW Multi-Layer Vector Index with Persistence, 8-Lane SIMD (AVX2/NEON), 32x Binary Quantization
+├── tapisaurus-graph/       # 🕸️ Knowledge Graph, Multi-Hop Traversal & GraphRAG Engine + In-Memory Semantic Cache
+├── tapisaurus-query/       # 🧠 Multi-Dialect Parser (SQL, MongoDB JSON, openCypher, TapisaurusQL), Columnar Batch Analytics & Cost Optimizer
+├── tapisaurus-security/    # 🔒 Zero-Trust AES-256-GCM Encryption, Argon2id & EdDSA (Ed25519) JWT RBAC
+├── tapisaurus-server/      # 🌐 Modular Multi-Protocol Server (MySQL 3306, Postgres 5432, MongoDB 27017, gRPC 50051, REST 27018)
+├── tapisaurus-cli/         # 💻 Production CLI, Interactive REPL Shell, Backup & Restore Tools
 ├── studio/             # 🎛️ Modern Web Management Studio (React + Vite + TailwindCSS)
 ├── docs/               # 📚 Comprehensive Guides, Competitive Analysis & API References
 ├── docs-site/          # 🌐 Interactive Web Documentation Portal
@@ -391,16 +391,16 @@ faizdb/
 
 ## 📦 Universal 1-Line Installation
 
-Install FaizDB on your server, PC, or Mac with a single command:
+Install TapisaurusDB on your server, PC, or Mac with a single command:
 
 ### 🐧 Linux & 🍎 macOS (Apple Silicon & Intel)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | bash
 ```
 
 ### 🪟 Windows (PowerShell)
 ```powershell
-iwr -useb https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex
 ```
 
 ### 🐳 Docker & Docker Compose
@@ -417,20 +417,20 @@ docker compose up -d
 
 ```bash
 # Clone the repository
-git clone https://github.com/ictdothouse/faizdb.git
-cd faizdb
+git clone https://github.com/tapiruslab/TapisaurusDB.git
+cd tapisaurus
 
 # Compile workspace in release mode
 cargo build --release
 
 # Launch 5-Way Multi-Protocol Gateway
-./target/release/faizdb serve
+./target/release/tapisaurus serve
 ```
 
 Console Banner:
 ```text
 ╔══════════════════════════════════════════════════════════════════╗
-║  🔥 FaizDB Server v0.1.0 Running 5-Way Multi-Protocol Gateway ║
+║  🔥 TapisaurusDB Server v0.1.0 Running 5-Way Multi-Protocol Gateway ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  🐬 MySQL Wire Protocol   : mysql://0.0.0.0:3306                 ║
 ║  🐘 PostgreSQL Wire Proto : postgresql://0.0.0.0:5432            ║
@@ -439,8 +439,8 @@ Console Banner:
 ║  🌐 HTTP / REST API       : http://0.0.0.0:27018                 ║
 ║                                                                  ║
 ║  👉 Connection Strings:                                          ║
-║     MySQL : mysql -h 127.0.0.1 -P 3306 -u admin -p faizdb        ║
-║     PSQL  : psql -h 127.0.0.1 -p 5432 -U postgres -d faizdb      ║
+║     MySQL : mysql -h 127.0.0.1 -P 3306 -u admin -p tapisaurus        ║
+║     PSQL  : psql -h 127.0.0.1 -p 5432 -U postgres -d tapisaurus      ║
 ║     Mongo : mongodb://127.0.0.1:27017                            ║
 ║     gRPC  : localhost:50051                                      ║
 ║     REST  : http://127.0.0.1:27018                               ║
@@ -454,21 +454,21 @@ Console Banner:
 #### A. 🐬 MySQL / MariaDB Wire (MySQL CLI, Laravel Eloquent, PHP PDO):
 ```bash
 # Direct MySQL CLI connection
-mysql -h 127.0.0.1 -P 3306 -u admin -p faizdb
+mysql -h 127.0.0.1 -P 3306 -u admin -p tapisaurus
 
 # Laravel Eloquent .env configuration:
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=faizdb
+DB_DATABASE=tapisaurus
 DB_USERNAME=admin
-DB_PASSWORD=faizdb-admin-2026
+DB_PASSWORD=tapisaurus-admin-2026
 ```
 
 #### B. 🐘 PostgreSQL Wire (`psql`, DBeaver, TablePlus, Grafana):
 ```bash
 # Secured by Argon2id Password Authentication
-PGPASSWORD="faizdb-admin-2026" psql -h 127.0.0.1 -p 5432 -U admin -d faizdb
+PGPASSWORD="tapisaurus-admin-2026" psql -h 127.0.0.1 -p 5432 -U admin -d tapisaurus
 
 # Execute standard SQL:
 SELECT * FROM users WHERE active = true;
@@ -477,9 +477,9 @@ INSERT INTO users (name, role, score) VALUES ('Ahmad Faiz', 'Architect', 9950);
 
 #### C. ⚡ gRPC & Protocol Buffers (Python, TypeScript, Go):
 ```python
-from faizdb import FaizDbGrpcClient
+from tapisaurus import TapisaurusGrpcClient
 
-client = FaizDbGrpcClient(target="localhost:50051")
+client = TapisaurusGrpcClient(target="localhost:50051")
 
 # Sub-millisecond ANN Vector Similarity Search (< 1ms)
 hits = client.vector_search("ai_embeddings", vector=[0.95, 0.90, 0.10], top_k=5)
@@ -532,7 +532,7 @@ curl -X POST http://127.0.0.1:27018/v1/users \
 ### 3. Interactive Multi-Dialect REPL
 
 ```bash
-./target/release/faizdb shell
+./target/release/tapisaurus shell
 ```
 
 Supports SQL, MongoDB Query Syntax, openCypher, and AI Vector dialect seamlessly:
@@ -559,25 +559,25 @@ FIND articles VECTOR NEAR [0.95, 0.88, 0.12, 0.04] TOP 5;
 
 ```bash
 # Non-blocking online snapshot creation with cryptographic checksum
-./target/release/faizdb backup --output ./backups/faizdb_snapshot_2026.json
+./target/release/tapisaurus backup --output ./backups/tapisaurus_snapshot_2026.json
 
 # Instant point-in-time database restoration
-./target/release/faizdb restore --input ./backups/faizdb_snapshot_2026.json
+./target/release/tapisaurus restore --input ./backups/tapisaurus_snapshot_2026.json
 ```
 
 ---
 
-### 5. System Preflight & Health Diagnostics (`faizdb doctor`)
+### 5. System Preflight & Health Diagnostics (`tapisaurus doctor`)
 
 Audit your host environment, check port bindings across all 5 gateways, verify disk write permissions, WAL integrity, CPU architecture, and security configuration in one instant command:
 
 ```bash
-./target/release/faizdb doctor
+./target/release/tapisaurus doctor
 ```
 
 ```text
 ╔══════════════════════════════════════════════════════════════════╗
-║              🩺 FaizDB System Preflight & Doctor                 ║
+║              🩺 TapisaurusDB System Preflight & Doctor                 ║
 ║       Multi-Gateway, Storage, Consensus & Security Audit         ║
 ╚══════════════════════════════════════════════════════════════════╝
 
@@ -589,13 +589,13 @@ Audit your host environment, check port bindings across all 5 gateways, verify d
   🟢 Port 50051 [gRPC & ProtoBuf Gateway] : ONLINE (Active & Listening)
 
 🔍 [2/4] Verifying Storage & Durability Subsystems...
-  🟢 Storage Directory: Present at './faizdb_data'
+  🟢 Storage Directory: Present at './tapisaurus_data'
   🟢 Disk I/O Integrity: Read/Write verified (Zero permissions lock)
   🟢 Write-Ahead Log (WAL): Clean & Consistent
 
 🔍 [3/4] Hardware & Environment Diagnostics...
   🟢 CPU Architecture: 12 logical execution cores detected
-  🟢 Engine Kernel: FaizDB v0.1.0 (Pure Safe Rust, Single-Binary)
+  🟢 Engine Kernel: TapisaurusDB v0.1.0 (Pure Safe Rust, Single-Binary)
 
 🔍 [4/4] Enterprise Security & Configuration Review...
   🟢 Root Authentication: Configured (User: 'admin')
@@ -604,33 +604,33 @@ Audit your host environment, check port bindings across all 5 gateways, verify d
 
 ---
 
-### 6. Instant Multi-Model Dataset Seeder (`faizdb seed`)
+### 6. Instant Multi-Model Dataset Seeder (`tapisaurus seed`)
 
 Quickly test SQL joins, MongoDB filters, HNSW vector search, and GraphRAG traversals without writing manual scripts:
 
 ```bash
 # E-Commerce dataset: Products, Orders, 64-dim HNSW embeddings & Purchase Knowledge Graph
-./target/release/faizdb seed --dataset ecommerce
+./target/release/tapisaurus seed --dataset ecommerce
 
 # AI Agent Memory tier: Episodic, Semantic, Working memories & Goal Hierarchy Graph
-./target/release/faizdb seed --dataset agent-memory
+./target/release/tapisaurus seed --dataset agent-memory
 
 # Social Graph: User profiles, Posts, and Bi-directional Follows Network
-./target/release/faizdb seed --dataset social-graph
+./target/release/tapisaurus seed --dataset social-graph
 ```
 
 ---
 
 ### 7. Official Observability & API Testing Assets
 
-- **Official Grafana Dashboard Template**: [`dashboards/faizdb-overview.json`](dashboards/faizdb-overview.json) — Production-ready Grafana 9/10/11 dashboard with real-time QPS, $p_{50}/p_{90}/p_{99}$ latency percentiles, I/O bandwidth, buffer cache hit ratios, WAL sync frequencies, and CBO join strategy distribution.
-- **Official Postman Collection**: [`faizdb.postman_collection.json`](faizdb.postman_collection.json) — Comprehensive Postman v2.1 collection covering Authentication, Telemetry, Collections, FaizQL, Vectors, Knowledge Graph, MVCC Transactions, and Backups with automatic JWT extraction.
+- **Official Grafana Dashboard Template**: [`dashboards/tapisaurus-overview.json`](dashboards/tapisaurus-overview.json) — Production-ready Grafana 9/10/11 dashboard with real-time QPS, $p_{50}/p_{90}/p_{99}$ latency percentiles, I/O bandwidth, buffer cache hit ratios, WAL sync frequencies, and CBO join strategy distribution.
+- **Official Postman Collection**: [`tapisaurus.postman_collection.json`](tapisaurus.postman_collection.json) — Comprehensive Postman v2.1 collection covering Authentication, Telemetry, Collections, TapisaurusQL, Vectors, Knowledge Graph, MVCC Transactions, and Backups with automatic JWT extraction.
 
 ---
 
-### 8. Launch FaizDB Web Management Studio
+### 8. Launch TapisaurusDB Web Management Studio
 
-FaizDB comes with a mission-control visual dashboard supporting Light & Dark modes:
+TapisaurusDB comes with a mission-control visual dashboard supporting Light & Dark modes:
 
 ```bash
 cd studio
@@ -642,7 +642,7 @@ pnpm dev
 Key Studio Workspaces:
 - **📊 Overview**: Real-time throughput graphs, live memory gauges, and storage telemetry.
 - **📑 Table Explorer**: Document inspector, JSON editor, instant query filters, and **Drag-and-Drop CSV/JSON bulk import**.
-- **⚡ FaizQL & SQL Console**: Multi-dialect SQL & MongoDB playground with **Cost-Based `EXPLAIN` Query Plan Visualizer**.
+- **⚡ TapisaurusQL & SQL Console**: Multi-dialect SQL & MongoDB playground with **Cost-Based `EXPLAIN` Query Plan Visualizer**.
 - **📡 Live Change Streams**: Reactive WebSocket event stream monitor.
 - **🌐 Cluster & Shards**: Raft node topology visualizer, shard allocation heatmap, and one-click failover.
 - **🌍 Multi-Region Mesh**: Active-Active Geo-Replication monitor and cross-datacenter latency metrics.
@@ -659,17 +659,17 @@ Key Studio Workspaces:
 
 Need a lightweight, zero-setup, in-process database for CLI tools, Desktop apps, Raspberry Pi, IoT sensors, or local Edge AI without running a separate server process?
 
-FaizDB can be embedded directly into your application like SQLite, requiring **zero server daemon, zero network ports, and zero external dependencies**.
+TapisaurusDB can be embedded directly into your application like SQLite, requiring **zero server daemon, zero network ports, and zero external dependencies**.
 
 #### A. Add to Your Rust Project (`Cargo.toml`):
 ```toml
 [dependencies]
-faizdb-core = { git = "https://github.com/ictdothouse/faizdb.git" }
+tapisaurus-core = { git = "https://github.com/tapiruslab/TapisaurusDB.git" }
 ```
 
 #### B. Embedded In-Process Rust Usage (Zero-Server):
 ```rust
-use faizdb_core::storage::engine::{StorageConfig, StorageEngine};
+use tapisaurus_core::storage::engine::{StorageConfig, StorageEngine};
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -695,13 +695,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 #### C. Where to Download Pre-Built Embedded Libraries:
-- **GitHub Releases:** Download pre-compiled static artifacts (`.tar.gz` / `.zip`), static MUSL libraries (`.a`), Android NDK shared libraries (`.so`), and Apple XCFrameworks (`.xcframework`) directly from [**GitHub Releases**](https://github.com/ictdothouse/faizdb/releases).
-- **Cargo / Rust Crate:** `cargo add faizdb-core` to compile natively into your binary.
+- **GitHub Releases:** Download pre-compiled static artifacts (`.tar.gz` / `.zip`), static MUSL libraries (`.a`), Android NDK shared libraries (`.so`), and Apple XCFrameworks (`.xcframework`) directly from [**GitHub Releases**](https://github.com/tapiruslab/TapisaurusDB/releases).
+- **Cargo / Rust Crate:** `cargo add tapisaurus-core` to compile natively into your binary.
 
 #### D. Architectural Demarcation for Real-Time Multiplayer Gaming:
-> **Physics loops stay in game server memory; FaizDB powers in-process state persistence.**  
-> In competitive multiplayer architectures (Unreal Engine, Unity, Godot dedicated game servers running at 64Hz–128Hz tick rates), player physics calculations and continuous player positions are handled strictly in the game server's volatile RAM. FaizDB is **never** placed in the synchronous physics tick loop.  
-> Instead, FaizDB's **in-process embedded mode (`faizdb-core`)** serves as a zero-network, zero-GC-stall state engine for:
+> **Physics loops stay in game server memory; TapisaurusDB powers in-process state persistence.**  
+> In competitive multiplayer architectures (Unreal Engine, Unity, Godot dedicated game servers running at 64Hz–128Hz tick rates), player physics calculations and continuous player positions are handled strictly in the game server's volatile RAM. TapisaurusDB is **never** placed in the synchronous physics tick loop.  
+> Instead, TapisaurusDB's **in-process embedded mode (`tapisaurus-core`)** serves as a zero-network, zero-GC-stall state engine for:
 > * Match outcome commits, persistent player inventory wallets, and authenticated session tokens.
 > * Real-time Skill-Based Matchmaking (SBMM) via sub-millisecond HNSW vector similarity search.
 > * Complete elimination of Java/Go Garbage Collection pauses (GC jitter spikes) that frequently destabilize Cassandra/Scylla deployments under peak concurrent player loads.
@@ -710,11 +710,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 7. 🐘 Petabyte-Scale Big Data, Columnar Engine & Streaming Lakehouse
 
-FaizDB includes an enterprise-grade Big Data engine capable of scaling from constrained IoT devices to Petabyte-scale Data Lakehouses:
+TapisaurusDB includes an enterprise-grade Big Data engine capable of scaling from constrained IoT devices to Petabyte-scale Data Lakehouses:
 
 ```rust
 // 1. Vector Quantization (SQ8) — 4x RAM reduction for 100M+ AI embeddings
-use faizdb_vector::{HnswConfig, HnswIndex, DistanceMetric, QuantizationType};
+use tapisaurus_vector::{HnswConfig, HnswIndex, DistanceMetric, QuantizationType};
 
 let config = HnswConfig::new(1536, DistanceMetric::Cosine)
     .with_quantization(QuantizationType::Scalar8);
@@ -722,7 +722,7 @@ let mut index = HnswIndex::new(config);
 index.insert("article_01", embedding_vec)?;
 
 // 2. Zero-Copy ColumnarBatch (Arrow / Parquet / DuckDB / Spark Interoperability)
-use faizdb_core::storage::columnar::ColumnarBatch;
+use tapisaurus_core::storage::columnar::ColumnarBatch;
 
 // Direct analytical export from live collection or JSON documents:
 let batch = collection.to_columnar_batch()?;
@@ -730,14 +730,14 @@ let total_volume = batch.sum_f64("trade_volume").unwrap(); // SIMD Columnar Scan
 let projected = batch.project(&["ticker", "price"])?; // Zero-Copy Column Slice
 
 // 3. Automated Tiered Storage (Hot NVMe + Cold S3/GCS Object Storage)
-use faizdb_core::storage::tiered::{TieredStorageConfig, TieredStorageManager};
+use tapisaurus_core::storage::tiered::{TieredStorageConfig, TieredStorageManager};
 
 let mut tier_mgr = TieredStorageManager::new(TieredStorageConfig::default());
 tier_mgr.evaluate_migration_candidates(); // Auto-migrates cold SSTables to S3
 
 // 4. Distributed Scatter-Gather & Debezium / Kafka CDC Streaming
-use faizdb_query::distributed::DistributedQueryCoordinator;
-use faizdb_server::stream::cdc::CdcEnvelope;
+use tapisaurus_query::distributed::DistributedQueryCoordinator;
+use tapisaurus_server::stream::cdc::CdcEnvelope;
 
 let cdc_event = CdcEnvelope::new_create("orders", "ord_99", order_doc, 1048576);
 let kafka_json = cdc_event.to_kafka_message()?;
@@ -757,7 +757,7 @@ let kafka_json = cdc_event.to_kafka_message()?;
 * [🏛️ Tier-1 Engineering & Architecture Guide](docs/TIER1_ENGINEERING_GUIDE.md) — SIMD Vector Math, Adaptive Replacement Cache (ARC), Prometheus telemetry, Chaos Testing, and YCSB.
 * [🤖 AI, LLM, LangGraph & Real-Time Gaming Use Cases](docs/USE_CASES_AND_SOLUTIONS.md) — LangGraph unified backend checkpointer, Semantic caching (cut 70%+ LLM tokens), Agentic 3-tier memory (Postgres+Redis+Pinecone+Neo4j in 1), GraphRAG, PyTorch training streaming, and real-time multiplayer gaming.
 * [🧪 Testing & Benchmarks Guide](docs/TESTING_AND_BENCHMARKS.md) — Live benchmark suites, Rust integration tests, Chaos tests, and YCSB runner.
-* [📖 Universal Commands & Syntax Reference Manual](docs/COMMANDS_AND_SYNTAX_REFERENCE.md) — Complete master manual & cheat-sheet for CLI commands, SQL statements, openCypher Graph, FaizQL Multi-Model, MongoDB wire queries, REST endpoints, and gRPC RPCs.
+* [📖 Universal Commands & Syntax Reference Manual](docs/COMMANDS_AND_SYNTAX_REFERENCE.md) — Complete master manual & cheat-sheet for CLI commands, SQL statements, openCypher Graph, TapisaurusQL Multi-Model, MongoDB wire queries, REST endpoints, and gRPC RPCs.
 * [🌐 Universal API Reference](docs/API_REFERENCE.md) — Multi-protocol matrix, gRPC RPCs, REST endpoints, EdDSA JWT auth, and Geo-Replication.
 * [📦 Official Client SDKs Guide](docs/SDK_GUIDE.md) — Complete guides and examples for Node.js/TypeScript, Python (`pyproject.toml`), and Go.
 * [⚔️ Competitive Analysis & Architectural Matrix](docs/COMPETITIVE_ANALYSIS.md) — Deep-dive vs SurrealDB, CockroachDB, Qdrant, ArangoDB, FerretDB, and MongoDB Atlas.
@@ -770,9 +770,9 @@ let kafka_json = cdc_event.to_kafka_message()?;
 
 ## 🗺️ Maturity Status & Roadmap to Enterprise GA (v1.0)
 
-FaizDB is currently at **v0.1.0 (Developer & Edge Preview)**. The core engine is fully implemented in pure Safe Rust, passing **200+ unit and integration tests (100% pass rate)**, with zero warnings under strict `-D warnings` clippy policies.
+TapisaurusDB is currently at **v0.1.0 (Developer & Edge Preview)**. The core engine is fully implemented in pure Safe Rust, passing **200+ unit and integration tests (100% pass rate)**, with zero warnings under strict `-D warnings` clippy policies.
 
-Rather than claiming instant battle-tested maturity for decade-old banking mainframes, FaizDB follows a transparent, phased engineering verification roadmap:
+Rather than claiming instant battle-tested maturity for decade-old banking mainframes, TapisaurusDB follows a transparent, phased engineering verification roadmap:
 
 ```
 ┌─────────────────────────────────┐     ┌─────────────────────────────────┐     ┌─────────────────────────────────┐
@@ -815,8 +815,8 @@ Rather than claiming instant battle-tested maturity for decade-old banking mainf
 - [x] Max Connections Governor & Overload Protection (`tokio::Semaphore` + RFC 53300)
 - [x] High-Throughput WAL Group Commit & Atomic Batch Durability (`append_batch`)
 - [x] Native Cloud-Native Kubernetes Health Probes (`/v1/health/liveness` & `/readiness`)
-- [x] Autonomous Background Scheduled Snapshot Daemon (`FAIZDB_AUTO_BACKUP`)
-- [x] Open-Format Universal Data Portability CLI (`faizdb dump --format [jsonl|sql]`)
+- [x] Autonomous Background Scheduled Snapshot Daemon (`TAPISAURUS_AUTO_BACKUP`)
+- [x] Open-Format Universal Data Portability CLI (`tapisaurus dump --format [jsonl|sql]`)
 - [x] PostgreSQL Extended Query Protocol & Multi-Table Relational Hash Join Engine
 - [x] MongoDB Wire $O(1)$ Primary Key Lookup & Stateful Cursor Pagination
 - [x] Unified Multi-Protocol Graceful Shutdown & Socket Drain Engine
@@ -826,12 +826,12 @@ Rather than claiming instant battle-tested maturity for decade-old banking mainf
 - [x] Numerical Float Boundary Clamping & Safe Vector Distance Normalization
 - [x] Bounded-Resource Graph Traversal with Cycle Resistance
 - [x] Formal Jepsen Distributed Testing Framework (`tests/test_jepsen_distributed_chaos.rs` — 5/5 PASS)
-- [x] Preflight Diagnostics & Environment Doctor CLI (`faizdb doctor`)
-- [x] Multi-Model Dataset Generator CLI (`faizdb seed`) for Relational, Vector & Graph
-- [x] Official Prometheus & Grafana Monitoring Dashboard Template (`dashboards/faizdb-overview.json`)
-- [x] Official Postman Collection with 20+ Endpoints & Automatic Bearer Token Auth (`faizdb.postman_collection.json`)
-- [x] Active Outbound CDC Stream Dispatcher (`faizdb-server::stream::cdc_dispatcher`)
-- [x] Distributed Scatter-Gather Query Coordinator (`faizdb-core::cluster::scatter_gather`)
+- [x] Preflight Diagnostics & Environment Doctor CLI (`tapisaurus doctor`)
+- [x] Multi-Model Dataset Generator CLI (`tapisaurus seed`) for Relational, Vector & Graph
+- [x] Official Prometheus & Grafana Monitoring Dashboard Template (`dashboards/tapisaurus-overview.json`)
+- [x] Official Postman Collection with 20+ Endpoints & Automatic Bearer Token Auth (`tapisaurus.postman_collection.json`)
+- [x] Active Outbound CDC Stream Dispatcher (`tapisaurus-server::stream::cdc_dispatcher`)
+- [x] Distributed Scatter-Gather Query Coordinator (`tapisaurus-core::cluster::scatter_gather`)
 - [x] In-Browser WebAssembly (WASM) Headless Engine (`bindings/wasm`)
 - [ ] GPU-Accelerated Vector Indexing (CUDA / Metal Shaders)
 
@@ -840,10 +840,10 @@ Rather than claiming instant battle-tested maturity for decade-old banking mainf
 
 ## 📜 License
 
-FaizDB is licensed under the **Business Source License 1.1 (BSL 1.1)**.
+TapisaurusDB is licensed under the **Business Source License 1.1 (BSL 1.1)**.
 
 * **100% Free & Unrestricted** for individual developers, startups, academic research, internal enterprise workloads, self-hosted deployments, and private SaaS applications.
-* **Anti-DBaaS Protection:** Third parties and commercial cloud providers are prohibited from offering FaizDB as a commercial managed database-as-a-service (DBaaS) without a commercial license agreement.
+* **Anti-DBaaS Protection:** Third parties and commercial cloud providers are prohibited from offering TapisaurusDB as a commercial managed database-as-a-service (DBaaS) without a commercial license agreement.
 * **Automatic Open-Source Conversion:** On **September 16, 2030**, the license converts automatically to the **Apache License, Version 2.0**.
 
 See the full [LICENSE](LICENSE) and [Intellectual Property & Licensing Safeguards](docs/INTELLECTUAL_PROPERTY_AND_ANTI_POACHING.md) for complete details.

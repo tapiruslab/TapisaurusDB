@@ -39,8 +39,8 @@ export const CacheManager: React.FC = () => {
       category: 'otp',
     },
     {
-      id: 'sess_faiz',
-      key: 'sess:jwt:faiz_enterprise',
+      id: 'sess_tapir',
+      key: 'sess:jwt:tapisaurus_enterprise',
       value: 'eyJhbGciOiJIUzI1NiIs...',
       ttl_seconds: 60,
       remaining_seconds: 48,

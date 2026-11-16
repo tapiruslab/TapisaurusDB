@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
       desc: 'Visual document spreadsheet, schema inspector, and JSON tree editor',
     },
     query: {
-      title: 'FaizQL Multi-Dialect Console',
+      title: 'TapisaurusQL Multi-Dialect Console',
       desc: 'Execute SQL queries, MongoDB queries, and AI vector instructions with sub-ms execution',
     },
     stream: {
@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
           size="sm"
           onClick={onRefresh}
           loading={isRefreshing}
-          title="Refresh Data from FaizDB"
+          title="Refresh Data from TapisaurusDB"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           <span>Refresh</span>
@@ -162,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             {onLogout && (
               <button
-                id="faizdb-logout-btn"
+                id="tapisaurus-logout-btn"
                 onClick={onLogout}
                 title="Sign Out"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all"

@@ -97,7 +97,7 @@ export const QueryConsole: React.FC = () => {
       q: 'EXPLAIN ANALYZE SELECT * FROM {tenant_1}:orders JOIN {tenant_1}:customers ON {tenant_1}:orders.customer_id = {tenant_1}:customers.id',
     },
     { label: 'SQL Select', q: 'SELECT * FROM users' },
-    { label: 'EXPLAIN Plan', q: 'EXPLAIN SELECT * FROM users WHERE email = "faiz@ict.house"' },
+    { label: 'EXPLAIN Plan', q: 'EXPLAIN SELECT * FROM users WHERE email = "faiz@tapirusdb.com"' },
     { label: 'Create Unique Index', q: 'CREATE UNIQUE INDEX idx_email ON users(email)' },
     { label: 'SQL Filter', q: 'SELECT * FROM users WHERE active = true' },
     {
@@ -105,7 +105,7 @@ export const QueryConsole: React.FC = () => {
       q: 'db.users.aggregate([\n  { "$match": { "active": true } },\n  { "$group": { "_id": "$country", "count": { "$sum": 1 } } },\n  { "$sort": { "count": -1 } }\n])',
     },
     { label: 'Mongo Find', q: 'db.users.find({ "country": "Malaysia" })' },
-    { label: 'FaizQL Vector', q: 'FIND users VECTOR NEAR [0.12, 0.85, 0.43, 0.67] TOP 5' },
+    { label: 'TapisaurusQL Vector', q: 'FIND users VECTOR NEAR [0.12, 0.85, 0.43, 0.67] TOP 5' },
     { label: 'Begin Transaction', q: 'BEGIN' },
     { label: 'Commit Transaction', q: 'COMMIT' },
   ];
@@ -149,7 +149,7 @@ export const QueryConsole: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `faizdb_query_result_${Date.now()}.json`;
+    a.download = `tapisaurus_query_result_${Date.now()}.json`;
     a.click();
   };
 
@@ -249,7 +249,7 @@ export const QueryConsole: React.FC = () => {
           <div className="flex items-center gap-2">
             <TermIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="text-xs font-semibold text-slate-900 dark:text-zinc-100 font-mono">
-              Query Workspace (SQL / openCypher / FaizQL / EXPLAIN ANALYZE)
+              Query Workspace (SQL / openCypher / TapisaurusQL / EXPLAIN ANALYZE)
             </span>
           </div>
 
@@ -423,7 +423,7 @@ export const QueryConsole: React.FC = () => {
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-500 dark:text-zinc-400">
               <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-              <span>Executing against FaizDB engine...</span>
+              <span>Executing against TapisaurusDB engine...</span>
             </div>
           ) : error ? (
             <div className="p-4 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 space-y-1">
@@ -450,7 +450,7 @@ export const QueryConsole: React.FC = () => {
                         )}
                       </h4>
                       <p className="text-[11px] text-zinc-400">
-                        FaizDB Cost-Based Distributed Optimizer & Physical Execution Plan
+                        TapisaurusDB Cost-Based Distributed Optimizer & Physical Execution Plan
                       </p>
                     </div>
                   </div>

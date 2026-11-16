@@ -1,8 +1,8 @@
-# 🏆 FaizDB Official Enterprise Architecture Verification Script (PowerShell)
+# 🏆 TapisaurusDB Official Enterprise Architecture Verification Script (PowerShell)
 $ErrorActionPreference = "Stop"
 
 Write-Host "================================================================================" -ForegroundColor Cyan
-Write-Host "  🏆 FAIZDB OFFICIAL ENTERPRISE ARCHITECTURE VERIFICATION SUITE" -ForegroundColor Cyan
+Write-Host "  🏆 TAPISAURUS OFFICIAL ENTERPRISE ARCHITECTURE VERIFICATION SUITE" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 
 # Check if WSL is available to run Linux native cargo or Windows cargo
@@ -20,15 +20,17 @@ if (Get-Command cargo -ErrorAction SilentlyContinue) {
 function Run-VerificationStep([string]$title, [string]$command) {
     Write-Host "`n>> $title" -ForegroundColor Yellow
     if ($useWsl) {
-        wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/afaiz/Documents/2006/PERSONAL2026/ICTHOUSE2026/FAIZDB && export CARGO_TARGET_DIR=/home/faizaziz/cargo_target && $command"
+        $repoWin = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+        $repoWsl = wsl -d Ubuntu -- wslpath -u "$repoWin"
+        wsl -d Ubuntu -- bash -lc "cd '$repoWsl' && $command"
     } else {
         Invoke-Expression $command
     }
 }
 
 Run-VerificationStep "[1/4] Running Rust Workspace Tests (Unit + Integration + Fuzz)" "cargo test --workspace"
-Run-VerificationStep "[2/4] Verifying Storage, Raft & Backup Durability Tests" "cargo test -p faizdb-core --test test_storage_durability && cargo test -p faizdb-core --test test_raft_consensus && cargo test -p faizdb-core --test test_backup_pitr && cargo test -p faizdb-core --test test_fuzz_storage"
-Run-VerificationStep "[3/4] Verifying Cost-Based Optimizer (CBO) & Histograms" "cargo test -p faizdb-query --test test_query_cbo"
+Run-VerificationStep "[2/4] Verifying Storage, Raft & Backup Durability Tests" "cargo test -p tapisaurus-core --test test_storage_durability && cargo test -p tapisaurus-core --test test_raft_consensus && cargo test -p tapisaurus-core --test test_backup_pitr && cargo test -p tapisaurus-core --test test_fuzz_storage"
+Run-VerificationStep "[3/4] Verifying Cost-Based Optimizer (CBO) & Histograms" "cargo test -p tapisaurus-query --test test_query_cbo"
 Run-VerificationStep "[4/4] Running Independent Comparative Load Benchmark vs SQLite" "python3 scripts/benchmarks/benchmark_comparison.py"
 
 Write-Host "`n================================================================================" -ForegroundColor Green

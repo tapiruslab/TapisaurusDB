@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Official YCSB (Yahoo! Cloud Serving Benchmark) Workload Runner for FaizDB
+Official YCSB (Yahoo! Cloud Serving Benchmark) Workload Runner for TapisaurusDB
 Supports standard Workloads A, B, C, D, E, F and comparative batch reporting.
 """
 
@@ -12,7 +12,7 @@ import urllib.request
 import concurrent.futures
 from typing import List, Dict, Any
 
-class FaizDbClient:
+class TapisaurusClient:
     def __init__(self, base_url: str = "http://127.0.0.1:27018"):
         self.base_url = base_url
 
@@ -61,12 +61,12 @@ class FaizDbClient:
             return False
 
 def run_workload(workload: str, total_ops: int, concurrency: int, base_url: str) -> Dict[str, Any]:
-    client = FaizDbClient(base_url)
+    client = TapisaurusClient(base_url)
     collection = f"ycsb_{workload.lower()}"
     latencies: List[float] = []
 
     print(f"============================================================")
-    print(f" 🚀 Running FaizDB YCSB Benchmark — Workload {workload.upper()}")
+    print(f" 🚀 Running TapisaurusDB YCSB Benchmark — Workload {workload.upper()}")
     print(f" Total Operations: {total_ops:,} | Concurrency Threads: {concurrency}")
     print(f" Target Endpoint : {base_url}")
     print(f"============================================================")
@@ -152,11 +152,11 @@ def run_workload(workload: str, total_ops: int, concurrency: int, base_url: str)
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="FaizDB YCSB Benchmark Runner")
+    parser = argparse.ArgumentParser(description="TapisaurusDB YCSB Benchmark Runner")
     parser.add_argument("--workload", choices=["A", "B", "C", "D", "E", "F", "V", "ALL"], default="B", help="YCSB Workload")
     parser.add_argument("--ops", type=int, default=5000, help="Total operations per workload")
     parser.add_argument("--threads", type=int, default=8, help="Concurrent client threads")
-    parser.add_argument("--url", type=str, default="http://127.0.0.1:27018", help="FaizDB Base URL")
+    parser.add_argument("--url", type=str, default="http://127.0.0.1:27018", help="TapisaurusDB Base URL")
 
     args = parser.parse_args()
 
@@ -166,7 +166,7 @@ if __name__ == "__main__":
             res = run_workload(wl, args.ops, args.threads, args.url)
             results.append(res)
 
-        print("\n🏆 COMPREHENSIVE YCSB WORKLOAD RESULTS (FaizDB v0.1.0):")
+        print("\n🏆 COMPREHENSIVE YCSB WORKLOAD RESULTS (TapisaurusDB v0.1.0):")
         print("| Workload | Description | Throughput (ops/s) | p50 Latency | p99 Latency |")
         print("|:---:|:---|:---:|:---:|:---:|")
         descriptions = {

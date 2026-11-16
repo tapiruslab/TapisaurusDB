@@ -1,5 +1,5 @@
 """
-Integration test for FaizDB gRPC / Protocol Buffers (Port 50051)
+Integration test for TapisaurusDB gRPC / Protocol Buffers (Port 50051)
 Tests TCP socket connectivity, HTTP/2 connection preface, and gRPC endpoints.
 """
 
@@ -8,7 +8,7 @@ import sys
 
 def main():
     print("=" * 65)
-    print("⚡ Testing FaizDB gRPC / Protocol Buffers on 127.0.0.1:50051")
+    print("⚡ Testing TapisaurusDB gRPC / Protocol Buffers on 127.0.0.1:50051")
     print("=" * 65)
 
     try:
@@ -27,12 +27,12 @@ def main():
         sock.close()
 
         print("\n" + "=" * 65)
-        print("🎉 FAIZDB GRPC SERVER LISTENER VERIFIED SUCCESSFULLY!")
+        print("🎉 TAPISAURUS GRPC SERVER LISTENER VERIFIED SUCCESSFULLY!")
         print("=" * 65)
 
     except ConnectionRefusedError:
-        print("ℹ️ Note: FaizDB server is not currently running on port 50051.")
-        print("Run 'faizdb serve' to start the 5-Way Multi-Protocol Server and test live.")
+        print("ℹ️ Note: TapisaurusDB server is not currently running on port 50051.")
+        print("Run 'tapisaurus serve' to start the 5-Way Multi-Protocol Server and test live.")
     except Exception as e:
         print(f"Connection test output: {e}")
 

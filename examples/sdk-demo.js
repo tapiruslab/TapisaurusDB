@@ -1,5 +1,5 @@
 /**
- * 🔥 FaizDB Official Node.js SDK Live Demo
+ * 🔥 TapisaurusDB Official Node.js SDK Live Demo
  * Demonstrates: Document Storage, AI Vector Search, Okapi BM25 Search, and Querying.
  *
  * Run:
@@ -7,13 +7,13 @@
  */
 
 async function main() {
-  console.log('🚀 Connecting to FaizDB on http://127.0.0.1:27018...');
+  console.log('🚀 Connecting to TapisaurusDB on http://127.0.0.1:27018...');
 
   // 1. Authenticate with master admin credentials
   const loginRes = await fetch('http://127.0.0.1:27018/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'faizdb-admin-2026' }),
+    body: JSON.stringify({ username: 'admin', password: 'tapisaurus-admin-2026' }),
   });
   const loginData = await loginRes.json();
 
@@ -33,7 +33,7 @@ async function main() {
   // 2. Insert sample documents into 'game_players' collection
   console.log('\n📝 Inserting high-performance game player records...');
   const players = [
-    { name: 'Faiz_Striker', score: 9850, level: 42, role: 'Assassin', active: true },
+    { name: 'Tapir_Striker', score: 9850, level: 42, role: 'Assassin', active: true },
     { name: 'Cyber_Valkyrie', score: 12400, level: 55, role: 'Mage', active: true },
     { name: 'Titan_Tank', score: 8100, level: 38, role: 'Tank', active: true },
   ];
@@ -74,7 +74,7 @@ async function main() {
   const metricsText = await metricsRes.text();
   console.log(metricsText.trim());
 
-  console.log('\n🎉 FaizDB SDK Demo finished successfully!');
+  console.log('\n🎉 TapisaurusDB SDK Demo finished successfully!');
 }
 
 main().catch(console.error);

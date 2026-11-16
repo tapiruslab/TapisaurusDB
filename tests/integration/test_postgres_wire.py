@@ -1,5 +1,5 @@
 """
-Integration test for FaizDB PostgreSQL Wire Protocol (Port 5432)
+Integration test for TapisaurusDB PostgreSQL Wire Protocol (Port 5432)
 Tests TCP connection, SSLRequest handling, StartupMessage handshake,
 and Simple Query protocol ('Q') for SQL queries (SELECT, INSERT, SHOW, Transactions).
 """
@@ -16,7 +16,7 @@ def send_ssl_request(sock: socket.socket) -> bool:
     print(f"  [SSL Probe] Server replied: {resp} (Expected b'N' for plain TCP)")
     return resp == b'N'
 
-def send_startup_message(sock: socket.socket, user: str = "postgres", database: str = "faizdb"):
+def send_startup_message(sock: socket.socket, user: str = "postgres", database: str = "tapisaurus"):
     """Send StartupMessage (proto v3.0 = 196608) with parameters and parse backend responses"""
     # Protocol v3.0 + null-terminated key/values + final null byte
     params = f"user\x00{user}\x00database\x00{database}\x00client_encoding\x00UTF8\x00\x00".encode('utf-8')
@@ -109,7 +109,7 @@ def execute_query(sock: socket.socket, query: str):
 
 def main():
     print("=" * 65)
-    print("🐘 Testing FaizDB PostgreSQL Wire Protocol on 127.0.0.1:5432")
+    print("🐘 Testing TapisaurusDB PostgreSQL Wire Protocol on 127.0.0.1:5432")
     print("=" * 65)
 
     try:
@@ -129,7 +129,7 @@ def main():
         print("\n3. Testing 'SELECT version()'...")
         fields, rows, tag = execute_query(sock, "SELECT version()")
         print(f"   Fields: {fields}, Rows: {rows}")
-        assert len(rows) > 0 and "FaizDB" in rows[0][0]
+        assert len(rows) > 0 and "TapisaurusDB" in rows[0][0]
 
         print("\n4. Testing 'SHOW tables'...")
         fields, rows, tag = execute_query(sock, "SHOW tables")
@@ -155,8 +155,8 @@ def main():
         print("=" * 65)
 
     except ConnectionRefusedError:
-        print("ℹ️ Note: FaizDB server is not currently running on port 5432.")
-        print("Run 'faizdb serve' to start the Multi-Protocol Server and test live.")
+        print("ℹ️ Note: TapisaurusDB server is not currently running on port 5432.")
+        print("Run 'tapisaurus serve' to start the Multi-Protocol Server and test live.")
 
 if __name__ == "__main__":
     main()

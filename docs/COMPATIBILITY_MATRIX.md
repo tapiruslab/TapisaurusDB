@@ -1,16 +1,16 @@
-# 🧩 FaizDB Official Wire Protocol Compatibility Matrix
+# 🧩 TapisaurusDB Official Wire Protocol Compatibility Matrix
 
 > **Last Updated:** September 2026  
-> **Release Target:** FaizDB v0.1.0 (Developer Preview)  
+> **Release Target:** TapisaurusDB v0.1.0 (Developer Preview)  
 > **Engine Architecture:** Clean-Slate Safe Rust Kernel with Native Multi-Wire Decoders  
 
 ---
 
 ## 🎯 Architectural Philosophy: Wire-Protocol Compatibility vs. Legacy Emulation
 
-FaizDB does **not** emulate the legacy internal architecture of PostgreSQL, MongoDB, or MySQL (e.g., PostgreSQL table-level OIDs, fork-based connection models, or MySQL MyISAM table locks). Instead, FaizDB implements **Native Wire Ingress Gateways** backed by a high-throughput, unified LSM-Tree storage engine with Multi-Version Concurrency Control (MVCC Serializable Snapshot Isolation), HNSW vector indexing, and graph traversal.
+TapisaurusDB does **not** emulate the legacy internal architecture of PostgreSQL, MongoDB, or MySQL (e.g., PostgreSQL table-level OIDs, fork-based connection models, or MySQL MyISAM table locks). Instead, TapisaurusDB implements **Native Wire Ingress Gateways** backed by a high-throughput, unified LSM-Tree storage engine with Multi-Version Concurrency Control (MVCC Serializable Snapshot Isolation), HNSW vector indexing, and graph traversal.
 
-The goal of FaizDB's wire gateways is to **eliminate database sprawl and client rewrite friction** — allowing existing applications, ORMs, and administrative GUIs to connect directly to FaizDB using standard client libraries without code modifications.
+The goal of TapisaurusDB's wire gateways is to **eliminate database sprawl and client rewrite friction** — allowing existing applications, ORMs, and administrative GUIs to connect directly to TapisaurusDB using standard client libraries without code modifications.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -20,14 +20,14 @@ The goal of FaizDB's wire gateways is to **eliminate database sprawl and client 
                                        │ Standard Wire TCP Packets
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    FaizDB Multi-Wire Ingress Gateways                       │
+│                    TapisaurusDB Multi-Wire Ingress Gateways                       │
 │     Port 5432 (PostgreSQL)  │  Port 27017 (MongoDB)  │  Port 3306 (MySQL)   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ • Handshake & Authentication (Argon2id, SASL PLAIN, Cleartext, Ed25519 JWT) │
 │ • Extended Query Protocol (Parse, Bind, Describe, Execute, Sync)            │
 │ • Virtual Catalog Reflection (`pg_catalog.*`, `information_schema.*`)       │
 └──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ AST (FaizQL)
+                                       │ AST (TapisaurusQL)
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                Unified Core Storage & Vector Engine (Safe Rust)              │
@@ -39,7 +39,7 @@ The goal of FaizDB's wire gateways is to **eliminate database sprawl and client 
 
 ## 🐘 1. PostgreSQL Wire Protocol (Port 5432 / 5433)
 
-FaizDB provides wire-level compatibility for PostgreSQL clients communicating via the **PostgreSQL Frontend/Backend Protocol v3.0**.
+TapisaurusDB provides wire-level compatibility for PostgreSQL clients communicating via the **PostgreSQL Frontend/Backend Protocol v3.0**.
 
 ### Compatibility Status:
 * **Core DML / CRUD:** ✅ 95%
@@ -65,14 +65,14 @@ FaizDB provides wire-level compatibility for PostgreSQL clients communicating vi
 | **Postgres Built-in Functions** | ✅ **Supported** | `version()`, `current_schema()`, `current_database()`, `current_user`, `current_setting('server_version_num')`, `format_type()`. |
 | **Window Functions (`OVER()`)** | 🟡 **Planned (v0.3)** | `ROW_NUMBER()`, `RANK()`, `PARTITION BY` currently in active design. |
 | **Common Table Expressions (WITH / CTE)**| 🟡 **Planned (v0.2)** | Non-recursive CTEs planned for next minor release; recursive CTEs out of scope for v0.x. |
-| **Procedural Languages (PL/pgSQL)** | ❌ **Non-Goal** | Procedural stored languages run inside FaizDB are not planned; use native microservices or Rust embedded modules. |
-| **Postgres Logical Replication Stream** | 🟡 **Alternative** | FaizDB uses native WebSocket/gRPC CDC Streams instead of Postgres WAL logical decoding. |
+| **Procedural Languages (PL/pgSQL)** | ❌ **Non-Goal** | Procedural stored languages run inside TapisaurusDB are not planned; use native microservices or Rust embedded modules. |
+| **Postgres Logical Replication Stream** | 🟡 **Alternative** | TapisaurusDB uses native WebSocket/gRPC CDC Streams instead of Postgres WAL logical decoding. |
 
 ---
 
 ## 🍃 2. MongoDB Wire Protocol (Port 27017)
 
-FaizDB natively parses incoming BSON payloads over TCP Port 27017 using **OP_MSG (OpCode 2013)** and **OP_QUERY (OpCode 2004)**.
+TapisaurusDB natively parses incoming BSON payloads over TCP Port 27017 using **OP_MSG (OpCode 2013)** and **OP_QUERY (OpCode 2004)**.
 
 ### Compatibility Status:
 * **CRUD Operations:** ✅ 92%
@@ -96,13 +96,13 @@ FaizDB natively parses incoming BSON payloads over TCP Port 27017 using **OP_MSG
 | **Aggregation Pipeline** | 🟡 **Partial** | `$match`, `$project`, `$group`, `$sort`, `$limit`, `$skip`, `$count` fully functional. |
 | **Complex Aggregations** | 🟡 **Planned (v0.3)** | Multi-database `$lookup`, `$facet`, `$graphLookup` in active development. |
 | **Change Streams (`watch()`)** | ✅ **Alternative** | Native WebSocket real-time change stream available on Port 27018 (`/v1/collections/:name/stream`). |
-| **GridFS** | ❌ **Non-Goal** | FaizDB focuses on high-speed structured/vector data; object storage should use S3/MinIO. |
+| **GridFS** | ❌ **Non-Goal** | TapisaurusDB focuses on high-speed structured/vector data; object storage should use S3/MinIO. |
 
 ---
 
 ## 🐬 3. MySQL / MariaDB Wire Protocol (Port 3306)
 
-FaizDB provides wire compatibility for standard MySQL clients (v5.7 and v8.0 protocol).
+TapisaurusDB provides wire compatibility for standard MySQL clients (v5.7 and v8.0 protocol).
 
 ### Compatibility Status:
 * **Connection Handshake:** ✅ 95% (Protocol v10)
@@ -126,7 +126,7 @@ FaizDB provides wire compatibility for standard MySQL clients (v5.7 and v8.0 pro
 
 ## ⚡ 4. Native High-Performance Protocols (gRPC & REST)
 
-FaizDB's native interfaces offer the highest throughput with zero translation overhead:
+TapisaurusDB's native interfaces offer the highest throughput with zero translation overhead:
 
 | Gateway | Port | Transport | Capabilities |
 |:---|:---:|:---:|:---|
@@ -138,7 +138,7 @@ FaizDB's native interfaces offer the highest throughput with zero translation ov
 
 ## 🧪 5. Verified Client Ecosystem & Tested Tools
 
-The following clients, drivers, and frameworks have been empirically tested and verified against FaizDB's multi-wire gateways:
+The following clients, drivers, and frameworks have been empirically tested and verified against TapisaurusDB's multi-wire gateways:
 
 ### Command-Line & GUI Tools:
 * ✅ **`psql`** (PostgreSQL CLI v14, v15, v16)
@@ -161,11 +161,11 @@ The following clients, drivers, and frameworks have been empirically tested and 
 
 ## ⚠️ 6. Error Handling & Standards Compliance
 
-FaizDB adheres strictly to industry error specifications:
-* When a PostgreSQL client executes an unsupported query feature, FaizDB returns standard **`SQLSTATE 0A000` (FEATURE NOT SUPPORTED)** with an actionable error description rather than a silent failure or protocol crash.
+TapisaurusDB adheres strictly to industry error specifications:
+* When a PostgreSQL client executes an unsupported query feature, TapisaurusDB returns standard **`SQLSTATE 0A000` (FEATURE NOT SUPPORTED)** with an actionable error description rather than a silent failure or protocol crash.
 * In MongoDB mode, unsupported aggregation pipeline stages emit MongoDB error code `115 (CommandNotSupported)` with links to the GitHub issue tracker.
 * Connection failures due to authentication return **`SQLSTATE 28P01` (Invalid Password)** or Mongo code `18 (AuthFailed)`.
 
 ---
 
-*For feature requests, edge-case compatibility reports, or driver verification questions, please open an issue on the [FaizDB Issue Tracker](https://github.com/ictdothouse/faizdb/issues).*
+*For feature requests, edge-case compatibility reports, or driver verification questions, please open an issue on the [TapisaurusDB Issue Tracker](https://github.com/tapiruslab/TapisaurusDB/issues).*

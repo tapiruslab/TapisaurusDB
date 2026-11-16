@@ -1,12 +1,12 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="faizdb",
+    name="tapisaurus",
     version="0.1.0",
-    description="Official Python SDK for FaizDB — The Universal High-Performance Multi-Model Database Engine",
+    description="Official Python SDK for TapisaurusDB — The Universal High-Performance Multi-Model Database Engine",
     author="Ahmad Faiz",
-    author_email="faiz@ict.house",
-    url="https://github.com/ictdothouse/faizdb",
+    author_email="faiz@tapirusdb.com",
+    url="https://github.com/tapiruslab/TapisaurusDB",
     packages=find_packages(),
     license="BSL-1.1",
     classifiers=[

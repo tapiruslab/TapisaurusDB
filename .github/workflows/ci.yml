@@ -1,4 +1,4 @@
-name: CI — FaizDB
+name: CI — TapisaurusDB
 
 on:
   push:

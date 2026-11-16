@@ -7,17 +7,17 @@ echo "🔬 SCIENTIFIC SYSTEMS VERIFICATION: SPEED, SIZE & MULTI-MODEL CAPABILITY
 echo "================================================================="
 
 echo -e "\n[1/4] EVALUATING BINARY FOOTPRINT (Release Build with fat LTO & Strip):"
-stat -c "  • Exact File Size : %s bytes (%f)" target/release/faizdb
-ls -lh target/release/faizdb | awk '{print "  • Formatted Size  : " $5}'
-size target/release/faizdb | awk 'NR==2 {printf "  • ELF Breakdown   : text=%d bytes (%.1f%%), data=%d bytes, bss=%d bytes\n", $1, ($1*100)/($1+$2+$3), $2, $3}'
-file target/release/faizdb | awk -F': ' '{print "  • Binary Type     : " $2}'
+stat -c "  • Exact File Size : %s bytes (%f)" target/release/tapisaurus
+ls -lh target/release/tapisaurus | awk '{print "  • Formatted Size  : " $5}'
+size target/release/tapisaurus | awk 'NR==2 {printf "  • ELF Breakdown   : text=%d bytes (%.1f%%), data=%d bytes, bss=%d bytes\n", $1, ($1*100)/($1+$2+$3), $2, $3}'
+file target/release/tapisaurus | awk -F': ' '{print "  • Binary Type     : " $2}'
 
 echo -e "\n[2/4] STARTING PRODUCTION ENGINE IN BACKGROUND..."
-./target/release/faizdb serve >/tmp/faizdb_server.log 2>&1 &
+./target/release/tapisaurus serve >/tmp/tapisaurus_server.log 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
-    echo -e "\n[!] Shutting down FaizDB Engine (PID $SERVER_PID)..."
+    echo -e "\n[!] Shutting down TapisaurusDB Engine (PID $SERVER_PID)..."
     kill $SERVER_PID 2>/dev/null || true
     wait $SERVER_PID 2>/dev/null || true
     echo "Engine shutdown verified."

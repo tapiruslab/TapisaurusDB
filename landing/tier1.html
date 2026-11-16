@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tier-1 Engineering Guide — FaizDB</title>
+  <title>Tier-1 Engineering Guide — TapisaurusDB</title>
   <meta name="description" content="Technical architecture and engineering deep dive on SIMD vector acceleration, Adaptive Replacement Cache (ARC), Prometheus telemetry, and Chaos testing.">
   
   <link rel="preconnect" href="https://api.fontshare.com">
@@ -79,7 +79,7 @@
     <div class="container nav-inner">
       <a href="index.html" class="logo">
         <div class="logo-mark">⚡</div>
-        <span>FaizDB</span>
+        <span>TapisaurusDB</span>
       </a>
       <ul class="nav-menu">
         <li><a href="index.html">Home</a></li>
@@ -91,7 +91,7 @@
       </ul>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="themeToggle" class="btn btn-secondary">☀️</button>
-        <a href="https://github.com/ictdothouse/faizdb" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
+        <a href="https://github.com/tapiruslab/TapisaurusDB" class="btn btn-secondary" target="_blank">⭐ GitHub</a>
       </div>
     </div>
   </header>
@@ -110,7 +110,7 @@
         Vector operations unroll 8-wide contiguous float accumulators into native AVX-512 (x86_64) and NEON (ARM64) SIMD registers. 1-bit binary compression packs 1536-dim vectors into 192 bytes with instant bitwise XOR + <code>POPCNT</code> execution.
       </p>
       <div class="code-block">
-        <div><span class="c-pri">use</span> faizdb_vector::quantization::{BinaryQuantizer, BinaryQuantizedVector};</div>
+        <div><span class="c-pri">use</span> tapisaurus_vector::quantization::{BinaryQuantizer, BinaryQuantizedVector};</div>
         <div>let bin_vec = BinaryQuantizer::quantize(&raw_f32_embeddings);</div>
         <div>let dist = BinaryQuantizer::hamming_distance(&query_bin, &stored_bin);</div>
       </div>
@@ -143,7 +143,7 @@
 
   <footer>
     <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
-      <span>© 2026 FaizDB Project · Genesis Design System</span>
+      <span>© 2026 TapisaurusDB Project · Genesis Design System</span>
       <a href="index.html" style="color: var(--primary); text-decoration: none;">Back to Home</a>
     </div>
   </footer>
@@ -151,7 +151,7 @@
   <script>
     const toggleBtn = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
-    const saved = localStorage.getItem('faizdb-theme') || 'light';
+    const saved = localStorage.getItem('tapisaurus-theme') || 'light';
     htmlEl.className = saved;
     toggleBtn.textContent = saved === 'dark' ? '🌙' : '☀️';
 
@@ -159,7 +159,7 @@
       const next = htmlEl.classList.contains('light') ? 'dark' : 'light';
       htmlEl.className = next;
       toggleBtn.textContent = next === 'dark' ? '🌙' : '☀️';
-      localStorage.setItem('faizdb-theme', next);
+      localStorage.setItem('tapisaurus-theme', next);
     });
   </script>
 </body>

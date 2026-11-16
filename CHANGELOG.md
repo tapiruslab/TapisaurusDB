@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **FaizDB** are documented in this file.
+All notable changes to **TapisaurusDB** are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -10,30 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### 🏛️ Production Audit Hardening (Billion-Dollar Tier Readiness)
-- **Lock-Free Concurrent MemTable (`faizdb-core/src/storage/memtable.rs`)**: Replaced `RwLock<BTreeMap>` with lock-free `crossbeam_skiplist::SkipMap`, eliminating write contention bottlenecks under 100K+ concurrent writes/sec while maintaining ordered range scans.
-- **Strict WAL Durability & Power-Failure Safety (`faizdb-core/src/storage/wal.rs`)**: Enforced synchronous disk persistence (`file.sync_data()`) on committed WAL appends, guaranteeing zero data loss on operating system crash or power outage.
-- **Watermark-Based MVCC Garbage Collection (`faizdb-core/src/transaction/mvcc.rs`)**: Upgraded version pruning from idle-only sweeps to aggressive watermark-based pruning calculating the oldest active snapshot watermark (`oldest_active_snapshot`), coupled with an emergency cap (50,000 versions) to eliminate memory leaks under long-running OLAP queries.
-- **Constant-Time O(1) Raft Replicated Log Lookup (`faizdb-core/src/cluster/raft.rs`)**: Replaced $O(N)$ linear iteration across log entries in `AppendEntries` RPC with $O(1)$ zero-copy direct index arithmetic with base offset bounds checking.
-- **Per-IP Authentication Brute-Force Rate Limiter (`faizdb-server/src/api/auth.rs`)**: Added strict per-IP rate limiting (5 attempts / 60 seconds) with thread-safe `DashMap` tracking and automatic window rotation on `/api/auth/login` to thwart credential stuffing and brute-force attacks.
-- **Native SSTable LZ4 Compression (`faizdb-core/src/storage/sstable.rs` & `engine.rs`)**: Enabled `Compression::Lz4` by default with frame headers, reducing SSTable disk footprints by 50% to 70% with zero-overhead streaming decompression.
-- **Sparse-Index O(log N) SSTable Prefix Scans (`faizdb-core/src/storage/sstable.rs` & `engine.rs`)**: Upgraded `prefix_scan` to seek directly to the candidate index block using the sparse index and terminate scanning immediately once keys lexicographically exceed the search prefix.
-- **High-Speed Binary Vector Persistence (`faizdb-vector/src/hnsw.rs`)**: Replaced JSON graph serialization with compact binary format (`FAIZHNSW`) storing raw 4-byte LE floats, achieving 5x-8x smaller index files, 50x faster load times, and transparent backwards-compatible JSON fallback.
-- **BSON Binary Raft Disk Store (`faizdb-core/src/cluster/raft.rs`)**: Upgraded Raft log persistence from JSON to framed BSON binary records with CRC32 verification and `sync_data()`, reducing disk I/O latency by 60%.
-- **Cryptographic HKDF-SHA256 Key Derivation (`faizdb-security/src/encryption.rs`)**: Replaced raw SHA-256 with proper HKDF-SHA256 extract-and-expand key derivation for AES-256-GCM cipher passphrases.
-- **Sharded Adaptive Replacement Cache (`faizdb-core/src/storage/arc_cache.rs` & `engine.rs`)**: Introduced `ShardedArcCache` with 16 independent mutex shards, eliminating cache lock contention during concurrent point reads.
-- **Raft Consensus Safety Invariant (`faizdb-core/src/cluster/raft.rs`)**: Follower-first cluster initialization and `initial_commit_index = initial_snapshot_index` on reboot adhering strictly to formal Raft specifications.
+- **Lock-Free Concurrent MemTable (`tapisaurus-core/src/storage/memtable.rs`)**: Replaced `RwLock<BTreeMap>` with lock-free `crossbeam_skiplist::SkipMap`, eliminating write contention bottlenecks under 100K+ concurrent writes/sec while maintaining ordered range scans.
+- **Strict WAL Durability & Power-Failure Safety (`tapisaurus-core/src/storage/wal.rs`)**: Enforced synchronous disk persistence (`file.sync_data()`) on committed WAL appends, guaranteeing zero data loss on operating system crash or power outage.
+- **Watermark-Based MVCC Garbage Collection (`tapisaurus-core/src/transaction/mvcc.rs`)**: Upgraded version pruning from idle-only sweeps to aggressive watermark-based pruning calculating the oldest active snapshot watermark (`oldest_active_snapshot`), coupled with an emergency cap (50,000 versions) to eliminate memory leaks under long-running OLAP queries.
+- **Constant-Time O(1) Raft Replicated Log Lookup (`tapisaurus-core/src/cluster/raft.rs`)**: Replaced $O(N)$ linear iteration across log entries in `AppendEntries` RPC with $O(1)$ zero-copy direct index arithmetic with base offset bounds checking.
+- **Per-IP Authentication Brute-Force Rate Limiter (`tapisaurus-server/src/api/auth.rs`)**: Added strict per-IP rate limiting (5 attempts / 60 seconds) with thread-safe `DashMap` tracking and automatic window rotation on `/api/auth/login` to thwart credential stuffing and brute-force attacks.
+- **Native SSTable LZ4 Compression (`tapisaurus-core/src/storage/sstable.rs` & `engine.rs`)**: Enabled `Compression::Lz4` by default with frame headers, reducing SSTable disk footprints by 50% to 70% with zero-overhead streaming decompression.
+- **Sparse-Index O(log N) SSTable Prefix Scans (`tapisaurus-core/src/storage/sstable.rs` & `engine.rs`)**: Upgraded `prefix_scan` to seek directly to the candidate index block using the sparse index and terminate scanning immediately once keys lexicographically exceed the search prefix.
+- **High-Speed Binary Vector Persistence (`tapisaurus-vector/src/hnsw.rs`)**: Replaced JSON graph serialization with compact binary format (`TPSHNSW1`) storing raw 4-byte LE floats, achieving 5x-8x smaller index files, 50x faster load times, and transparent backwards-compatible JSON fallback.
+- **BSON Binary Raft Disk Store (`tapisaurus-core/src/cluster/raft.rs`)**: Upgraded Raft log persistence from JSON to framed BSON binary records with CRC32 verification and `sync_data()`, reducing disk I/O latency by 60%.
+- **Cryptographic HKDF-SHA256 Key Derivation (`tapisaurus-security/src/encryption.rs`)**: Replaced raw SHA-256 with proper HKDF-SHA256 extract-and-expand key derivation for AES-256-GCM cipher passphrases.
+- **Sharded Adaptive Replacement Cache (`tapisaurus-core/src/storage/arc_cache.rs` & `engine.rs`)**: Introduced `ShardedArcCache` with 16 independent mutex shards, eliminating cache lock contention during concurrent point reads.
+- **Raft Consensus Safety Invariant (`tapisaurus-core/src/cluster/raft.rs`)**: Follower-first cluster initialization and `initial_commit_index = initial_snapshot_index` on reboot adhering strictly to formal Raft specifications.
 
-- **Phase 5: In-Browser WebAssembly (WASM) Headless Engine (`bindings/wasm`)**: Native browser and Node.js WebAssembly package built with `wasm-bindgen`, exposing pure in-memory zero-server FaizDB execution, collections CRUD, JSON document serialization, and client-side HNSW vector similarity search with Cosine, Euclidean, and Dot Product metrics directly inside browser web applications.
-- **Phase 4: Distributed Scatter-Gather Query Coordinator (`faizdb-core/src/cluster/scatter_gather.rs`)**: 16,384 virtual hash slot routing engine with `{hash_tag}` extraction for colocation, parallel partition query scattering, multi-field sort-merge (`ORDER BY ... ASC/DESC`) with streaming `LIMIT`/`OFFSET`, and distributed columnar analytical aggregations (`COUNT`, `SUM`, `MIN`, `MAX`, `AVG`) with pushdown to remote shards.
-- **Phase 4: Active Outbound CDC Stream Dispatcher (`faizdb-server/src/stream/cdc_dispatcher.rs`)**: Real-time event streaming pipeline pushing database mutations (`insert`, `update`, `delete`) to Kafka REST proxies, Debezium gateways, and HTTP webhooks with bounded buffer queues, exponential retry with jitter, batching (`batch_size`, `flush_interval_ms`), and live Prometheus/atomic telemetry.
+- **Phase 5: In-Browser WebAssembly (WASM) Headless Engine (`bindings/wasm`)**: Native browser and Node.js WebAssembly package built with `wasm-bindgen`, exposing pure in-memory zero-server TapisaurusDB execution, collections CRUD, JSON document serialization, and client-side HNSW vector similarity search with Cosine, Euclidean, and Dot Product metrics directly inside browser web applications.
+- **Phase 4: Distributed Scatter-Gather Query Coordinator (`tapisaurus-core/src/cluster/scatter_gather.rs`)**: 16,384 virtual hash slot routing engine with `{hash_tag}` extraction for colocation, parallel partition query scattering, multi-field sort-merge (`ORDER BY ... ASC/DESC`) with streaming `LIMIT`/`OFFSET`, and distributed columnar analytical aggregations (`COUNT`, `SUM`, `MIN`, `MAX`, `AVG`) with pushdown to remote shards.
+- **Phase 4: Active Outbound CDC Stream Dispatcher (`tapisaurus-server/src/stream/cdc_dispatcher.rs`)**: Real-time event streaming pipeline pushing database mutations (`insert`, `update`, `delete`) to Kafka REST proxies, Debezium gateways, and HTTP webhooks with bounded buffer queues, exponential retry with jitter, batching (`batch_size`, `flush_interval_ms`), and live Prometheus/atomic telemetry.
 - **Phase 3: Automated Tiered Storage Architecture (`StorageEngine` + `TieredStorageManager`)**: Transparent point lookups (`get`) and prefix scans (`prefix_scan`) querying Hot NVMe and Cold HDD/Blob tiers seamlessly; dual-tier SSTable reader management (`cold_sstables: RwLock<Vec<SSTableReader>>`) with ARC block caching; autonomous background tier migration triggered on MemTable flushes; cold SSTables persistence and recovery across restarts; real-time telemetry tracking hot vs. cold bytes and tables.
-- **Phase 3: Hardware SIMD Vector Acceleration (`faizdb-vector`)**: 8-lane SIMD-unrolled vector math loops for Cosine Distance, Squared Euclidean Distance, and Dot Product distance metrics with trailing remainder handlers, utilizing 256-bit AVX2 / ARM NEON vectorization for high-dimensional embeddings (1536-dim OpenAI, 4096-dim Llama).
+- **Phase 3: Hardware SIMD Vector Acceleration (`tapisaurus-vector`)**: 8-lane SIMD-unrolled vector math loops for Cosine Distance, Squared Euclidean Distance, and Dot Product distance metrics with trailing remainder handlers, utilizing 256-bit AVX2 / ARM NEON vectorization for high-dimensional embeddings (1536-dim OpenAI, 4096-dim Llama).
 - **Phase 3: Columnar Analytical Aggregations (`ColumnarBatch`)**: In-memory analytical aggregation operators (`avg_f64`, `min_f64`, `max_f64`, `count`) operating directly on columnar vectors without full document deserialization overhead.
-- **5-Way Universal Protocol Gateway & Native MySQL / MariaDB Wire Ingress (Port 3306)**: Complete async MySQL HandshakeV10 protocol engine (`faizdb-server/src/wire/mysql/`), supporting MySQL CLI, Laravel Eloquent (`DB_CONNECTION=mysql`), PHP PDO/mysqli, ColumnDef41 packet encoding, EOF/OK packets, and automated test suite (`tests/test_mysql_wire_protocol.rs`).
+- **5-Way Universal Protocol Gateway & Native MySQL / MariaDB Wire Ingress (Port 3306)**: Complete async MySQL HandshakeV10 protocol engine (`tapisaurus-server/src/wire/mysql/`), supporting MySQL CLI, Laravel Eloquent (`DB_CONNECTION=mysql`), PHP PDO/mysqli, ColumnDef41 packet encoding, EOF/OK packets, and automated test suite (`tests/test_mysql_wire_protocol.rs`).
 - `SECURITY.md` — responsible disclosure policy
 - `CONTRIBUTING.md` — full contributor guide
 - `.github/workflows/ci.yml` — GitHub Actions CI (fmt, clippy -D warnings, tests, cargo-audit, MSRV)
-- `faizdb-server/tests/` — comprehensive integration test suite (auth flow, document CRUD, vector search, production hardening, competitor verification)
+- `tapisaurus-server/tests/` — comprehensive integration test suite (auth flow, document CRUD, vector search, production hardening, competitor verification)
 - `bindings/python/pyproject.toml` — PEP 517/518 modern Python packaging
 - `HnswIndex::try_search()` — non-panicking vector search with explicit dimension validation
 - **Unified Multi-Protocol Graceful Shutdown**: Synchronized broadcast channel cleanly draining active connections across HTTP REST, MongoDB Wire (Port 27017), PostgreSQL Wire (Port 5432), and gRPC (Port 50051) on SIGINT/SIGTERM.
@@ -42,18 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sub-Millisecond Query Scan Limit Pushdown**: Direct pushdown of `LIMIT` clauses into the document scan iterator for short-circuit evaluation without unnecessary record scanning.
 - **Numerical Float Safety & Distance Clamping**: Mathematical clamping on cosine similarity (`[-1.0, 1.0]`) and distance (`[0.0, 2.0]`) to protect against IEEE 754 precision loss and eliminate `NaN` risk in HNSW indexing.
 - **Bounded-Resource Graph Traversal**: Sourced-budget BFS traversal (`traverse_bfs_bounded`) with a configurable visit limit (default 50,000 nodes) and visited-node deduplication preventing infinite loops in cyclic graphs.
-- **Open-Format Data Portability CLI (`faizdb dump`)**: Streaming export of collections to standard JSONL and ANSI SQL `INSERT` statements with $O(1)$ memory usage.
+- **Open-Format Data Portability CLI (`tapisaurus dump`)**: Streaming export of collections to standard JSONL and ANSI SQL `INSERT` statements with $O(1)$ memory usage.
 - **Cloud-Native Kubernetes Health Probes**: Native HTTP endpoints `GET /v1/health/liveness` (event-loop deadlock detection) and `GET /v1/health/readiness` (storage engine availability gating).
-- **Autonomous Background Snapshot Daemon**: Zero-maintenance async background daemon (`FAIZDB_AUTO_BACKUP`) for periodic atomic snapshots with automatic timestamp rotation.
+- **Autonomous Background Snapshot Daemon**: Zero-maintenance async background daemon (`TAPISAURUS_AUTO_BACKUP`) for periodic atomic snapshots with automatic timestamp rotation.
 - **WAL Group Commit & Batch Durability**: Vectorized single-buffer atomic serialization (`append_batch` and `put_batch`) enabling 100k+ durable writes/sec with amortized `fsync`.
 - **Max Connections Governor & Overload Protection**: Asynchronous admission control (`tokio::sync::Semaphore`) across PostgreSQL and MongoDB wire protocols with RFC 53300 fatal error rejection (`FATAL: 53300: sorry, too many clients already`).
 - **PostgreSQL Extended Query Protocol**: Full support for `'P'`, `'B'`, `'D'`, `'E'`, `'S'`, and `'C'` wire protocol messages with parameterized queries ($1, $2) and prepared statement caching.
-- **Relational SQL Multi-Table Hash Joins**: Native execution of `INNER JOIN` and `LEFT JOIN` in FaizQL with high-speed in-memory hash join algorithm.
+- **Relational SQL Multi-Table Hash Joins**: Native execution of `INNER JOIN` and `LEFT JOIN` in TapisaurusQL with high-speed in-memory hash join algorithm.
 - **MongoDB Wire Fast-Path & Stateful Cursors**: $O(1)$ primary key lookup for `{ _id: ... }` filters and stateful cursor pagination supporting `getMore` and `killCursors`.
 - **Vector HNSW Dynamic Updates & Tombstones**: Tombstone-based vector deletion and in-place embedding updates without requiring full index reconstruction.
 
 ### Security & Robustness Hardening
-- **Enterprise Connection Governor**: Guarded against connection exhaustion and socket starvation via configurable `FAIZDB_MAX_CONNECTIONS`.
+- **Enterprise Connection Governor**: Guarded against connection exhaustion and socket starvation via configurable `TAPISAURUS_MAX_CONNECTIONS`.
 - **PostgreSQL Wire Protocol**: Refined scalar introspection handling and query routing to ensure seamless execution of standard table queries alongside PostgreSQL administrative commands.
 - **Network Buffer Protection**: Enforced strict upper-bound message limits on PostgreSQL (16MB) and MongoDB (48MB) wire listeners to prevent unbounded heap allocations on network streams.
 - **Vector Search Preflight Validation**: Enforced strict preflight dimension, empty query, and `top_k` checks across REST and query endpoints with graceful HTTP 400 responses.
@@ -70,13 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Defensive Vector Slice Clamping**: Guarded SIMD vector distance calculations against out-of-bounds slice indexing via `a.len().min(b.len())`.
 - **Zero-Allocation Columnar Aggregation**: Optimized `avg_f64` to accumulate sums in a single pass without allocating temporary vectors.
 - **SQL DDL Quoting & `IF [NOT] EXISTS` Parsing**: Hardened DDL and DML statements to strip backticks (`` ` ``) and double quotes (`"`), correctly parsing `CREATE TABLE IF NOT EXISTS` and `DROP TABLE IF EXISTS` without corrupting table names.
-- **Graph Edge Query Durability**: Extended FaizQL query execution to write graph edge creations and deletions directly to durable LSM storage (`graph:e:`), guaranteeing edge persistence across reboots. Added native support for `CREATE EDGE [FROM] ... TO ... VIA ... [WEIGHT ...]` and `DELETE EDGE [FROM] ... TO ... [VIA ...]`.
+- **Graph Edge Query Durability**: Extended TapisaurusQL query execution to write graph edge creations and deletions directly to durable LSM storage (`graph:e:`), guaranteeing edge persistence across reboots. Added native support for `CREATE EDGE [FROM] ... TO ... VIA ... [WEIGHT ...]` and `DELETE EDGE [FROM] ... TO ... [VIA ...]`.
 - **Offline TTL Expiration / Zombie Purge**: Fixed document recovery on restart to compute absolute TTL expiration (`created_at + ttl_secs`); expired documents are purged immediately from storage upon reboot instead of having their TTL reset.
 - **MySQL Wire Protocol Column Typing**: Correctly mapped string/UUID IDs to `MYSQL_TYPE_VAR_STRING (0xFD)` instead of `MYSQL_TYPE_LONGLONG (0x08)`, preventing client drivers (e.g. PHP PDO, Laravel, Go, Python) from failing on UUID v7 strings.
 - **SQL Comment Stripping & Tautology `1 = 1` Predicates**: Implemented robust SQL comment stripping (`--`, `#`, `/* ... */`), case-insensitive ` AND ` compound filters, and instant resolution of boolean/numeric tautologies (`WHERE 1=1`) commonly emitted by ORMs (Prisma, Drizzle, Hibernate).
 - **SQL Keyword Boundary & Substring Collision Isolation**: Implemented `find_keyword_top_level` with word boundaries (`is_ascii_whitespace`, `;`, `(`, `)`, `,`) while preserving quoted literals, preventing substring collisions on table names like `settings`, `assets`, or `warehouse`, and index names like `idx_location`.
 - **SQL Range (`BETWEEN` / `NOT BETWEEN`) & Set Membership (`IN` / `NOT IN`)**: Resolved parser dropping of `BETWEEN ... AND ...` ternary predicates, and added complete support for `NOT BETWEEN`, `IN (...)`, `NOT IN (...)`, and `OR` with parenthesized precedence in `parse_sql_where`.
-- **PostgreSQL Wire Parse Message Negative Parameter Count Underflow Guard**: Enforced `raw_num_params > 0` validation and buffer bounds in `faizdb-server/src/wire/postgres/listener.rs`, eliminating a 100% CPU lock loop when receiving `-1` parameter count codes.
+- **PostgreSQL Wire Parse Message Negative Parameter Count Underflow Guard**: Enforced `raw_num_params > 0` validation and buffer bounds in `tapisaurus-server/src/wire/postgres/listener.rs`, eliminating a 100% CPU lock loop when receiving `-1` parameter count codes.
 - **HNSW Vector Tombstone Query Consistency**: Updated `HnswIndex::try_search` to verify `self.is_empty()`, matching `search()` behavior on indexes where all nodes have been tombstone-deleted.
 - **MVCC Write History Autonomous Memory Pruning**: Integrated auto-clearing and `gc()` trigger in `TransactionManager::commit` when transactions finish, preventing unbounded growth of `committed_writes` over millions of transactions.
 - **REST Vector Deletion & Axum 0.7 Routing**: Added `DELETE /v1/vector/{index_name}/{id}` and `DELETE /v1/vector/index/{name}` endpoints with correct Axum 0.7 `{param}` URL syntax.
@@ -84,8 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code Quality & Linter Compliance**: Resolved all workspace Clippy lints to achieve full compliance with `-D warnings` strict build policy.
 
 ### Changed
-- **JWT algorithm upgraded from `HS256` → `EdDSA` (Ed25519)** — asymmetric signatures, immune to timing attacks, 2026 security standard. Supply `FAIZDB_JWT_PRIVATE_KEY` / `FAIZDB_JWT_PUBLIC_KEY` (PEM) in production.
-- `faizdb-server/src/api.rs` (1,529 lines) split into focused submodules:
+- **JWT algorithm upgraded from `HS256` → `EdDSA` (Ed25519)** — asymmetric signatures, immune to timing attacks, 2026 security standard. Supply `TAPISAURUS_JWT_PRIVATE_KEY` / `TAPISAURUS_JWT_PUBLIC_KEY` (PEM) in production.
+- `tapisaurus-server/src/api.rs` (1,529 lines) split into focused submodules:
   - `api/auth.rs` — login, whoami, token generation
   - `api/collections.rs` — CRUD, query, aggregation, search, TTL, transactions, import
   - `api/backup.rs` — create, list, restore, schedule
@@ -94,8 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `api/middleware.rs` — CORS, auth, RBAC, rate limiter, audit logger
   - `api/websocket.rs` — Change Stream WebSocket handlers
   - `api/mod.rs` — Router assembly
-- `faizdb-core/src/storage/engine.rs` — replaced `std::sync::RwLock` with `parking_lot::RwLock` (no lock poisoning, no `.unwrap()`)
-- `faizdb-core/src/storage/compaction.rs` — `merge_sstables()` now uses a **streaming k-way BinaryHeap merge** instead of loading all entries to RAM. Memory usage bounded to `O(k)` regardless of dataset size.
+- `tapisaurus-core/src/storage/engine.rs` — replaced `std::sync::RwLock` with `parking_lot::RwLock` (no lock poisoning, no `.unwrap()`)
+- `tapisaurus-core/src/storage/compaction.rs` — `merge_sstables()` now uses a **streaming k-way BinaryHeap merge** instead of loading all entries to RAM. Memory usage bounded to `O(k)` regardless of dataset size.
 - `AppState.backup_schedule` changed from `std::sync::RwLock` to `parking_lot::RwLock`
 - Rust minimum version bumped to **1.88** (latest stable Aug 2026)
 - `tokio` bumped to **1.53.1** (latest)
@@ -116,8 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Document Primary Identifier (`_id` / `id`) Query & Sort Resolution**: Fixed filter evaluation and query sorting where referencing `_id` or `id` returned `None` because fields only checked nested document attributes. `Collection::find` and SQL/MongoDB sorting now resolve `doc.id` natively.
 - **Relational Hash Join NULL Key Isolation & Canonical Stringification**: Fixed bug where missing foreign keys (`None`) defaulted to empty string (`""`), causing unrelated records without keys to join. INNER JOIN now strictly rejects NULL/missing keys according to ANSI SQL standards, and formats numeric, boolean, UUID, and datetime keys canonically.
 - **ANSI SQL WHERE Operators (`<>`, `IS NULL`, `IS NOT NULL`, `LIKE`)**: Added support for standard ANSI SQL inequality (`<>`), nullity checks (`IS NULL`, `IS NOT NULL`), and wildcard patterns (`LIKE '%pattern%'`, `'prefix%'`, `'%suffix'`).
-- Repository URL in `Cargo.toml` corrected from `github.com/faizdb/faizdb` → `github.com/ictdothouse/faizdb`
-- Author email corrected from `faiz@faizdb.io` → `faiz@ict.house`
+- Repository URL in `Cargo.toml` corrected from `github.com/tapiruslab/TapisaurusDB` → `github.com/tapiruslab/TapisaurusDB`
+- Author email corrected from `faiz@tapirusdb.com` → `faiz@tapirusdb.com`
 
 ---
 
@@ -128,7 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HNSW vector index (Cosine, Euclidean, Inner Product distance metrics)
 - Adjacency-list property graph engine with BFS/DFS traversal
 - 4-way protocol gateway: MongoDB Wire (27017), PostgreSQL Wire (5432), gRPC (50051), REST/WS (27018)
-- FaizQL query language with SQL and MongoDB shell dialect support
+- TapisaurusQL query language with SQL and MongoDB shell dialect support
 - Aggregation pipeline engine (`$match`, `$group`, `$sort`, `$project`, `$limit`, `$skip`)
 - Raft consensus for multi-node clustering
 - CRDT-based geo-replication for multi-region deployments

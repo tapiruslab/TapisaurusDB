@@ -71,7 +71,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, onNavigateToTab }) =>
     {
       id: 'mongo',
       label: '🍃 MongoDB Connection URI (Compass / Mongoose / Prisma)',
-      code: 'mongodb://127.0.0.1:27017/faizdb',
+      code: 'mongodb://127.0.0.1:27017/tapisaurus',
     },
     {
       id: 'rest',
@@ -81,7 +81,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, onNavigateToTab }) =>
     {
       id: 'cli',
       label: '💻 Interactive CLI & Shell',
-      code: './faizdb shell',
+      code: './tapisaurus shell',
     },
   ];
 
@@ -226,7 +226,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, onNavigateToTab }) =>
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-cyan-700 dark:text-cyan-400">
-                  FaizQL Multi-Dialect
+                  TapisaurusQL Multi-Dialect
                 </span>
                 <Badge variant="info">SQL + Mongo</Badge>
               </div>

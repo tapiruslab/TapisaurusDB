@@ -1,8 +1,8 @@
 {
-  "name": "faizdb-studio",
+  "name": "tapisaurus-studio",
   "private": true,
   "version": "0.1.0",
-  "author": "Ahmad Faiz <faiz@ict.house>",
+  "author": "Ahmad Faiz <faiz@tapirusdb.com>",
   "type": "module",
   "scripts": {
     "dev": "vite --port 27020",

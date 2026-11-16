@@ -36,10 +36,10 @@ export const SearchExplorer: React.FC = () => {
 
   const sampleArticles = [
     {
-      title: 'FaizDB: The Next-Gen NoSQL & AI Database',
+      title: 'TapisaurusDB: The Next-Gen NoSQL & AI Database',
       category: 'Database Engineering',
-      content: 'FaizDB combines hybrid LSM-Tree and B-Tree storage with native HNSW vector search and Raft consensus clustering in Rust.',
-      tags: ['database', 'rust', 'nosql', 'faizdb'],
+      content: 'TapisaurusDB combines hybrid LSM-Tree and B-Tree storage with native HNSW vector search and Raft consensus clustering in Rust.',
+      tags: ['database', 'rust', 'nosql', 'tapisaurus'],
     },
     {
       title: 'Distributed Consensus with Raft Protocol',

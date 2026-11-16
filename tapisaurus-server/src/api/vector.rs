@@ -1,0 +1,385 @@
+//! Vector Search REST API handlers powered by HNSW index.
+
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+use crate::api::{ApiResponse, AppState};
+use tapisaurus_vector::{DistanceMetric, HnswConfig, HnswIndex, QuantizationType};
+
+#[derive(Debug, Deserialize)]
+pub struct CreateVectorIndexRequest {
+    pub name: String,
+    pub dimensions: usize,
+    pub metric: Option<String>,
+    pub quantization: Option<String>,
+    pub max_m: Option<usize>,
+    pub ef_construction: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InsertVectorRequest {
+    pub index_name: String,
+    pub id: String,
+    pub vector: Vec<f32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchVectorRequest {
+    pub index_name: String,
+    pub query: Vec<f32>,
+    pub top_k: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VectorSearchResultItem {
+    pub id: String,
+    pub distance: f32,
+    pub score: f32,
+}
+
+pub async fn create_vector_index(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateVectorIndexRequest>,
+) -> impl IntoResponse {
+    let metric = match payload.metric.as_deref() {
+        Some("euclidean") | Some("l2") => DistanceMetric::Euclidean,
+        Some("dot") | Some("dot_product") => DistanceMetric::DotProduct,
+        Some("manhattan") => DistanceMetric::Manhattan,
+        _ => DistanceMetric::Cosine,
+    };
+
+    let quantization = match payload
+        .quantization
+        .as_deref()
+        .map(|s| s.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("scalar8") | Some("sq8") | Some("int8") => QuantizationType::Scalar8,
+        Some("binary1") | Some("bq") | Some("binary") => QuantizationType::Binary1,
+        _ => QuantizationType::None,
+    };
+
+    let m = payload.max_m.unwrap_or(16);
+    let config = HnswConfig {
+        dimensions: payload.dimensions,
+        metric,
+        quantization,
+        m,
+        m0: m * 2,
+        ef_construction: payload.ef_construction.unwrap_or(100),
+        ef_search: 64,
+        ml: 1.0 / (m as f64).ln(),
+    };
+
+    if let Some(storage) = state.db.storage() {
+        let key = format!("vec:meta:{}", payload.name);
+        match serde_json::to_vec(&config) {
+            Ok(val) => {
+                if let Err(e) = storage.put(key.as_bytes(), &val) {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::err(format!(
+                            "Failed to persist vector index metadata: {e}"
+                        ))),
+                    );
+                }
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::err(format!(
+                        "Failed to serialize vector index configuration: {e}"
+                    ))),
+                );
+            }
+        }
+    }
+
+    let index = Arc::new(parking_lot::RwLock::new(HnswIndex::new(config.clone())));
+    state
+        .db
+        .vector_indexes()
+        .insert(payload.name.clone(), index);
+
+    (
+        StatusCode::CREATED,
+        Json(ApiResponse::ok(serde_json::json!({
+            "index_name": payload.name,
+            "dimensions": payload.dimensions,
+            "metric": format!("{:?}", metric),
+            "quantization": format!("{:?}", config.quantization),
+            "status": "Ready",
+        }))),
+    )
+}
+
+pub async fn insert_vector(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<InsertVectorRequest>,
+) -> impl IntoResponse {
+    let index_lock = match state.db.vector_indexes().get(&payload.index_name) {
+        Some(idx) => idx.clone(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::err(format!(
+                    "Vector index '{}' does not exist. Create it first using POST /v1/vector/index",
+                    payload.index_name
+                ))),
+            );
+        }
+    };
+
+    // 1. Preflight validation: ID eligibility and vector dimensions before storage writes
+    if payload.id.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::err("Vector id cannot be empty")),
+        );
+    }
+
+    {
+        let idx = index_lock.read();
+        if payload.vector.len() != idx.config.dimensions {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::err(format!(
+                    "Vector dimension mismatch: expected {}, got {}",
+                    idx.config.dimensions,
+                    payload.vector.len()
+                ))),
+            );
+        }
+        if idx.contains_id(&payload.id) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::err(format!(
+                    "Vector with id '{}' already exists",
+                    payload.id
+                ))),
+            );
+        }
+    }
+
+    let storage_key = format!("vec:data:{}:{}", payload.index_name, payload.id);
+
+    // 2. Persist to storage engine
+    if let Some(storage) = state.db.storage() {
+        match serde_json::to_vec(&payload.vector) {
+            Ok(val) => {
+                if let Err(e) = storage.put(storage_key.as_bytes(), &val) {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::err(format!(
+                            "Failed to persist vector to storage engine: {e}"
+                        ))),
+                    );
+                }
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::err(format!(
+                        "Failed to serialize vector payload: {e}"
+                    ))),
+                );
+            }
+        }
+    }
+
+    // 3. Apply in-memory insertion with compensating removal on unexpected failure
+    let mut index = index_lock.write();
+    let total_nodes = index.len() + 1;
+    match index.insert(payload.id.clone(), payload.vector.clone()) {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::ok(serde_json::json!({
+                "id": payload.id,
+                "index_name": payload.index_name,
+                "total_nodes": total_nodes,
+            }))),
+        ),
+        Err(e) => {
+            // Compensating removal: clean up persisted record to prevent orphaned disk state
+            if let Some(storage) = state.db.storage() {
+                if let Err(del_err) = storage.delete(storage_key.as_bytes()) {
+                    tracing::warn!(
+                        "Compensating removal failed for key '{}': {del_err}",
+                        storage_key
+                    );
+                }
+            }
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::err(format!("Failed to insert vector: {e}"))),
+            )
+        }
+    }
+}
+
+pub async fn search_vector(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SearchVectorRequest>,
+) -> impl IntoResponse {
+    let index_lock = match state.db.vector_indexes().get(&payload.index_name) {
+        Some(idx) => idx.clone(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::err(format!(
+                    "Vector index '{}' not found",
+                    payload.index_name
+                ))),
+            )
+        }
+    };
+
+    let top_k = payload.top_k.unwrap_or(10);
+    if top_k == 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::err("top_k must be greater than 0")),
+        );
+    }
+
+    if payload.query.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::err("Query vector cannot be empty")),
+        );
+    }
+
+    let index = index_lock.read();
+    if payload.query.len() != index.config.dimensions {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::err(format!(
+                "Query vector dimension mismatch: expected {}, got {}",
+                index.config.dimensions,
+                payload.query.len()
+            ))),
+        );
+    }
+
+    let results = index.search(&payload.query, top_k);
+
+    let mapped: Vec<VectorSearchResultItem> = results
+        .into_iter()
+        .map(|r| {
+            let score = 1.0 / (1.0 + r.distance);
+            VectorSearchResultItem {
+                id: r.id,
+                distance: r.distance,
+                score,
+            }
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse::ok(serde_json::json!({
+            "index_name": payload.index_name,
+            "query_dimensions": payload.query.len(),
+            "top_k": top_k,
+            "results": mapped,
+        }))),
+    )
+}
+
+pub async fn list_vector_indexes(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let indexes: Vec<serde_json::Value> = state
+        .db
+        .vector_indexes()
+        .iter()
+        .map(|entry| {
+            let idx = entry.value().read();
+            serde_json::json!({
+                "name": entry.key(),
+                "dimensions": idx.config.dimensions,
+                "metric": format!("{:?}", idx.config.metric),
+                "quantization": format!("{:?}", idx.config.quantization),
+                "memory_bytes": idx.memory_bytes(),
+                "total_vectors": idx.len(),
+            })
+        })
+        .collect();
+
+    Json(ApiResponse::ok(indexes))
+}
+
+pub async fn delete_vector(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path((index_name, id)): axum::extract::Path<(String, String)>,
+) -> impl IntoResponse {
+    let index_lock = match state.db.vector_indexes().get(&index_name) {
+        Some(idx) => idx.clone(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::err(format!(
+                    "Vector index '{index_name}' not found"
+                ))),
+            );
+        }
+    };
+
+    let removed = index_lock.write().delete(&id);
+    if removed {
+        if let Some(storage) = state.db.storage() {
+            let key = format!("vec:data:{}:{}", index_name, id);
+            let _ = storage.delete(key.as_bytes());
+        }
+        (
+            StatusCode::OK,
+            Json(ApiResponse::ok(serde_json::json!({
+                "id": id,
+                "index_name": index_name,
+                "deleted": true,
+            }))),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::err(format!(
+                "Vector with id '{id}' not found in index '{index_name}'"
+            ))),
+        )
+    }
+}
+
+pub async fn drop_vector_index(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(name): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    let removed = state.db.vector_indexes().remove(&name).is_some();
+    if removed {
+        if let Some(storage) = state.db.storage() {
+            let meta_key = format!("vec:meta:{}", name);
+            let _ = storage.delete(meta_key.as_bytes());
+
+            let prefix = format!("vec:data:{}:", name);
+            if let Ok(entries) = storage.prefix_scan(prefix.as_bytes()) {
+                for (k, _) in entries {
+                    let _ = storage.delete(&k);
+                }
+            }
+        }
+        (
+            StatusCode::OK,
+            Json(ApiResponse::ok(serde_json::json!({
+                "index_name": name,
+                "dropped": true,
+            }))),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::err(format!("Vector index '{name}' not found"))),
+        )
+    }
+}

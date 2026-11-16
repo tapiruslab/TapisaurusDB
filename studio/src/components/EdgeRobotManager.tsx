@@ -241,7 +241,7 @@ export const EdgeRobotManager: React.FC<EdgeRobotManagerProps> = ({ apiBaseUrl =
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">FaizDB Port</label>
+                  <label className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">TapisaurusDB Port</label>
                   <input
                     type="text"
                     value={remotePort}
@@ -306,7 +306,7 @@ export const EdgeRobotManager: React.FC<EdgeRobotManagerProps> = ({ apiBaseUrl =
           </div>
 
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Tailor FaizDB internal LSM-Tree MemTable sizes, compaction concurrency, and vector caches to prevent Out-Of-Memory (OOM) faults on low-resource robotics and IoT hardware.
+            Tailor TapisaurusDB internal LSM-Tree MemTable sizes, compaction concurrency, and vector caches to prevent Out-Of-Memory (OOM) faults on low-resource robotics and IoT hardware.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

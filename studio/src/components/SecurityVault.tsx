@@ -31,7 +31,7 @@ interface AuditLogEntry {
 
 export const SecurityVault: React.FC = () => {
   const [role, setRole] = useState<'admin' | 'read_write' | 'read_only'>('admin');
-  const [username, setUsername] = useState('developer_faiz');
+  const [username, setUsername] = useState('developer_tapir');
   const [validDays, setValidDays] = useState(30);
   const [generatedToken, setGeneratedToken] = useState<string>('');
   const [copied, setCopied] = useState(false);

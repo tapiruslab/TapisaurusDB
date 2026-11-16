@@ -1,6 +1,6 @@
-# 📚 FaizDB Universal API & Protocols Reference
+# 📚 TapisaurusDB Universal API & Protocols Reference
 
-FaizDB features a unified, multi-protocol engine running across 5 standard ports:
+TapisaurusDB features a unified, multi-protocol engine running across 5 standard ports:
 
 | Protocol | Default Port | Primary Target & Compatibility |
 | :--- | :---: | :--- |
@@ -14,11 +14,11 @@ FaizDB features a unified, multi-protocol engine running across 5 standard ports
 
 ## ⚡ 1. gRPC & Protocol Buffers (`Port 50051`)
 
-Defined in standard [`proto/faizdb.proto`](../proto/faizdb.proto):
+Defined in standard [`proto/tapisaurus.proto`](../proto/tapisaurus.proto):
 
 ### RPC Methods:
 1. **`ExecuteQuery(QueryRequest) returns (QueryResponse)`**
-   * Executes SQL, Mongo JSON, or FaizQL AST queries.
+   * Executes SQL, Mongo JSON, or TapisaurusQL AST queries.
 2. **`VectorSearch(VectorSearchRequest) returns (VectorSearchResponse)`**
    * Sub-millisecond Cosine / Euclidean / Manhattan similarity search on high-dimensional vectors.
 3. **`InsertDocuments(InsertRequest) returns (InsertResponse)`**
@@ -32,7 +32,7 @@ Defined in standard [`proto/faizdb.proto`](../proto/faizdb.proto):
 
 ## 🌍 2. Multi-Region Geo-Replication & CRDTs (`/v1/cluster`)
 
-FaizDB provides active-active multi-datacenter replication with mathematically guaranteed *Strong Eventual Consistency* using Conflict-Free Replicated Data Types (CRDTs):
+TapisaurusDB provides active-active multi-datacenter replication with mathematically guaranteed *Strong Eventual Consistency* using Conflict-Free Replicated Data Types (CRDTs):
 
 ### 1. `GET /v1/cluster/regions`
 Lists local region ID and all registered peer datacenter regions.
@@ -46,7 +46,7 @@ Lists local region ID and all registered peer datacenter regions.
       "regions": [
         {
           "region_id": "us-east-1",
-          "endpoint": "http://us.faizdb.io:27018",
+          "endpoint": "http://us.tapirusdb.com:27018",
           "is_active": true,
           "last_synced_at": "2026-09-01T21:00:00Z",
           "latency_ms": 142
@@ -62,7 +62,7 @@ Registers a new peer region in the global replication mesh.
   ```json
   {
     "region_id": "eu-central-1",
-    "endpoint": "http://eu.faizdb.io:27018"
+    "endpoint": "http://eu.tapirusdb.com:27018"
   }
   ```
 
@@ -90,9 +90,9 @@ Transmits and applies incoming CRDT `ReplicationDelta` batches across regions.
 
 ## 🔐 3. Authentication & RBAC
 
-FaizDB enforces Zero-Trust Role-Based Access Control (RBAC) with **EdDSA (Ed25519)** asymmetric JWT tokens (2026 industry standard).
+TapisaurusDB enforces Zero-Trust Role-Based Access Control (RBAC) with **EdDSA (Ed25519)** asymmetric JWT tokens (2026 industry standard).
 * Immune to timing attacks and HMAC key brute-forcing.
-* Supply standard PEM keys via `FAIZDB_JWT_PRIVATE_KEY` and `FAIZDB_JWT_PUBLIC_KEY` in production, or let FaizDB auto-generate ephemeral keys during local testing.
+* Supply standard PEM keys via `TAPISAURUS_JWT_PRIVATE_KEY` and `TAPISAURUS_JWT_PUBLIC_KEY` in production, or let TapisaurusDB auto-generate ephemeral keys during local testing.
 
 ### 1. `POST /v1/auth/login`
 Authenticates a user and returns a signed Ed25519 JWT token.
@@ -100,7 +100,7 @@ Authenticates a user and returns a signed Ed25519 JWT token.
   ```json
   {
     "username": "admin",
-    "password": "faizdb-admin-2026"
+    "password": "tapisaurus-admin-2026"
   }
   ```
 * **Response:**
@@ -169,10 +169,10 @@ Deletes a user account. Protected by a safety guard: cannot delete the last rema
 
 ## 🗄️ 5. Query & Full Document CRUD Operations
 
-FaizDB provides full REST document operations alongside multi-dialect query processing.
+TapisaurusDB provides full REST document operations alongside multi-dialect query processing.
 
 ### 1. `POST /v1/query`
-Executes multi-dialect SQL, MongoDB JSON, FaizQL, or EXPLAIN plan queries.
+Executes multi-dialect SQL, MongoDB JSON, TapisaurusQL, or EXPLAIN plan queries.
 * **Header:** `Authorization: Bearer <TOKEN>`
 * **Request:**
   ```json
@@ -180,7 +180,7 @@ Executes multi-dialect SQL, MongoDB JSON, FaizQL, or EXPLAIN plan queries.
   ```
 * **EXPLAIN Query Example:**
   ```json
-  { "query": "EXPLAIN SELECT * FROM users WHERE email = 'faiz@ict.house'" }
+  { "query": "EXPLAIN SELECT * FROM users WHERE email = 'faiz@tapirusdb.com'" }
   ```
 
 ### 2. `POST /v1/collections/:name/documents`
@@ -255,7 +255,7 @@ Permanently drops the collection, immediately clearing in-memory caches, seconda
 
 ## 🧠 6. AI Vector Search & Transactional GraphRAG
 
-FaizDB is the first engine to unify multi-hop graph traversal and vector ranking in a single query.
+TapisaurusDB is the first engine to unify multi-hop graph traversal and vector ranking in a single query.
 
 ### 1. Vector Management Endpoints:
 * **`POST /v1/vector/index`**: Creates an HNSW index with metric (`cosine`, `euclidean`, `dot`) and dimensions (e.g. 1536).
@@ -267,7 +267,7 @@ FaizDB is the first engine to unify multi-hop graph traversal and vector ranking
 * **`POST /v1/graph/edges`**: Creates directed relationships between vertices (e.g. `source`, `target`, `relationship: "cites"`).
 
 ### 3. Transactional GraphRAG Unified Query:
-Execute multi-hop traversal and vector ranking in a single FaizQL statement:
+Execute multi-hop traversal and vector ranking in a single TapisaurusQL statement:
 ```sql
 FIND research_papers 
 TRAVERSE FROM "paper_01" DEPTH 2 VIA "cites" 
@@ -293,7 +293,7 @@ Fast bulk import supporting either JSON documents array or CSV string with autom
 * **CSV String Request:**
   ```json
   {
-    "csv": "name,role,active,price\nFaiz,Architect,true,99.50\nElena,Engineer,true,80.00"
+    "csv": "name,role,active,price\nTapir,Architect,true,99.50\nElena,Engineer,true,80.00"
   }
   ```
 * **Response:**
@@ -338,30 +338,30 @@ Fast bulk import supporting either JSON documents array or CSV string with autom
 
 ## 🔌 11. Native Wire Protocols (MySQL, PostgreSQL & MongoDB)
 
-FaizDB operates 3 native wire protocol listeners alongside HTTP REST and gRPC:
+TapisaurusDB operates 3 native wire protocol listeners alongside HTTP REST and gRPC:
 
 ### 1. 🐬 MySQL / MariaDB Wire Protocol (`Port 3306`):
-* **Handshake Negotiation**: Native `HandshakeV10` protocol greeting returning server version `8.0.35-FaizDB-Universal`.
+* **Handshake Negotiation**: Native `HandshakeV10` protocol greeting returning server version `8.0.35-TapisaurusDB-Universal`.
 * **Authentication**: Supports `HandshakeResponse41` with `mysql_native_password` authentication and database selection.
 * **Driver Support**: Direct wire-level compatibility for MySQL CLI, PHP `mysqli`, PDO, and Laravel Eloquent (`DB_CONNECTION=mysql`).
-* **Connection String**: `mysql -h 127.0.0.1 -P 3306 -u root faizdb` or `mysql://root@127.0.0.1:3306/faizdb`
+* **Connection String**: `mysql -h 127.0.0.1 -P 3306 -u root tapisaurus` or `mysql://root@127.0.0.1:3306/tapisaurus`
 
 ### 2. 🐘 PostgreSQL Wire Protocol (`Port 5432 / 5433`):
 * **Authentication Challenge**: Employs PostgreSQL `AuthenticationCleartextPassword` ('R', code 3).
 * **Verification**: Checks credentials against `UserStore` with Argon2id hashing.
 * **Rejection**: Invalid credentials or missing passwords trigger PostgreSQL `FATAL 28P01` error response and connection termination.
-* **Connection String**: `postgresql://admin:password@localhost:5432/faizdb`
+* **Connection String**: `postgresql://admin:password@localhost:5432/tapisaurus`
 
 ### 3. 🍃 MongoDB Wire Protocol (`Port 27017`):
 * **Driver Support**: Compatible with PyMongo, Mongoose, MongoDB Shell (`mongosh`), and Prisma.
 * **OP_MSG Support**: Handles document insert, find, update, and multi-stage `aggregate` pipelines including `$lookup` cross-collection joins.
-* **Connection String**: `mongodb://localhost:27017/faizdb`
+* **Connection String**: `mongodb://localhost:27017/tapisaurus`
 
 ---
 
 ## 🕸️ 12. openCypher Graph Syntax & AI Semantic Caching
 
-FaizDB provides native openCypher support for knowledge graphs and hybrid GraphRAG queries:
+TapisaurusDB provides native openCypher support for knowledge graphs and hybrid GraphRAG queries:
 
 ### 1. Node Creation & Filtering
 ```cypher
@@ -397,7 +397,7 @@ Built-in `SemanticCache` performs sub-millisecond cosine similarity matching on 
 
 ## ⚙️ 13. LSM-Tree Anti-Stall Engine & Storage Tuning
 
-FaizDB provides self-tuning write backpressure to prevent Level-0 SSTable file bloat and eliminate write stalls under high-throughput burst workloads:
+TapisaurusDB provides self-tuning write backpressure to prevent Level-0 SSTable file bloat and eliminate write stalls under high-throughput burst workloads:
 
 ### StorageConfig Parameters
 
@@ -424,7 +424,7 @@ println!("Compactions Completed: {}", stats.compactions_completed);
 
 ## 🐘 14. PostgreSQL Virtual System Catalog Reflection
 
-To provide seamless, zero-config compatibility with modern ORMs and database management tools (Prisma, Drizzle, SQLAlchemy, DBeaver, TablePlus), FaizDB's PostgreSQL wire protocol (Port 5432) synthesizes virtual catalog responses for standard metadata inspection queries:
+To provide seamless, zero-config compatibility with modern ORMs and database management tools (Prisma, Drizzle, SQLAlchemy, DBeaver, TablePlus), TapisaurusDB's PostgreSQL wire protocol (Port 5432) synthesizes virtual catalog responses for standard metadata inspection queries:
 
 | Catalog View / Table | Handled Columns | Supported Tools & ORMs |
 |:---|:---|:---|
@@ -437,10 +437,10 @@ To provide seamless, zero-config compatibility with modern ORMs and database man
 
 ## 🛡️ 15. Torn-Write Crash Recovery & WAL Integrity Assurance
 
-FaizDB guarantees mathematical crash durability against abrupt power failures, kernel panics, and torn disk writes:
+TapisaurusDB guarantees mathematical crash durability against abrupt power failures, kernel panics, and torn disk writes:
 
 * **CRC32 Frame Validation:** Every WAL record is protected by a 32-bit CRC checksum header (`magic: 0xFDB00001`).
 * **Payload Bounds Verification:** Deserialization performs explicit length validation (`pos + key_len + 4 <= payload_len`), preventing buffer overflow or slice panics on corrupted file tails.
-* **Safe Tail Truncation:** If a partial or corrupted write is encountered at the end of the log during startup replay, FaizDB safely logs a diagnostic warning, truncates the torn tail at the last valid LSN boundary, and recovers 100% of committed pre-crash transactions without crashing.
+* **Safe Tail Truncation:** If a partial or corrupted write is encountered at the end of the log during startup replay, TapisaurusDB safely logs a diagnostic warning, truncates the torn tail at the last valid LSN boundary, and recovers 100% of committed pre-crash transactions without crashing.
 
 

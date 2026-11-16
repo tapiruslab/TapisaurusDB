@@ -1,8 +1,8 @@
-# 🎮 FaizDB: Comprehensive 20-Solution Enterprise Use Cases & Architecture Guide
+# 🎮 TapisaurusDB: Comprehensive 20-Solution Enterprise Use Cases & Architecture Guide
 
-This document details **20 real-world production use cases** where **FaizDB** replaces multi-database sprawl, eliminates distributed sync taxes, and delivers superior throughput, sub-millisecond latencies, and mathematical durability across modern technology stacks.
+This document details **20 real-world production use cases** where **TapisaurusDB** replaces multi-database sprawl, eliminates distributed sync taxes, and delivers superior throughput, sub-millisecond latencies, and mathematical durability across modern technology stacks.
 
-> 💡 **Standalone-First Architecture Note:** FaizDB is an independent, autonomous database kernel with its own native query language (**FaizQL**), native high-performance gRPC engine (port 50051), and embedded in-process library mode (`faizdb-core`). The MySQL wire (port 3306), PostgreSQL wire (port 5432/5433), and MongoDB wire (port 27017) protocols are **completely optional ingress bridges** provided for ecosystem convenience (allowing tools like MySQL CLI, Laravel Eloquent, DBeaver, Prisma, TablePlus, and PyMongo to connect without code changes). FaizDB does not require or emulate external databases to operate; it runs 100% standalone.
+> 💡 **Standalone-First Architecture Note:** TapisaurusDB is an independent, autonomous database kernel with its own native query language (**TapisaurusQL**), native high-performance gRPC engine (port 50051), and embedded in-process library mode (`tapisaurus-core`). The MySQL wire (port 3306), PostgreSQL wire (port 5432/5433), and MongoDB wire (port 27017) protocols are **completely optional ingress bridges** provided for ecosystem convenience (allowing tools like MySQL CLI, Laravel Eloquent, DBeaver, Prisma, TablePlus, and PyMongo to connect without code changes). TapisaurusDB does not require or emulate external databases to operate; it runs 100% standalone.
 
 ---
 
@@ -49,31 +49,31 @@ This document details **20 real-world production use cases** where **FaizDB** re
   * **Episodic Semantic Memory:** High-dimensional vector embeddings of past user interactions (typically requiring Pinecone or Qdrant).
   * **Entity / Relational Memory:** Structured facts and multi-hop relationships between people, tools, organizations, and goals (typically requiring Neo4j).
 * **The Dual-Database Sync Tax:** Maintaining synchronization across 4 different databases causes severe network latency (100–300ms per agent step), data drift, and complex distributed failure modes.
-* **The FaizDB Unification:**
-  FaizDB unifies all 4 tiers inside a **single 7.70 MB executable**:
+* **The TapisaurusDB Unification:**
+  TapisaurusDB unifies all 4 tiers inside a **single 7.70 MB executable**:
   * Working memory is stored in lock-free MemTable with automated `_ttl` expiration.
   * Episodic memory is indexed in 1536-dim HNSW vector space with 32x binary quantization.
   * Entity relationships are traversed in native Knowledge Graph edges with bounded openCypher BFS.
   * State checkpointer operates over native PostgreSQL wire (port 5432) or REST/gRPC in microsecond ACID transactions.
 
-#### 💡 Production Blueprint: FaizDB as the Unified Database for LangGraph
-LangGraph is the leading state machine framework for cyclical multi-agent workflows, but standard LangGraph deployments suffer from severe database sprawl. FaizDB serves as the ultimate wire-compatible persistence engine for LangGraph, offering **two flexible integration pathways**:
+#### 💡 Production Blueprint: TapisaurusDB as the Unified Database for LangGraph
+LangGraph is the leading state machine framework for cyclical multi-agent workflows, but standard LangGraph deployments suffer from severe database sprawl. TapisaurusDB serves as the ultimate wire-compatible persistence engine for LangGraph, offering **two flexible integration pathways**:
 
-##### Path A: 100% Pure Native FaizDB Checkpointer (Zero PostgreSQL Dependency)
-Developers can use FaizDB's official native Python checkpointer (`faizdb.langgraph.FaizDbSaver`). This path completely bypasses PostgreSQL, storing agent execution snapshots directly into native FaizDB BSON/JSON collections over HTTP REST (port 27018) or gRPC (port 50051) with zero serialization overhead:
+##### Path A: 100% Pure Native TapisaurusDB Checkpointer (Zero PostgreSQL Dependency)
+Developers can use TapisaurusDB's official native Python checkpointer (`tapisaurus.langgraph.TapisaurusSaver`). This path completely bypasses PostgreSQL, storing agent execution snapshots directly into native TapisaurusDB BSON/JSON collections over HTTP REST (port 27018) or gRPC (port 50051) with zero serialization overhead:
 
 ```python
 # ==============================================================================
-# Path A: 100% Pure Native FaizDB Checkpointer (Zero PostgreSQL Wire)
+# Path A: 100% Pure Native TapisaurusDB Checkpointer (Zero PostgreSQL Wire)
 # ==============================================================================
-from faizdb import FaizDB
-from faizdb.langgraph import FaizDbSaver
+from tapisaurus import TapisaurusDB
+from tapisaurus.langgraph import TapisaurusSaver
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
 
-# 1. Connect natively to FaizDB (Port 27018 / gRPC 50051)
-db = FaizDB("http://localhost:27018")
-checkpointer = FaizDbSaver(db, collection_prefix="production_agents")
+# 1. Connect natively to TapisaurusDB (Port 27018 / gRPC 50051)
+db = TapisaurusDB("http://localhost:27018")
+checkpointer = TapisaurusSaver(db, collection_prefix="production_agents")
 
 class AgentState(TypedDict):
     query: str
@@ -89,7 +89,7 @@ workflow.add_node("agent", agent_node)
 workflow.set_entry_point("agent")
 workflow.add_edge("agent", END)
 
-# 2. Compile LangGraph workflow with pure native FaizDB persistence
+# 2. Compile LangGraph workflow with pure native TapisaurusDB persistence
 app = workflow.compile(checkpointer=checkpointer)
 
 # 3. Sub-millisecond snapshot persistence & time-travel enabled
@@ -99,7 +99,7 @@ print("Execution Result:", result)
 ```
 
 ##### Path B: Native Wire PostgreSQL Compatibility (Port 5432)
-For enterprise teams with existing LangGraph codebases already using `langgraph-checkpoint-postgres` / `psycopg`, FaizDB exposes a native PostgreSQL wire protocol (Port 5432) requiring **zero code modifications**:
+For enterprise teams with existing LangGraph codebases already using `langgraph-checkpoint-postgres` / `psycopg`, TapisaurusDB exposes a native PostgreSQL wire protocol (Port 5432) requiring **zero code modifications**:
 
 ```python
 # ==============================================================================
@@ -118,7 +118,7 @@ class AgentWorkflowState(TypedDict):
 
 async def knowledge_retrieval_node(state: AgentWorkflowState):
     conn = await psycopg.AsyncConnection.connect(
-        "postgresql://faizadmin:faizpass@127.0.0.1:5432/production"
+        "postgresql://tapisaurus_admin:tapisaurus_pass@127.0.0.1:5432/production"
     )
     async with conn.cursor() as cur:
         await cur.execute("""
@@ -131,7 +131,7 @@ async def knowledge_retrieval_node(state: AgentWorkflowState):
     return {"grounded_facts": str(records)}
 
 async def main():
-    DB_URI = "postgresql://faizadmin:faizpass@127.0.0.1:5432/langgraph_checkpoints"
+    DB_URI = "postgresql://tapisaurus_admin:tapisaurus_pass@127.0.0.1:5432/langgraph_checkpoints"
     async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
         workflow = StateGraph(AgentWorkflowState)
         workflow.add_node("retriever", knowledge_retrieval_node)
@@ -143,7 +143,7 @@ async def main():
             {"query": "Investigate corporate acquisition history"}, 
             thread_config
         )
-        print("LangGraph + FaizDB Wire Execution Succeeded:", final_state)
+        print("LangGraph + TapisaurusDB Wire Execution Succeeded:", final_state)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -153,17 +153,17 @@ if __name__ == "__main__":
 
 ### 2. Semantic Caching: Slashing 70%+ LLM API Bills
 * **The Problem:** Repeated calls to frontier LLM APIs — including OpenAI, Anthropic, Google, Meta, Mistral, DeepSeek, and other commercial or self-hosted models — for semantically identical questions cost enterprises tens of thousands of dollars per month with 1.5–3.0s latency.
-* **FaizDB Solution:**
+* **TapisaurusDB Solution:**
   1. Incoming prompt text is vectorized into embeddings.
   2. The built-in `SemanticCache` performs sub-millisecond vector similarity matching (`cosine_similarity`).
-  3. If similarity exceeds the configurable threshold ($\ge 0.90$), FaizDB immediately serves the in-memory cached response with automated TTL expiration, eliminating redundant database lookups and expensive LLM API invocations.
+  3. If similarity exceeds the configurable threshold ($\ge 0.90$), TapisaurusDB immediately serves the in-memory cached response with automated TTL expiration, eliminating redundant database lookups and expensive LLM API invocations.
   4. Delivers instant answers to users (< 1ms) while saving **70% to 85%** of monthly LLM API expenditures.
 
 ---
 
 ### 3. Tri-Hybrid GraphRAG: Eliminating Foundation Model Hallucinations
 * **The Problem:** Vector-only RAG misses relational context and specific identifiers (e.g., invoice numbers, SKU codes, familial relations), resulting in LLM hallucinations.
-* **FaizDB Solution:** Executes **Tri-Hybrid Retrieval**:
+* **TapisaurusDB Solution:** Executes **Tri-Hybrid Retrieval**:
   1. **Okapi BM25 Keyword Search:** Exact phrase and token lookups.
   2. **HNSW Dense Vector Search:** Conceptual semantic similarity with 32x binary quantization.
   3. **Multi-Hop Knowledge Graph Traversal:** Deterministic BFS traversal via `extract_rag_context` that compiles extracted entity relationships into concise, markdown-formatted prompt injection context without token waste.
@@ -173,29 +173,29 @@ if __name__ == "__main__":
 
 ### 4. High-Throughput PyTorch / TensorFlow DataLoader Streaming
 * **The Problem:** High-performance training nodes (NVIDIA H100, B200, RTX 5090) experience *GPU Starvation* when local file systems or object stores cannot deliver training batches fast enough.
-* **FaizDB Solution:** Streams dataset batches directly into PyTorch/TensorFlow `IterableDataset` pipelines via gRPC Port 50051 using zero-copy byte slices (53,282 durable writes/sec on disk, 476k+ scans/sec), maximizing GPU tensor core utilization to near 100%.
+* **TapisaurusDB Solution:** Streams dataset batches directly into PyTorch/TensorFlow `IterableDataset` pipelines via gRPC Port 50051 using zero-copy byte slices (53,282 durable writes/sec on disk, 476k+ scans/sec), maximizing GPU tensor core utilization to near 100%.
 
 ---
 
 ### 5. Autonomous Multi-Agent Swarm Collaboration Event Bus
 * **The Problem:** Swarms of autonomous agents (Researcher, Architect, Coder, QA Auditor) need to coordinate task handoffs in real-time without polling latency or deadlocks.
-* **FaizDB Solution:** Native WebSocket Change Streams (Port 27018) push task status updates to worker agents in **&lt; 0.5 milliseconds**. When the Researcher agent commits findings, the Coder agent immediately wakes up and begins implementation.
+* **TapisaurusDB Solution:** Native WebSocket Change Streams (Port 27018) push task status updates to worker agents in **&lt; 0.5 milliseconds**. When the Researcher agent commits findings, the Coder agent immediately wakes up and begins implementation.
 
 ---
 
 ### 6. AI Codebase Knowledge Graph & Semantic Code Navigation
 * **The Problem:** Modern AI IDEs (Cursor, Windsurf, Devin) struggle to reason across million-line enterprise monorepos when code search only indexes raw text files.
-* **FaizDB Solution:** Stores the Abstract Syntax Tree (AST) in JSON documents, function call-graphs and module dependencies in Knowledge Graph edges, and symbol documentation in HNSW vector embeddings, enabling instant multi-hop semantic code reasoning.
+* **TapisaurusDB Solution:** Stores the Abstract Syntax Tree (AST) in JSON documents, function call-graphs and module dependencies in Knowledge Graph edges, and symbol documentation in HNSW vector embeddings, enabling instant multi-hop semantic code reasoning.
 
 ---
 
 ## ⚡ Real-Time Systems, Gaming & High-Frequency Telemetry
 
 ### 7. Multiplayer Game Server In-Process State Persistence, Leaderboards & Anti-Duplication Inventory
-* **Architectural Demarcation:** In high-tick multiplayer gaming (Unreal Engine 5, Unity dedicated servers running 64Hz–128Hz), player physics calculations and continuous spatial vectors are processed strictly in the game server's volatile RAM. FaizDB is **never** placed in the synchronous physics rendering path.
+* **Architectural Demarcation:** In high-tick multiplayer gaming (Unreal Engine 5, Unity dedicated servers running 64Hz–128Hz), player physics calculations and continuous spatial vectors are processed strictly in the game server's volatile RAM. TapisaurusDB is **never** placed in the synchronous physics rendering path.
 * **The Persistence Challenge:** Game backends struggle when saving match outcome states, persistent inventory wallets, and leaderboards: traditional Java/Go databases (e.g. Cassandra) cause devastating 200–500ms lag spikes due to Garbage Collection (GC) pauses.
-* **FaizDB Solution:**
-  * **Zero-GC In-Process Engine:** FaizDB's embedded mode (`faizdb-core`) runs in the game server process with zero GC pauses, ensuring consistent 120+ FPS player experience.
+* **TapisaurusDB Solution:**
+  * **Zero-GC In-Process Engine:** TapisaurusDB's embedded mode (`tapisaurus-core`) runs in the game server process with zero GC pauses, ensuring consistent 120+ FPS player experience.
   * **Skill-Based Matchmaking (SBMM):** Sub-millisecond HNSW vector search matches players dynamically by playstyle embeddings.
   * **Multi-document ACID MVCC:** Guarantees zero item duplication exploits during player-to-player trades.
 
@@ -203,19 +203,19 @@ if __name__ == "__main__":
 
 ### 8. Native Real-Time Change Data Capture (CDC) to Kafka, ClickHouse & Snowflake
 * **The Problem:** Streaming database updates to downstream analytical warehouses (ClickHouse, Snowflake) requires fragile external Debezium/Kafka Connect clusters that introduce high maintenance overhead.
-* **FaizDB Solution:** Native built-in Change Streams push atomic mutation envelopes directly into Kafka and downstream queues via open-format JSONL with sub-millisecond serialization.
+* **TapisaurusDB Solution:** Native built-in Change Streams push atomic mutation envelopes directly into Kafka and downstream queues via open-format JSONL with sub-millisecond serialization.
 
 ---
 
 ### 9. Real-Time Collaborative Workspaces (Figma/Notion-Style CRDT Document Editing)
 * **The Problem:** Concurrent document editing across global teams suffers from merge conflicts or requires slow distributed locks.
-* **FaizDB Solution:** Leverages built-in Conflict-Free Replicated Data Types (CRDTs) — PN-Counters, LWW-Registers, and OR-Sets — strictly for non-monetary collaborative documents. Global team members write locally with sub-millisecond latency and converge deterministically across WAN links.
+* **TapisaurusDB Solution:** Leverages built-in Conflict-Free Replicated Data Types (CRDTs) — PN-Counters, LWW-Registers, and OR-Sets — strictly for non-monetary collaborative documents. Global team members write locally with sub-millisecond latency and converge deterministically across WAN links.
 
 ---
 
 ### 10. High-Volume Live Event Ticketing & Dynamic Auction Bidding Engines
 * **The Problem:** When tickets go on sale or auctions close, thousands of requests per second attempt to reserve the same seats or submit bids within fractions of a second.
-* **FaizDB Solution:** Sub-millisecond MVCC transactions lock individual seats instantaneously without table-level blocking. Unpaid reservations are automatically released via $O(\log N)$ min-heap TTL eviction after 10 minutes.
+* **TapisaurusDB Solution:** Sub-millisecond MVCC transactions lock individual seats instantaneously without table-level blocking. Unpaid reservations are automatically released via $O(\log N)$ min-heap TTL eviction after 10 minutes.
 
 ---
 
@@ -233,20 +233,20 @@ if __name__ == "__main__":
 
 ### 12. High-Concurrency E-Commerce & Flash Sales (Zero Overselling ACID Guarantee)
 * **The Problem:** Flash sales (Black Friday, 11.11, limited drops) trigger severe inventory overselling when databases fail under sudden concurrent transaction spikes.
-* **FaizDB Solution:** Snapshot Isolation Multi-Document ACID ensures atomic stock decrement (`qty = qty - 1 WHERE qty > 0`). Built-in connection admission control (`tokio::Semaphore`) prevents connection starvation crashes.
+* **TapisaurusDB Solution:** Snapshot Isolation Multi-Document ACID ensures atomic stock decrement (`qty = qty - 1 WHERE qty > 0`). Built-in connection admission control (`tokio::Semaphore`) prevents connection starvation crashes.
 
 ---
 
 ### 13. Fintech, Core Banking & Immutable Ledgers (Strict CP Linearizability + PITR)
 * **The Problem:** Banking ledgers demand zero double-spending, absolute serializability, and the ability to restore state to an exact microsecond prior to an erroneous transaction.
-* **Strict CP Mode Enforcement:** Banking ledgers are strictly governed by **CP Mode (Raft Consensus Quorum + Multi-Document MVCC ACID + Atomic WAL)**. Network partitions reject writes if quorum cannot be achieved, mathematically eliminating negative account balances and double-spending. **FaizDB never uses CRDTs for banking transactions.**
-* **FaizDB Solution:** Vectorized WAL group commit writes up to 100,000 durable txns/sec. Encrypted snapshots (AES-256-GCM) paired with WAL replay enable microsecond Point-In-Time Disaster Recovery (PITR).
+* **Strict CP Mode Enforcement:** Banking ledgers are strictly governed by **CP Mode (Raft Consensus Quorum + Multi-Document MVCC ACID + Atomic WAL)**. Network partitions reject writes if quorum cannot be achieved, mathematically eliminating negative account balances and double-spending. **TapisaurusDB never uses CRDTs for banking transactions.**
+* **TapisaurusDB Solution:** Vectorized WAL group commit writes up to 100,000 durable txns/sec. Encrypted snapshots (AES-256-GCM) paired with WAL replay enable microsecond Point-In-Time Disaster Recovery (PITR).
 
 ---
 
 ### 14. Real-Time Financial Fraud Detection & Anti-Money Laundering (AML) Graph Rings
 * **The Problem:** Fraudsters obscure illicit fund flows through circular transaction rings across dozens of intermediary accounts, which relational databases cannot trace in real-time.
-* **FaizDB Solution:** Graph BFS traversal explores 3 to 5 transaction hops in &lt; 1ms. Configurable traversal budgets (default 50,000 nodes) prevent runaway queries while vector anomaly scoring flags suspicious behavior.
+* **TapisaurusDB Solution:** Graph BFS traversal explores 3 to 5 transaction hops in &lt; 1ms. Configurable traversal budgets (default 50,000 nodes) prevent runaway queries while vector anomaly scoring flags suspicious behavior.
 
 ---
 
@@ -254,19 +254,19 @@ if __name__ == "__main__":
 
 ### 15. Autonomous Vehicles & Robot Spatial Perception (NVIDIA Jetson / Tesla HW4)
 * **The Problem:** Autonomous robots, drones, and self-driving vehicles need onboard databases for spatial navigation, but enterprise databases require gigabytes of RAM and heavy runtimes.
-* **FaizDB Solution:** With a **7.70 MB standalone binary** and **23 MB baseline RAM footprint**, FaizDB installs directly onto automotive compute hardware (NVIDIA Jetson Orin, Tesla FSD HW4, Raspberry Pi 5). Performs local visual and lidar vector localization completely offline.
+* **TapisaurusDB Solution:** With a **7.70 MB standalone binary** and **23 MB baseline RAM footprint**, TapisaurusDB installs directly onto automotive compute hardware (NVIDIA Jetson Orin, Tesla FSD HW4, Raspberry Pi 5). Performs local visual and lidar vector localization completely offline.
 
 ---
 
 ### 16. Satellite Avionics & Air-Gapped Orbital Payloads (SpaceX / Starlink / Defense)
 * **The Problem:** Orbital satellites and defense avionics operate in radiation-harsh, zero-connectivity environments where sudden power cuts are common, risking partial or torn disk writes.
-* **FaizDB Solution:** Operates 100% air-gapped with zero external C dependencies. Write-Ahead Log (WAL) with CRC32 framing and payload bounds validation guarantees that corrupted partial tail writes are safely intercepted, truncated at the last valid LSN boundary, and 100% of committed pre-crash telemetry data is restored without crashing, proven via automated Jepsen chaos fault tests.
+* **TapisaurusDB Solution:** Operates 100% air-gapped with zero external C dependencies. Write-Ahead Log (WAL) with CRC32 framing and payload bounds validation guarantees that corrupted partial tail writes are safely intercepted, truncated at the last valid LSN boundary, and 100% of committed pre-crash telemetry data is restored without crashing, proven via automated Jepsen chaos fault tests.
 
 ---
 
 ### 17. Industrial IoT Sensor Streams & Acoustic Predictive Maintenance
 * **The Problem:** Modern industrial factories produce millions of time-series telemetry events per second from pumps, turbines, and generators. Ingestion surges can overwhelm storage compaction, creating hundreds of unmerged SSTables and causing catastrophic write stalls.
-* **FaizDB Solution:** High-throughput LSM-Tree writes tens of thousands of sensor readings per second protected by **Dynamic Anti-Stall Write Backpressure** (`l0_compaction_trigger: 4`, `l0_slowdown_writes_trigger: 8`, `l0_stop_writes_trigger: 16`). Compaction merges SSTables in background via atomic CAS, keeping Level-0 bounded and eliminating ingestion freezes. HNSW vector search compares acoustic frequency patterns against known mechanical failure signatures to predict bearing wear weeks before physical breakdown.
+* **TapisaurusDB Solution:** High-throughput LSM-Tree writes tens of thousands of sensor readings per second protected by **Dynamic Anti-Stall Write Backpressure** (`l0_compaction_trigger: 4`, `l0_slowdown_writes_trigger: 8`, `l0_stop_writes_trigger: 16`). Compaction merges SSTables in background via atomic CAS, keeping Level-0 bounded and eliminating ingestion freezes. HNSW vector search compares acoustic frequency patterns against known mechanical failure signatures to predict bearing wear weeks before physical breakdown.
 
 ---
 
@@ -274,13 +274,13 @@ if __name__ == "__main__":
 
 ### 18. Active-Active Multi-Region Geo-Distributed Mesh (Zero-Lock CRDT Convergence)
 * **The Problem:** Global users spread across North America, Europe, and Asia demand sub-5ms read/write latencies, but synchronous cross-continental database replication introduces 150ms+ roundtrip penalties.
-* **FaizDB Solution:** Active-Active Multi-Master replication powered by CRDTs (Version Vectors, Last-Write-Wins Registers, PN-Counters). Clients in Singapore, Frankfurt, and Virginia write locally in &lt; 1ms, converging asynchronously across WAN links without distributed locks.
+* **TapisaurusDB Solution:** Active-Active Multi-Master replication powered by CRDTs (Version Vectors, Last-Write-Wins Registers, PN-Counters). Clients in Singapore, Frankfurt, and Virginia write locally in &lt; 1ms, converging asynchronously across WAN links without distributed locks.
 
 ---
 
 ### 19. Zero-Trust Cyber Defense, Anti-Bruteforce & Tokenized EdDSA (Ed25519) Identity
 * **The Problem:** Databases exposed to the internet suffer from continuous dictionary attacks, GPU brute-forcing, and credential stuffing.
-* **FaizDB Solution:**
+* **TapisaurusDB Solution:**
   * Passwords hashed with memory-hard **Argon2id** ($m=65536, t=3, p=4$), neutralizing GPU/ASIC password cracking rigs.
   * Asymmetric **EdDSA (Ed25519)** JWT signatures immune to signature forgery.
   * Transport-level rate limiting and automatic IP quarantining sever malicious brute-force connections at the TCP layer.
@@ -289,6 +289,6 @@ if __name__ == "__main__":
 
 ### 20. Cloud-Native Kubernetes Microservices (Zero-Sidecar Native Probes & Graceful Drain)
 * **The Problem:** Deploying traditional databases into Kubernetes requires complex Operators, sidecar health-check containers, and manual connection draining to prevent 502 Bad Gateway errors during rolling updates.
-* **FaizDB Solution:**
+* **TapisaurusDB Solution:**
   * Built-in HTTP health probes (`/v1/health/liveness` and `/v1/health/readiness`) operate directly without sidecars.
   * Unified multi-protocol graceful shutdown broadcasts drain in-flight TCP connections across HTTP, Mongo, Postgres, and gRPC listeners cleanly during pod evictions.

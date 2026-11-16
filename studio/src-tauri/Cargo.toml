@@ -1,8 +1,8 @@
 [package]
-name = "faizdb-studio-desktop"
+name = "tapisaurus-studio-desktop"
 version = "0.1.0"
-description = "FaizDB Official Desktop App — AI-Native Database & Edge Robot Control Center"
-authors = ["Ahmad Faiz <faiz@ict.house>"]
+description = "TapisaurusDB Official Desktop App — AI-Native Database & Edge Robot Control Center"
+authors = ["Ahmad Faiz <faiz@tapirusdb.com>"]
 license = "BSL-1.1"
 edition = "2021"
 

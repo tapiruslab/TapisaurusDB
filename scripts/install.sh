@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🔥 FaizDB Universal Installer for Linux & macOS (Darwin)
+# 🔥 TapisaurusDB Universal Installer for Linux & macOS (Darwin)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | bash
 #
-# Architected by Ahmad Faiz <faiz@ict.house>
+# Architected by Ahmad Faiz <faiz@tapirusdb.com>
 # ==============================================================================
 
 set -e
@@ -20,7 +20,7 @@ RED="\033[31m"
 
 echo -e "${CYAN}${BOLD}"
 echo "╔══════════════════════════════════════════════════════════════════╗"
-echo "║  🔥 FaizDB — The AI-Native NoSQL Database Engine Installer   ║"
+echo "║  🔥 TapisaurusDB — The AI-Native NoSQL Database Engine Installer   ║"
 echo "╚══════════════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
 
@@ -50,7 +50,7 @@ case "$OS" in
         ;;
     *)
         echo -e "${RED}❌ Unsupported operating system: $OS${RESET}"
-        echo "For Windows, please run: iwr -useb https://raw.githubusercontent.com/ictdothouse/faizdb/main/scripts/install.ps1 | iex"
+        echo "For Windows, please run: iwr -useb https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex"
         exit 1
         ;;
 esac
@@ -67,28 +67,28 @@ fi
 
 echo -e "${BLUE}ℹ️  Target Directory:${RESET} ${BOLD}${INSTALL_DIR}${RESET}"
 
-# 3. Build or Download FaizDB Binary
-echo -e "${YELLOW}⚡ Preparing FaizDB binary...${RESET}"
+# 3. Build or Download TapisaurusDB Binary
+echo -e "${YELLOW}⚡ Preparing TapisaurusDB binary...${RESET}"
 
 if command -v cargo >/dev/null 2>&1; then
     echo -e "${GREEN}✓ Found Rust toolchain. Compiling optimized release binary...${RESET}"
     TMP_DIR=$(mktemp -d)
-    git clone --depth 1 https://github.com/ictdothouse/faizdb.git "$TMP_DIR/faizdb"
-    cd "$TMP_DIR/faizdb"
+    git clone --depth 1 https://github.com/tapiruslab/TapisaurusDB.git "$TMP_DIR/tapisaurus"
+    cd "$TMP_DIR/tapisaurus"
     cargo build --release
-    cp target/release/faizdb "$INSTALL_DIR/faizdb"
-    chmod +x "$INSTALL_DIR/faizdb"
+    cp target/release/tapisaurus "$INSTALL_DIR/tapisaurus"
+    chmod +x "$INSTALL_DIR/tapisaurus"
     rm -rf "$TMP_DIR"
 else
     echo -e "${YELLOW}Rust not detected. Installing via source bootstrap...${RESET}"
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source "$HOME/.cargo/env"
     TMP_DIR=$(mktemp -d)
-    git clone --depth 1 https://github.com/ictdothouse/faizdb.git "$TMP_DIR/faizdb"
-    cd "$TMP_DIR/faizdb"
+    git clone --depth 1 https://github.com/tapiruslab/TapisaurusDB.git "$TMP_DIR/tapisaurus"
+    cd "$TMP_DIR/tapisaurus"
     cargo build --release
-    cp target/release/faizdb "$INSTALL_DIR/faizdb"
-    chmod +x "$INSTALL_DIR/faizdb"
+    cp target/release/tapisaurus "$INSTALL_DIR/tapisaurus"
+    chmod +x "$INSTALL_DIR/tapisaurus"
     rm -rf "$TMP_DIR"
 fi
 
@@ -112,15 +112,15 @@ fi
 # 5. Linux systemd Service Setup (Optional for root/sudo)
 if [ "$TARGET_OS" = "linux" ] && [ "$EUID" -eq 0 ] && command -v systemctl >/dev/null 2>&1; then
     echo -e "${YELLOW}⚙️  Configuring systemd background daemon service...${RESET}"
-    cat <<EOF > /etc/systemd/system/faizdb.service
+    cat <<EOF > /etc/systemd/system/tapisaurus.service
 [Unit]
-Description=FaizDB AI-Native NoSQL Database Daemon
+Description=TapisaurusDB AI-Native NoSQL Database Daemon
 After=network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/faizdb serve --wire-port 27017 --http-port 27018 --host 0.0.0.0
+ExecStart=/usr/local/bin/tapisaurus serve --wire-port 27017 --http-port 27018 --host 0.0.0.0
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -129,17 +129,17 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable faizdb
-    systemctl restart faizdb
-    echo -e "${GREEN}✓ Systemd service 'faizdb.service' enabled and running on ports 27017 & 27018!${RESET}"
+    systemctl enable tapisaurus
+    systemctl restart tapisaurus
+    echo -e "${GREEN}✓ Systemd service 'tapisaurus.service' enabled and running on ports 27017 & 27018!${RESET}"
 fi
 
 echo ""
-echo -e "${GREEN}${BOLD}🎉 FaizDB was installed successfully!${RESET}"
-echo -e "${BOLD}Version:${RESET} $( "$INSTALL_DIR/faizdb" --version 2>/dev/null || echo "v0.1.0" )"
+echo -e "${GREEN}${BOLD}🎉 TapisaurusDB was installed successfully!${RESET}"
+echo -e "${BOLD}Version:${RESET} $( "$INSTALL_DIR/tapisaurus" --version 2>/dev/null || echo "v0.1.0" )"
 echo ""
 echo -e "${CYAN}To get started immediately:${RESET}"
-echo -e "  ${BOLD}faizdb shell${RESET}                         # Interactive Multi-Dialect REPL"
-echo -e "  ${BOLD}faizdb serve --wire-port 27017${RESET}       # Launch Dual-Protocol Daemon"
-echo -e "  ${BOLD}faizdb backup --output backup.json${RESET}   # Point-In-Time Backup"
+echo -e "  ${BOLD}tapisaurus shell${RESET}                         # Interactive Multi-Dialect REPL"
+echo -e "  ${BOLD}tapisaurus serve --wire-port 27017${RESET}       # Launch Dual-Protocol Daemon"
+echo -e "  ${BOLD}tapisaurus backup --output backup.json${RESET}   # Point-In-Time Backup"
 echo ""

@@ -1,6 +1,6 @@
-# 🏛️ FaizDB Tier-1 Engineering & Architecture Reference Guide
+# 🏛️ TapisaurusDB Tier-1 Engineering & Architecture Reference Guide
 
-This reference document records the architecture, design rationale, and usage instructions for the Tier-1 engineering components built into FaizDB.
+This reference document records the architecture, design rationale, and usage instructions for the Tier-1 engineering components built into TapisaurusDB.
 
 ---
 
@@ -16,7 +16,7 @@ This reference document records the architecture, design rationale, and usage in
 
 ## 1. ⚡ SIMD Hardware-Accelerated Vector Math
 
-- **Location:** [`faizdb-vector/src/distance.rs`](../faizdb-vector/src/distance.rs)
+- **Location:** [`tapisaurus-vector/src/distance.rs`](../tapisaurus-vector/src/distance.rs)
 - **What it does:** Unrolls loop iterations into 8-wide contiguous float chunks with independent accumulators (`dot0..dot3`, `norm_a0..norm_a3`).
 - **Why it matters:** Allows the compiler (LLVM) to emit vectorized instructions (**AVX2 / AVX-512** on x86_64 and **NEON** on ARM64) without CPU register stalls, achieving up to 3x higher similarity search throughput.
 - **Supported Metrics:**
@@ -29,7 +29,7 @@ This reference document records the architecture, design rationale, and usage in
 
 ## 2. 🧠 Adaptive Replacement Cache (ARC)
 
-- **Location:** [`faizdb-core/src/storage/arc_cache.rs`](../faizdb-core/src/storage/arc_cache.rs)
+- **Location:** [`tapisaurus-core/src/storage/arc_cache.rs`](../tapisaurus-core/src/storage/arc_cache.rs)
 - **What it does:** Replaces static LRU cache with the Megiddo-Modha self-tuning algorithm. It manages 4 lists:
   - $T_1$: Recent items (accessed once).
   - $T_2$: Frequent items (accessed $\ge 2$ times).
@@ -38,7 +38,7 @@ This reference document records the architecture, design rationale, and usage in
 - **Why it matters:** Dynamically shifts cache capacity target $p$ towards recency or frequency based on live access patterns without manual tuning.
 
 ```rust
-use faizdb_core::storage::arc_cache::ArcCache;
+use tapisaurus_core::storage::arc_cache::ArcCache;
 
 let mut cache = ArcCache::new(1000); // 1,000 items capacity
 cache.put("user_100", cached_document_bytes);
@@ -49,27 +49,27 @@ let doc = cache.get(&"user_100");
 
 ## 3. 📊 Prometheus & OpenTelemetry Telemetry Endpoint
 
-- **Location:** [`faizdb-server/src/api/metrics.rs`](../faizdb-server/src/api/metrics.rs)
+- **Location:** [`tapisaurus-server/src/api/metrics.rs`](../tapisaurus-server/src/api/metrics.rs)
 - **Endpoint:** `GET /metrics` and `GET /v1/metrics`
 - **Output Format:** Prometheus Text Exposition Format (`version=0.0.4`)
 - **Key Metrics Tracked:**
-  - `faizdb_uptime_seconds` (Process uptime gauge)
-  - `faizdb_operations_total{op="insert|query|vector_search"}` (Operation counters)
-  - `faizdb_active_connections` (Active client socket gauge)
-  - `faizdb_cache_hit_ratio` (Real-time storage cache hit efficiency)
+  - `tapisaurus_uptime_seconds` (Process uptime gauge)
+  - `tapisaurus_operations_total{op="insert|query|vector_search"}` (Operation counters)
+  - `tapisaurus_active_connections` (Active client socket gauge)
+  - `tapisaurus_cache_hit_ratio` (Real-time storage cache hit efficiency)
 
 ---
 
 ## 4. 🧪 Distributed Chaos & Fault Tolerance Suite
 
-- **Location:** [`faizdb-server/tests/test_chaos_fault_tolerance.rs`](../faizdb-server/tests/test_chaos_fault_tolerance.rs)
+- **Location:** [`tapisaurus-server/tests/test_chaos_fault_tolerance.rs`](../tapisaurus-server/tests/test_chaos_fault_tolerance.rs)
 - **What it tests:**
   1. **WAL Crash Resilience:** Simulates immediate process termination (`SIGKILL`) during active writes and verifies 100% data recovery via Write-Ahead Log CRC32 checksum replay upon restart.
   2. **Multi-Region Partition Healing:** Simulates 3 disjoint geographic partitions (Singapore, Frankfurt, Virginia) writing concurrently and validates deterministic convergence to highest timestamp state.
   3. **CRDT PN-Counter Convergence:** Validates commutative state updates across multiple network splits.
 
 ```bash
-cargo test -p faizdb-server --test test_chaos_fault_tolerance
+cargo test -p tapisaurus-server --test test_chaos_fault_tolerance
 ```
 
 ---
@@ -77,7 +77,7 @@ cargo test -p faizdb-server --test test_chaos_fault_tolerance
 ## 5. 📈 YCSB (Yahoo! Cloud Serving Benchmark) Workload Runner
 
 - **Location:** [`scripts/ycsb_runner.py`](../scripts/ycsb_runner.py)
-- **What it does:** Multi-threaded client driver benchmarking standard cloud workloads against FaizDB.
+- **What it does:** Multi-threaded client driver benchmarking standard cloud workloads against TapisaurusDB.
 - **Workloads:**
   - **Workload A:** 50% Reads / 50% Updates (Heavy write load)
   - **Workload B:** 95% Reads / 5% Updates (Read-heavy caching load)
