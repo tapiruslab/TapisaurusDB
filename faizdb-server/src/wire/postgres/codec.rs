@@ -1,0 +1,367 @@
+//! PostgreSQL Frontend/Backend Protocol v3.0 Encoders & Decoders.
+//!
+//! Handles encoding and decoding of PostgreSQL binary wire packets:
+//! - StartupMessage & SSLRequest
+//! - AuthenticationOk, ParameterStatus, BackendKeyData, ReadyForQuery
+//! - RowDescription, DataRow, CommandComplete, ErrorResponse
+
+use bytes::{BufMut, BytesMut};
+
+/// Well-known PostgreSQL DataType Object Identifiers (OIDs)
+pub const PG_TYPE_BOOL: i32 = 16;
+pub const PG_TYPE_INT8: i32 = 20;
+pub const PG_TYPE_INT2: i32 = 21;
+pub const PG_TYPE_INT4: i32 = 23;
+pub const PG_TYPE_TEXT: i32 = 25;
+pub const PG_TYPE_FLOAT4: i32 = 700;
+pub const PG_TYPE_FLOAT8: i32 = 701;
+pub const PG_TYPE_VARCHAR: i32 = 1043;
+pub const PG_TYPE_JSON: i32 = 114;
+pub const PG_TYPE_JSONB: i32 = 3802;
+
+/// Field description in a `RowDescription` ('T') message
+#[derive(Debug, Clone)]
+pub struct PgField {
+    pub name: String,
+    pub table_oid: i32,
+    pub column_attr_num: i16,
+    pub type_oid: i32,
+    pub type_size: i16,
+    pub type_modifier: i32,
+    pub format_code: i16, // 0 = text, 1 = binary
+}
+
+impl PgField {
+    pub fn new(name: impl Into<String>, type_oid: i32) -> Self {
+        let (type_size, type_modifier) = match type_oid {
+            PG_TYPE_BOOL => (1, -1),
+            PG_TYPE_INT2 => (2, -1),
+            PG_TYPE_INT4 => (4, -1),
+            PG_TYPE_INT8 => (8, -1),
+            PG_TYPE_FLOAT4 => (4, -1),
+            PG_TYPE_FLOAT8 => (8, -1),
+            _ => (-1, -1), // variable length (text, varchar, jsonb)
+        };
+
+        Self {
+            name: name.into(),
+            table_oid: 0,
+            column_attr_num: 0,
+            type_oid,
+            type_size,
+            type_modifier,
+            format_code: 0, // Text format default
+        }
+    }
+
+    pub fn text(name: impl Into<String>) -> Self {
+        Self::new(name, PG_TYPE_TEXT)
+    }
+}
+
+/// Encode `AuthenticationOk` message: 'R' + len (8) + code (0)
+pub fn encode_auth_ok() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(9);
+    buf.put_u8(b'R');
+    buf.put_i32(8);
+    buf.put_i32(0);
+    buf.to_vec()
+}
+
+/// Encode `AuthenticationCleartextPassword` message: 'R' + len (8) + code (3)
+pub fn encode_auth_cleartext_password() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(9);
+    buf.put_u8(b'R');
+    buf.put_i32(8);
+    buf.put_i32(3);
+    buf.to_vec()
+}
+
+/// Encode `ParameterStatus` message: 'S' + len + name\0 + value\0
+pub fn encode_parameter_status(name: &str, value: &str) -> Vec<u8> {
+    let payload_len = 4 + name.len() + 1 + value.len() + 1;
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b'S');
+    buf.put_i32(payload_len as i32);
+    buf.put_slice(name.as_bytes());
+    buf.put_u8(0);
+    buf.put_slice(value.as_bytes());
+    buf.put_u8(0);
+    buf.to_vec()
+}
+
+/// Encode `BackendKeyData` message: 'K' + len (12) + pid + secret_key
+pub fn encode_backend_key_data(pid: i32, secret_key: i32) -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(13);
+    buf.put_u8(b'K');
+    buf.put_i32(12);
+    buf.put_i32(pid);
+    buf.put_i32(secret_key);
+    buf.to_vec()
+}
+
+/// Encode `ReadyForQuery` message: 'Z' + len (5) + status ('I' for idle, 'T' for in-txn)
+pub fn encode_ready_for_query(status: u8) -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(6);
+    buf.put_u8(b'Z');
+    buf.put_i32(5);
+    buf.put_u8(status);
+    buf.to_vec()
+}
+
+/// Encode `CommandComplete` message: 'C' + len + tag\0
+pub fn encode_command_complete(tag: &str) -> Vec<u8> {
+    let payload_len = 4 + tag.len() + 1;
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b'C');
+    buf.put_i32(payload_len as i32);
+    buf.put_slice(tag.as_bytes());
+    buf.put_u8(0);
+    buf.to_vec()
+}
+
+/// Encode `RowDescription` message: 'T' + len + field_count + fields
+pub fn encode_row_description(fields: &[PgField]) -> Vec<u8> {
+    let mut fields_len = 2; // field count (i16)
+    for f in fields {
+        fields_len += f.name.len() + 1 + 4 + 2 + 4 + 2 + 4 + 2;
+    }
+    let payload_len = 4 + fields_len;
+
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b'T');
+    buf.put_i32(payload_len as i32);
+    buf.put_i16(fields.len() as i16);
+
+    for f in fields {
+        buf.put_slice(f.name.as_bytes());
+        buf.put_u8(0);
+        buf.put_i32(f.table_oid);
+        buf.put_i16(f.column_attr_num);
+        buf.put_i32(f.type_oid);
+        buf.put_i16(f.type_size);
+        buf.put_i32(f.type_modifier);
+        buf.put_i16(f.format_code);
+    }
+
+    buf.to_vec()
+}
+
+/// Encode `DataRow` message: 'D' + len + col_count + [col_len (i32) + col_data]
+pub fn encode_data_row(columns: &[Option<String>]) -> Vec<u8> {
+    let mut data_len = 2; // column count (i16)
+    for col in columns {
+        match col {
+            Some(s) => data_len += 4 + s.len(),
+            None => data_len += 4, // -1 i32 for NULL
+        }
+    }
+    let payload_len = 4 + data_len;
+
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b'D');
+    buf.put_i32(payload_len as i32);
+    buf.put_i16(columns.len() as i16);
+
+    for col in columns {
+        match col {
+            Some(s) => {
+                buf.put_i32(s.len() as i32);
+                buf.put_slice(s.as_bytes());
+            }
+            None => {
+                buf.put_i32(-1); // NULL indicator in PG protocol
+            }
+        }
+    }
+
+    buf.to_vec()
+}
+
+/// Encode `ErrorResponse` message: 'E' + len + fields ('S' severity, 'C' code, 'M' message, '\0')
+pub fn encode_error_response(severity: &str, code: &str, message: &str) -> Vec<u8> {
+    let mut payload_len = 4;
+    payload_len += 1 + severity.len() + 1; // 'S'
+    payload_len += 1 + code.len() + 1; // 'C'
+    payload_len += 1 + message.len() + 1; // 'M'
+    payload_len += 1; // Terminator '\0'
+
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b'E');
+    buf.put_i32(payload_len as i32);
+
+    buf.put_u8(b'S');
+    buf.put_slice(severity.as_bytes());
+    buf.put_u8(0);
+
+    buf.put_u8(b'C');
+    buf.put_slice(code.as_bytes());
+    buf.put_u8(0);
+
+    buf.put_u8(b'M');
+    buf.put_slice(message.as_bytes());
+    buf.put_u8(0);
+
+    buf.put_u8(0); // final null terminator
+    buf.to_vec()
+}
+
+/// Encode `EmptyQueryResponse` message: 'I' + len (4)
+pub fn encode_empty_query_response() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(5);
+    buf.put_u8(b'I');
+    buf.put_i32(4);
+    buf.to_vec()
+}
+
+/// Encode `ParseComplete` message: '1' + len (4)
+pub fn encode_parse_complete() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(5);
+    buf.put_u8(b'1');
+    buf.put_i32(4);
+    buf.to_vec()
+}
+
+/// Encode `BindComplete` message: '2' + len (4)
+pub fn encode_bind_complete() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(5);
+    buf.put_u8(b'2');
+    buf.put_i32(4);
+    buf.to_vec()
+}
+
+/// Encode `CloseComplete` message: '3' + len (4)
+pub fn encode_close_complete() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(5);
+    buf.put_u8(b'3');
+    buf.put_i32(4);
+    buf.to_vec()
+}
+
+/// Encode `NoData` message: 'n' + len (4)
+pub fn encode_no_data() -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(5);
+    buf.put_u8(b'n');
+    buf.put_i32(4);
+    buf.to_vec()
+}
+
+/// Encode `ParameterDescription` message: 't' + len + param_count (i16) + [param_oid (i32)]
+pub fn encode_parameter_description(param_oids: &[i32]) -> Vec<u8> {
+    let payload_len = 4 + 2 + (param_oids.len() * 4);
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b't');
+    buf.put_i32(payload_len as i32);
+    buf.put_i16(param_oids.len() as i16);
+    for &oid in param_oids {
+        buf.put_i32(oid);
+    }
+    buf.to_vec()
+}
+
+/// Encode `NoticeResponse` message: 'N' + len + fields ('S' severity, 'C' code, 'M' message, '\0')
+pub fn encode_notice_response(severity: &str, code: &str, message: &str) -> Vec<u8> {
+    let mut payload_len = 4;
+    payload_len += 1 + severity.len() + 1; // 'S'
+    payload_len += 1 + code.len() + 1; // 'C'
+    payload_len += 1 + message.len() + 1; // 'M'
+    payload_len += 1; // Terminator '\0'
+
+    let mut buf = BytesMut::with_capacity(1 + payload_len);
+    buf.put_u8(b'N');
+    buf.put_i32(payload_len as i32);
+
+    buf.put_u8(b'S');
+    buf.put_slice(severity.as_bytes());
+    buf.put_u8(0);
+
+    buf.put_u8(b'C');
+    buf.put_slice(code.as_bytes());
+    buf.put_u8(0);
+
+    buf.put_u8(b'M');
+    buf.put_slice(message.as_bytes());
+    buf.put_u8(0);
+
+    buf.put_u8(0);
+    buf.to_vec()
+}
+
+/// Decodes parameter values from PostgreSQL wire Bind ('B') message based on format code.
+/// - format_code == 0: Text format
+/// - format_code == 1: Binary network format (big-endian integer, float, or boolean)
+pub fn decode_pg_param(format_code: i16, param_bytes: &[u8], type_oid: Option<i32>) -> String {
+    if format_code == 0 {
+        // Text format
+        return String::from_utf8_lossy(param_bytes).to_string();
+    }
+
+    // Binary format (format_code == 1)
+    match (param_bytes.len(), type_oid.unwrap_or(0)) {
+        (1, _) => {
+            // boolean
+            if param_bytes[0] == 0 {
+                "false".to_string()
+            } else {
+                "true".to_string()
+            }
+        }
+        (2, _) => {
+            // int2 (i16)
+            let val = i16::from_be_bytes([param_bytes[0], param_bytes[1]]);
+            val.to_string()
+        }
+        (4, PG_TYPE_FLOAT4) => {
+            // float4
+            let val = f32::from_be_bytes([
+                param_bytes[0],
+                param_bytes[1],
+                param_bytes[2],
+                param_bytes[3],
+            ]);
+            val.to_string()
+        }
+        (4, _) => {
+            // int4 (i32) default
+            let val = i32::from_be_bytes([
+                param_bytes[0],
+                param_bytes[1],
+                param_bytes[2],
+                param_bytes[3],
+            ]);
+            val.to_string()
+        }
+        (8, PG_TYPE_FLOAT8) => {
+            // float8
+            let val = f64::from_be_bytes([
+                param_bytes[0],
+                param_bytes[1],
+                param_bytes[2],
+                param_bytes[3],
+                param_bytes[4],
+                param_bytes[5],
+                param_bytes[6],
+                param_bytes[7],
+            ]);
+            val.to_string()
+        }
+        (8, _) => {
+            // int8 (i64) default
+            let val = i64::from_be_bytes([
+                param_bytes[0],
+                param_bytes[1],
+                param_bytes[2],
+                param_bytes[3],
+                param_bytes[4],
+                param_bytes[5],
+                param_bytes[6],
+                param_bytes[7],
+            ]);
+            val.to_string()
+        }
+        _ => {
+            // Fallback to UTF-8
+            String::from_utf8_lossy(param_bytes).to_string()
+        }
+    }
+}

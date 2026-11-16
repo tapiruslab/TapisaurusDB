@@ -1,0 +1,20 @@
+//! Distributed Cluster, Raft Consensus & Auto-Sharding Module.
+
+pub mod crdt;
+pub mod geo;
+pub mod raft;
+pub mod scatter_gather;
+pub mod sharding;
+
+pub use crdt::{CrdtDocument, LwwRegister, OrSet, PnCounter, VersionVector};
+pub use geo::{GeoReplicationEngine, RegionConfig, ReplicationDelta};
+pub use raft::{
+    AppendEntriesArgs, AppendEntriesReply, ClusterNodeInfo, InMemoryRaftRouter,
+    InstallSnapshotArgs, InstallSnapshotReply, LogEntry, LogIndex, NodeRole, RaftConfig,
+    RaftDiskStore, RaftNode, RaftRpcTransport, RaftTickAction, RequestVoteArgs, RequestVoteReply,
+    Term,
+};
+pub use scatter_gather::{
+    MergedQueryResult, PartitionResult, ScatterGatherCoordinator, ScatterPartition, ScatterQuery,
+};
+pub use sharding::{ShardDistribution, ShardRange, ShardRouter, TOTAL_SHARD_SLOTS};

@@ -1,0 +1,61 @@
+services:
+  # FaizDB Database Engine (27017: Mongo, 5432: Postgres, 50051: gRPC, 27018: HTTP/REST)
+  faizdb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faizdb-engine
+    ports:
+      - "27017:27017" # MongoDB Wire Protocol
+      - "5432:5432"   # PostgreSQL Wire Protocol
+      - "50051:50051" # gRPC / Protocol Buffers
+      - "27018:27018" # FaizDB REST / HTTP API
+    environment:
+      # --- Security: Set strong random secrets in production! ---
+      FAIZDB_API_KEY: ${FAIZDB_API_KEY:-faizdb-secret-key}
+      FAIZDB_CLUSTER_TOKEN: ${FAIZDB_CLUSTER_TOKEN:-faizdb-cluster-secret}
+      FAIZDB_ALLOWED_ORIGINS: ${FAIZDB_ALLOWED_ORIGINS:-http://localhost:27020}
+
+      # --- JWT Authentication ---
+      # Generate a strong secret: openssl rand -hex 64
+      FAIZDB_JWT_SECRET: ${FAIZDB_JWT_SECRET:-faizdb-jwt-secret-change-in-production}
+      FAIZDB_TOKEN_TTL_SECS: ${FAIZDB_TOKEN_TTL_SECS:-3600}    # 1 hour
+
+      # --- RBAC User Accounts ---
+      FAIZDB_ADMIN_USER: ${FAIZDB_ADMIN_USER:-admin}
+      FAIZDB_ADMIN_PASS: ${FAIZDB_ADMIN_PASS:-faizdb-admin-2026}
+      FAIZDB_RW_USER: ${FAIZDB_RW_USER:-}    # Optional ReadWrite user
+      FAIZDB_RW_PASS: ${FAIZDB_RW_PASS:-}
+      FAIZDB_RO_USER: ${FAIZDB_RO_USER:-}    # Optional ReadOnly user
+      FAIZDB_RO_PASS: ${FAIZDB_RO_PASS:-}
+
+      # --- Rate Limiting ---
+      FAIZDB_RATE_LIMIT: ${FAIZDB_RATE_LIMIT:-100}
+      FAIZDB_BAN_STRIKES: ${FAIZDB_BAN_STRIKES:-3}
+
+      # --- Request Limits ---
+      FAIZDB_MAX_PAYLOAD_MB: ${FAIZDB_MAX_PAYLOAD_MB:-10}
+      FAIZDB_REQUEST_TIMEOUT_SECS: ${FAIZDB_REQUEST_TIMEOUT_SECS:-30}
+
+      # --- Logging ---
+      FAIZDB_AUDIT_LOG: ${FAIZDB_AUDIT_LOG:-/data/logs/audit.jsonl}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - faizdb_data:/data
+    restart: unless-stopped
+
+  # FaizDB Web Management Studio (Port 27020)
+  studio:
+    build:
+      context: ./studio
+      dockerfile: Dockerfile
+    container_name: faizdb-studio
+    ports:
+      - "27020:80"     # Open http://localhost:27020
+    depends_on:
+      - faizdb
+    restart: unless-stopped
+
+volumes:
+  faizdb_data:
+    driver: local
