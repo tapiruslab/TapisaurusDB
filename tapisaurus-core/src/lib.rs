@@ -38,19 +38,27 @@ pub mod storage;
 pub mod stream;
 pub mod transaction;
 pub mod ttl;
+pub mod wasm_udf;
 
 // Re-export commonly used types
 pub use backup::{
     build_snapshot, load_and_verify_snapshot, save_snapshot_file, SnapshotArchive, SnapshotManifest,
 };
-pub use cluster::{NodeRole, RaftNode, ShardDistribution, ShardRouter};
+pub use cluster::{
+    DeterministicEpochBatch, DeterministicOp, DeterministicSequencer, DeterministicTxReceipt,
+    DeterministicTxSpec, NodeRole, RaftNode, ShardDistribution, ShardRouter,
+};
 pub use document::{Document, DocumentId, Value};
 pub use error::{TapisaurusError, TapisaurusResult};
 pub use search::{InvertedIndex, SearchResult};
-pub use storage::columnar::{ColumnData, ColumnDataType, ColumnarBatch, ColumnarSchema};
+pub use storage::columnar::{
+    ColumnData, ColumnDataType, ColumnZoneMap, ColumnarBatch, ColumnarSchema, ColumnarStripe,
+    HtapColumnarTable, ZonePredicateOp,
+};
 pub use storage::engine::StorageEngine;
 pub use stream::{ChangeEvent, ChangeStreamBus, OperationType};
 pub use ttl::{TtlManager, TtlStats};
+pub use wasm_udf::{WasmSandboxModule, WasmTriggerAction, WasmUdfRegistry};
 
 /// The database version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

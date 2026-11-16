@@ -39,6 +39,7 @@ pub struct DatabaseContext {
     graph_store: Arc<parking_lot::RwLock<tapisaurus_graph::GraphStore>>,
     semantic_cache: Arc<tapisaurus_graph::SemanticCache>,
     collection_stats: DashMap<String, crate::optimizer::TableStatistics>,
+    wasm_registry: Arc<tapisaurus_core::WasmUdfRegistry>,
 }
 
 impl Default for DatabaseContext {
@@ -62,6 +63,7 @@ impl Default for DatabaseContext {
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
+            wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
         }
     }
 }
@@ -92,6 +94,7 @@ impl DatabaseContext {
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
+            wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
         };
         ctx.recover_from_storage()?;
         Ok(ctx)
@@ -120,6 +123,7 @@ impl DatabaseContext {
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
+            wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
         };
 
         ctx.recover_from_storage()?;
@@ -147,6 +151,7 @@ impl DatabaseContext {
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
+            wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
         };
 
         let _ = ctx.recover_from_storage();
@@ -175,6 +180,7 @@ impl DatabaseContext {
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
+            wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
         };
 
         let _ = ctx.recover_from_storage();
@@ -470,6 +476,11 @@ impl DatabaseContext {
     /// Access semantic cache for GraphRAG and vector prompt embeddings
     pub fn semantic_cache(&self) -> Arc<tapisaurus_graph::SemanticCache> {
         self.semantic_cache.clone()
+    }
+
+    /// Access sandboxed WebAssembly UDF and in-transaction trigger registry
+    pub fn wasm_registry(&self) -> Arc<tapisaurus_core::WasmUdfRegistry> {
+        self.wasm_registry.clone()
     }
 
     /// List all collection names
@@ -1386,7 +1397,9 @@ impl DatabaseContext {
             } => {
                 let col = self.get_or_create_collection(&collection);
                 let mut ids = Vec::with_capacity(documents.len());
-                for doc in documents {
+                for mut doc in documents {
+                    // Execute any sandboxed WebAssembly triggers registered on this collection
+                    self.wasm_registry.apply_triggers(&collection, &mut doc)?;
                     let doc_clone = doc.clone();
                     let id = col.insert(doc).map_err(|e| e.to_string())?;
                     let id_str = id.as_str().to_string();
@@ -2098,5 +2111,37 @@ mod tests {
             replicated.get("title"),
             Some(&Value::String("Replicated via Raft".to_string()))
         );
+    }
+
+    #[test]
+    fn test_executor_wasm_trigger_on_sql_insert() {
+        let ctx = DatabaseContext::new();
+        // WASM function `double_score(x) = x * 2`: local.get 0 (0x20, 0x00), i64.const 2 (0x42, 0x02), i64.mul (0x7e)
+        let wasm_bytes = tapisaurus_core::WasmSandboxModule::assemble_single_fn_module(
+            "double_score",
+            1,
+            &[0x20, 0x00, 0x42, 0x02, 0x7e],
+        );
+        ctx.wasm_registry()
+            .register_module("scoring_wasm", &wasm_bytes)
+            .unwrap();
+        ctx.wasm_registry().register_trigger(
+            "players",
+            tapisaurus_core::WasmTriggerAction::ComputeField {
+                module_name: "scoring_wasm".into(),
+                export_fn: "double_score".into(),
+                input_field: "base_xp".into(),
+                output_field: "total_xp".into(),
+            },
+        );
+
+        let stmt = parse_query("INSERT INTO players (_id, base_xp) VALUES ('p_100', 450)").unwrap();
+        ctx.execute(stmt).unwrap();
+
+        let doc = ctx
+            .get_or_create_collection("players")
+            .find_by_id("p_100")
+            .unwrap();
+        assert_eq!(doc.get("total_xp"), Some(&Value::Integer(900)));
     }
 }

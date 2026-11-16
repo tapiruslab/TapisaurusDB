@@ -349,6 +349,344 @@ impl ColumnarBatch {
     }
 }
 
+/// Default morsel size (number of rows per columnar stripe, tuned for CPU L1/L2 cache residency)
+pub const DEFAULT_MORSEL_ROWS: usize = 2048;
+
+/// Magic header for persisted HTAP columnar stripe files
+pub const HTAP_MAGIC_BYTES: &[u8; 8] = b"TPHTAP01";
+
+/// Numeric predicate operator for Zone-Map stripe pruning
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ZonePredicateOp {
+    Eq,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+    Between(f64, f64),
+}
+
+/// Min-Max Zone Map metadata for a single column inside a `ColumnarStripe`.
+/// Enables O(1) data skipping of entire 2048-row stripes when query predicates fall outside `[min, max]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColumnZoneMap {
+    pub min_f64: Option<f64>,
+    pub max_f64: Option<f64>,
+    pub min_str: Option<String>,
+    pub max_str: Option<String>,
+    pub null_count: usize,
+    pub row_count: usize,
+}
+
+impl ColumnZoneMap {
+    /// Compute min/max/null zone map statistics from a contiguous `ColumnData` array
+    pub fn from_column(col: &ColumnData) -> Self {
+        match col {
+            ColumnData::Int64(vals) => {
+                let mut min_v: Option<f64> = None;
+                let mut max_v: Option<f64> = None;
+                let mut nulls = 0usize;
+                for v in vals {
+                    if let Some(i) = v {
+                        let f = *i as f64;
+                        min_v = Some(min_v.map_or(f, |m| m.min(f)));
+                        max_v = Some(max_v.map_or(f, |m| m.max(f)));
+                    } else {
+                        nulls += 1;
+                    }
+                }
+                Self {
+                    min_f64: min_v,
+                    max_f64: max_v,
+                    min_str: None,
+                    max_str: None,
+                    null_count: nulls,
+                    row_count: vals.len(),
+                }
+            }
+            ColumnData::Float64(vals) => {
+                let mut min_v: Option<f64> = None;
+                let mut max_v: Option<f64> = None;
+                let mut nulls = 0usize;
+                for v in vals {
+                    if let Some(f) = v {
+                        min_v = Some(min_v.map_or(*f, |m| m.min(*f)));
+                        max_v = Some(max_v.map_or(*f, |m| m.max(*f)));
+                    } else {
+                        nulls += 1;
+                    }
+                }
+                Self {
+                    min_f64: min_v,
+                    max_f64: max_v,
+                    min_str: None,
+                    max_str: None,
+                    null_count: nulls,
+                    row_count: vals.len(),
+                }
+            }
+            ColumnData::String(vals) => {
+                let mut min_s: Option<String> = None;
+                let mut max_s: Option<String> = None;
+                let mut nulls = 0usize;
+                for v in vals {
+                    if let Some(s) = v {
+                        min_s = Some(match min_s {
+                            Some(ref m) if m <= s => m.clone(),
+                            _ => s.clone(),
+                        });
+                        max_s = Some(match max_s {
+                            Some(ref m) if m >= s => m.clone(),
+                            _ => s.clone(),
+                        });
+                    } else {
+                        nulls += 1;
+                    }
+                }
+                Self {
+                    min_f64: None,
+                    max_f64: None,
+                    min_str: min_s,
+                    max_str: max_s,
+                    null_count: nulls,
+                    row_count: vals.len(),
+                }
+            }
+            ColumnData::Boolean(vals) => Self {
+                min_f64: None,
+                max_f64: None,
+                min_str: None,
+                max_str: None,
+                null_count: vals.iter().filter(|v| v.is_none()).count(),
+                row_count: vals.len(),
+            },
+            ColumnData::Binary(vals) => Self {
+                min_f64: None,
+                max_f64: None,
+                min_str: None,
+                max_str: None,
+                null_count: vals.iter().filter(|v| v.is_none()).count(),
+                row_count: vals.len(),
+            },
+        }
+    }
+
+    /// Returns `true` if this stripe can be skipped entirely for the given numeric predicate
+    pub fn can_prune_numeric(&self, op: ZonePredicateOp, val: f64) -> bool {
+        let (Some(min_v), Some(max_v)) = (self.min_f64, self.max_f64) else {
+            return true;
+        };
+        match op {
+            ZonePredicateOp::Eq => val < min_v || val > max_v,
+            ZonePredicateOp::Gt => max_v <= val,
+            ZonePredicateOp::Gte => max_v < val,
+            ZonePredicateOp::Lt => min_v >= val,
+            ZonePredicateOp::Lte => min_v > val,
+            ZonePredicateOp::Between(low, high) => max_v < low || min_v > high,
+        }
+    }
+
+    fn matches_row(op: ZonePredicateOp, row_val: f64, threshold: f64) -> bool {
+        match op {
+            ZonePredicateOp::Eq => (row_val - threshold).abs() < f64::EPSILON,
+            ZonePredicateOp::Gt => row_val > threshold,
+            ZonePredicateOp::Gte => row_val >= threshold,
+            ZonePredicateOp::Lt => row_val < threshold,
+            ZonePredicateOp::Lte => row_val <= threshold,
+            ZonePredicateOp::Between(low, high) => row_val >= low && row_val <= high,
+        }
+    }
+}
+
+/// A morsel-sized columnar stripe with precomputed per-column `ColumnZoneMap`s
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColumnarStripe {
+    pub stripe_id: u32,
+    pub batch: ColumnarBatch,
+    pub zone_maps: HashMap<String, ColumnZoneMap>,
+}
+
+impl ColumnarStripe {
+    pub fn from_batch(stripe_id: u32, batch: ColumnarBatch) -> Self {
+        let mut zone_maps = HashMap::new();
+        for (col_name, col_data) in &batch.columns {
+            zone_maps.insert(col_name.clone(), ColumnZoneMap::from_column(col_data));
+        }
+        Self {
+            stripe_id,
+            batch,
+            zone_maps,
+        }
+    }
+}
+
+/// HTAP (Hybrid Transactional/Analytical Processing) Columnar Table segmented into morsel stripes
+/// with Zone-Map predicate pushdown, vectorized aggregations, and LZ4 + CRC32 disk persistence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HtapColumnarTable {
+    pub stripe_rows: usize,
+    pub stripes: Vec<ColumnarStripe>,
+    pub total_rows: usize,
+}
+
+impl HtapColumnarTable {
+    /// Build a striped HTAP table from JSON documents using the specified morsel stripe size
+    pub fn from_json_documents(
+        docs: &[serde_json::Value],
+        stripe_rows: usize,
+    ) -> Result<Self, String> {
+        let morsel = stripe_rows.max(1);
+        let mut stripes = Vec::new();
+        for (idx, chunk) in docs.chunks(morsel).enumerate() {
+            let batch = ColumnarBatch::from_json_documents(chunk)?;
+            stripes.push(ColumnarStripe::from_batch(idx as u32, batch));
+        }
+        Ok(Self {
+            stripe_rows: morsel,
+            stripes,
+            total_rows: docs.len(),
+        })
+    }
+
+    /// Execute a Zone-Map pruned vectorized `SUM` over `target_col` filtered by `pred_col op threshold`.
+    /// Returns `(sum, stripes_scanned, stripes_pruned)`.
+    pub fn sum_filtered(
+        &self,
+        target_col: &str,
+        pred_col: &str,
+        op: ZonePredicateOp,
+        threshold: f64,
+    ) -> (f64, usize, usize) {
+        let mut sum = 0.0f64;
+        let mut scanned = 0usize;
+        let mut pruned = 0usize;
+
+        for stripe in &self.stripes {
+            if let Some(zm) = stripe.zone_maps.get(pred_col) {
+                if zm.can_prune_numeric(op, threshold) {
+                    pruned += 1;
+                    continue;
+                }
+            }
+            scanned += 1;
+            let row_count = stripe.batch.row_count;
+            for r in 0..row_count {
+                let pred_val = Self::extract_numeric(&stripe.batch, pred_col, r);
+                if let Some(pv) = pred_val {
+                    if ColumnZoneMap::matches_row(op, pv, threshold) {
+                        if let Some(tv) = Self::extract_numeric(&stripe.batch, target_col, r) {
+                            sum += tv;
+                        }
+                    }
+                }
+            }
+        }
+
+        (sum, scanned, pruned)
+    }
+
+    /// Execute a Zone-Map pruned vectorized `GROUP BY` computing `(SUM, COUNT)` per group key.
+    /// Returns `(group_map, stripes_pruned)`.
+    pub fn group_by_sum_count(
+        &self,
+        group_col: &str,
+        agg_col: &str,
+        predicate: Option<(&str, ZonePredicateOp, f64)>,
+    ) -> (HashMap<String, (f64, usize)>, usize) {
+        let mut groups: HashMap<String, (f64, usize)> = HashMap::new();
+        let mut pruned = 0usize;
+
+        for stripe in &self.stripes {
+            if let Some((p_col, op, thresh)) = predicate {
+                if let Some(zm) = stripe.zone_maps.get(p_col) {
+                    if zm.can_prune_numeric(op, thresh) {
+                        pruned += 1;
+                        continue;
+                    }
+                }
+            }
+
+            let Some(ColumnData::String(group_vals)) = stripe.batch.columns.get(group_col) else {
+                continue;
+            };
+
+            for (r, g_opt) in group_vals.iter().enumerate() {
+                let Some(ref g_key) = g_opt else {
+                    continue;
+                };
+                if let Some((p_col, op, thresh)) = predicate {
+                    let Some(pv) = Self::extract_numeric(&stripe.batch, p_col, r) else {
+                        continue;
+                    };
+                    if !ColumnZoneMap::matches_row(op, pv, thresh) {
+                        continue;
+                    }
+                }
+                if let Some(av) = Self::extract_numeric(&stripe.batch, agg_col, r) {
+                    let entry = groups.entry(g_key.clone()).or_insert((0.0, 0));
+                    entry.0 += av;
+                    entry.1 += 1;
+                }
+            }
+        }
+
+        (groups, pruned)
+    }
+
+    fn extract_numeric(batch: &ColumnarBatch, col_name: &str, row_idx: usize) -> Option<f64> {
+        match batch.columns.get(col_name) {
+            Some(ColumnData::Float64(v)) => v.get(row_idx).and_then(|x| *x),
+            Some(ColumnData::Int64(v)) => v.get(row_idx).and_then(|x| x.map(|i| i as f64)),
+            _ => None,
+        }
+    }
+
+    /// Persist HTAP columnar stripes to disk with `TPHTAP01` header, LZ4 frame compression, and CRC32 verification
+    pub fn save_to_path(&self, path: &std::path::Path) -> std::io::Result<()> {
+        let json_bytes = serde_json::to_vec(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let compressed = lz4_flex::compress_prepend_size(&json_bytes);
+        let mut hasher = crc32fast::Hasher::new();
+        hasher.update(&compressed);
+        let crc = hasher.finalize();
+
+        let mut out = Vec::with_capacity(8 + 4 + compressed.len());
+        out.extend_from_slice(HTAP_MAGIC_BYTES);
+        out.extend_from_slice(&crc.to_le_bytes());
+        out.extend_from_slice(&compressed);
+        std::fs::write(path, out)
+    }
+
+    /// Load and verify an HTAP columnar stripe file from disk
+    pub fn load_from_path(path: &std::path::Path) -> std::io::Result<Self> {
+        let raw = std::fs::read(path)?;
+        if raw.len() < 12 || &raw[..8] != HTAP_MAGIC_BYTES {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid TPHTAP01 header",
+            ));
+        }
+        let mut crc_bytes = [0u8; 4];
+        crc_bytes.copy_from_slice(&raw[8..12]);
+        let expected_crc = u32::from_le_bytes(crc_bytes);
+        let compressed = &raw[12..];
+
+        let mut hasher = crc32fast::Hasher::new();
+        hasher.update(compressed);
+        if hasher.finalize() != expected_crc {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "HTAP columnar file CRC32 mismatch",
+            ));
+        }
+
+        let decompressed = lz4_flex::decompress_size_prepended(compressed)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        serde_json::from_slice(&decompressed)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,5 +733,51 @@ mod tests {
 
         assert_eq!(batch.count("ticker"), 3);
         assert_eq!(batch.count("price"), 3);
+    }
+
+    #[test]
+    fn test_htap_zone_map_pruning_and_lz4_persistence() {
+        // Create 300 rows sorted by order_id (0..300) across 3 stripes of 100 rows each
+        let mut docs = Vec::with_capacity(300);
+        for i in 0..300 {
+            let region = if i % 2 == 0 { "APAC" } else { "EMEA" };
+            docs.push(serde_json::json!({
+                "order_id": i,
+                "region": region,
+                "amount": (i as f64) * 10.0,
+            }));
+        }
+
+        let table = HtapColumnarTable::from_json_documents(&docs, 100).unwrap();
+        assert_eq!(table.stripes.len(), 3);
+
+        // Query where order_id >= 250 -> stripes 0 (0..99) and 1 (100..199) MUST be pruned via Zone Map!
+        let (sum, scanned, pruned) =
+            table.sum_filtered("amount", "order_id", ZonePredicateOp::Gte, 250.0);
+        assert_eq!(
+            pruned, 2,
+            "First two 100-row stripes must be skipped by Zone Map"
+        );
+        assert_eq!(scanned, 1, "Only stripe 2 (200..299) should be scanned");
+        let expected_sum: f64 = (250..300).map(|i| (i as f64) * 10.0).sum();
+        assert!((sum - expected_sum).abs() < 1e-4);
+
+        // Group by region with Zone Map predicate order_id >= 200
+        let (groups, grp_pruned) = table.group_by_sum_count(
+            "region",
+            "amount",
+            Some(("order_id", ZonePredicateOp::Gte, 200.0)),
+        );
+        assert_eq!(grp_pruned, 2);
+        assert_eq!(groups.get("APAC").unwrap().1, 50);
+        assert_eq!(groups.get("EMEA").unwrap().1, 50);
+
+        // Persist to disk with LZ4 + CRC32 and reload
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("orders_htap.col");
+        table.save_to_path(&path).unwrap();
+        let loaded = HtapColumnarTable::load_from_path(&path).unwrap();
+        assert_eq!(loaded.total_rows, 300);
+        assert_eq!(loaded.stripes.len(), 3);
     }
 }

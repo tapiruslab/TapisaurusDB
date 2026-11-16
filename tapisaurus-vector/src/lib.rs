@@ -11,10 +11,12 @@
 
 #![forbid(unsafe_code)]
 
+pub mod diskann;
 pub mod distance;
 pub mod hnsw;
 pub mod quantization;
 
+pub use diskann::{DiskAnnConfig, DiskAnnIndex, DISKANN_MAGIC};
 pub use distance::{
     cosine_distance, dot_product_distance, euclidean_distance, manhattan_distance, normalize,
     normalize_in_place, squared_euclidean_distance, DistanceMetric,

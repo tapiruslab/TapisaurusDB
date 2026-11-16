@@ -1,12 +1,17 @@
 //! Distributed Cluster, Raft Consensus & Auto-Sharding Module.
 
 pub mod crdt;
+pub mod deterministic_tx;
 pub mod geo;
 pub mod raft;
 pub mod scatter_gather;
 pub mod sharding;
 
 pub use crdt::{CrdtDocument, LwwRegister, OrSet, PnCounter, VersionVector};
+pub use deterministic_tx::{
+    DeterministicEpochBatch, DeterministicOp, DeterministicSequencer, DeterministicTxReceipt,
+    DeterministicTxSpec,
+};
 pub use geo::{GeoReplicationEngine, RegionConfig, ReplicationDelta};
 pub use raft::{
     AppendEntriesArgs, AppendEntriesReply, ClusterNodeInfo, InMemoryRaftRouter,
