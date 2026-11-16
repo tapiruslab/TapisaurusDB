@@ -73,3 +73,11 @@ Following the strict enterprise audit prior to public launch, all core modules s
 - `tapisaurus-query/`: Dedicated SQL Tokenizer, Multi-dialect parser (SQL, MongoDB, TapisaurusQL), Cost-Based Optimizer (CBO), Execution engine.
 - `tapisaurus-server/`: 5-way wire protocol server (Mongo 27017, Postgres 5432, MySQL 3306, gRPC 50051, REST/WS 27018), Prometheus `/metrics`, Raft HTTP transport & tick daemon.
 - `tapisaurus-security/`: Argon2id, Ed25519 JWT, AES-256-GCM, HKDF, RBAC.
+
+---
+
+## 🛡️ Engineering & Repository Guardrails
+- **Attribution Policy:** Strictly attribute authorship, manifests, and git commits exclusively to **Ahmad Faiz** (`faiz@tapirusdb.com`). Never credit AI tools or add `Co-authored-by:` trailers.
+- **Clippy & MSRV `1.88+` Compatibility:** Keep `[workspace.dependencies]` pruned of unused crates (`cargo::unused_workspace_dependencies`), and avoid `Atomic*::fetch_update` (deprecated on newer toolchains in favor of `try_update`, unavailable on MSRV `1.88`); use explicit `compare_exchange_weak` helpers instead.
+- **Windows Local Test Footprint:** When `C:\` disk space is constrained, run `RUSTFLAGS="-C debuginfo=0" cargo test --all --offline` to avoid PDB `LNK1318` / OS error `112`.
+- **GitHub Permissions:** `tapiruslab` is a personal `User` account (`ictdothouse` is a `Write` collaborator). New `tapiruslab/*` repositories must be created by `tapiruslab` before `ictdothouse` pushes.
