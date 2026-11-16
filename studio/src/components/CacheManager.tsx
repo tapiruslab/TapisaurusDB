@@ -28,42 +28,50 @@ interface ExpiringItem {
 
 export const CacheManager: React.FC = () => {
   const [collectionName, setCollectionName] = useState<string>('cache_store');
-  const [items, setItems] = useState<ExpiringItem[]>([
-    {
-      id: 'otp_9921',
-      key: 'otp:auth:user_9921',
-      value: '849204',
-      ttl_seconds: 15,
-      remaining_seconds: 12,
-      created_at: Date.now(),
-      category: 'otp',
-    },
-    {
-      id: 'sess_tapir',
-      key: 'sess:jwt:tapisaurus_enterprise',
-      value: 'eyJhbGciOiJIUzI1NiIs...',
-      ttl_seconds: 60,
-      remaining_seconds: 48,
-      created_at: Date.now(),
-      category: 'session',
-    },
-    {
-      id: 'rate_101',
-      key: 'ratelimit:ip:192.168.1.101',
-      value: 'requests_count: 42',
-      ttl_seconds: 30,
-      remaining_seconds: 22,
-      created_at: Date.now(),
-      category: 'ratelimit',
-    },
-  ]);
+  const [items, setItems] = useState<ExpiringItem[]>([]);
 
-  const [totalPurged, setTotalPurged] = useState<number>(142);
+  const [totalPurged, setTotalPurged] = useState<number>(0);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newKey, setNewKey] = useState<string>('otp:sms:user_773');
   const [newVal, setNewVal] = useState<string>('582910');
   const [newTtl, setNewTtl] = useState<number>(10);
   const [isPurging, setIsPurging] = useState<boolean>(false);
+
+  // Load real TTL cache documents from the active collection on mount / collection switch
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.getDocuments(collectionName);
+        if (!active || !res || !Array.isArray(res.documents)) return;
+        const loaded: ExpiringItem[] = res.documents
+          .filter((doc: any) => typeof doc._ttl === 'number' || typeof doc.key === 'string')
+          .map((doc: any) => {
+            const keyStr = String(doc.key ?? doc._id ?? 'key');
+            const ttlSec = typeof doc._ttl === 'number' ? doc._ttl : 60;
+            return {
+              id: String(doc._id ?? `item_${Date.now()}`),
+              key: keyStr,
+              value: typeof doc.value === 'string' ? doc.value : JSON.stringify(doc.value ?? doc),
+              ttl_seconds: ttlSec,
+              remaining_seconds: ttlSec,
+              created_at: Date.now(),
+              category: keyStr.includes('otp')
+                ? 'otp'
+                : keyStr.includes('sess')
+                  ? 'session'
+                  : 'ratelimit',
+            };
+          });
+        setItems(loaded);
+      } catch {
+        if (active) setItems([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [collectionName]);
 
   // Live countdown ticker every 1 second
   useEffect(() => {

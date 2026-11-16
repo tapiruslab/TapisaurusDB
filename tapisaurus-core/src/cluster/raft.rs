@@ -379,7 +379,6 @@ struct RaftState {
     voted_for: Option<String>,
     log: Vec<LogEntry>,
     commit_index: LogIndex,
-    #[allow(dead_code)]
     last_applied: LogIndex,
     last_snapshot_index: LogIndex,
     last_snapshot_term: Term,
@@ -389,6 +388,8 @@ struct RaftState {
     current_election_timeout_ms: u64,
     votes_received: std::collections::HashSet<String>,
     peers: HashMap<String, String>, // node_id -> address
+    peer_match_index: HashMap<String, LogIndex>,
+    peer_next_index: HashMap<String, LogIndex>,
 }
 
 /// Thread-safe Production Raft Consensus Engine
@@ -480,6 +481,8 @@ impl RaftNode {
             current_election_timeout_ms: initial_election_timeout,
             votes_received: std::collections::HashSet::new(),
             peers: HashMap::new(),
+            peer_match_index: HashMap::new(),
+            peer_next_index: HashMap::new(),
         };
 
         Self {
@@ -501,7 +504,13 @@ impl RaftNode {
         let mut state = self.state.write();
         let p_id = peer_id.into();
         let p_addr = peer_addr.into();
+        let next_idx = state.log.last().map(|e| e.index + 1).unwrap_or(1);
         state.peers.insert(p_id.clone(), p_addr);
+        state.peer_match_index.entry(p_id.clone()).or_insert(0);
+        state
+            .peer_next_index
+            .entry(p_id.clone())
+            .or_insert(next_idx);
         info!(
             "Added Raft cluster peer: '{}' (Cluster size: {})",
             p_id,
@@ -513,6 +522,8 @@ impl RaftNode {
     pub fn remove_peer(&self, peer_id: &str) -> bool {
         let mut state = self.state.write();
         let removed = state.peers.remove(peer_id).is_some();
+        state.peer_match_index.remove(peer_id);
+        state.peer_next_index.remove(peer_id);
         if removed {
             info!(
                 "Removed Raft cluster peer: '{}' (Cluster size: {})",
@@ -638,6 +649,12 @@ impl RaftNode {
             if state.votes_received.len() >= quorum {
                 state.role = NodeRole::Leader;
                 state.leader_id = Some(self.node_id.clone());
+                let next_idx = state.log.last().map(|e| e.index + 1).unwrap_or(1);
+                let peer_ids: Vec<String> = state.peers.keys().cloned().collect();
+                for pid in peer_ids {
+                    state.peer_next_index.insert(pid.clone(), next_idx);
+                    state.peer_match_index.entry(pid).or_insert(0);
+                }
                 info!(
                     "Node '{}' won election with {}/{} votes! Now LEADER for term {}",
                     self.node_id,
@@ -651,7 +668,7 @@ impl RaftNode {
         false
     }
 
-    /// Prepare AppendEntries / Heartbeat payloads for all known peers
+    /// Prepare AppendEntries / Heartbeat payloads for all known peers, including unconfirmed log entries
     pub fn prepare_heartbeats(&self) -> HashMap<String, (String, AppendEntriesArgs)> {
         let state = self.state.read();
         let mut map = HashMap::new();
@@ -659,23 +676,132 @@ impl RaftNode {
             return map;
         }
 
-        let (last_log_index, last_log_term) = state
+        let (last_log_index, _) = state
             .log
             .last()
             .map(|l| (l.index, l.term))
             .unwrap_or((0, 0));
         for (peer_id, peer_addr) in &state.peers {
+            let next_idx = state
+                .peer_next_index
+                .get(peer_id)
+                .copied()
+                .unwrap_or(last_log_index + 1)
+                .max(1);
+            let prev_log_index = next_idx.saturating_sub(1);
+            let prev_log_term = state
+                .log
+                .iter()
+                .find(|e| e.index == prev_log_index)
+                .map(|e| e.term)
+                .unwrap_or(state.last_snapshot_term);
+            let entries: Vec<LogEntry> = state
+                .log
+                .iter()
+                .filter(|e| e.index >= next_idx)
+                .cloned()
+                .collect();
+
             let args = AppendEntriesArgs {
                 term: state.current_term,
                 leader_id: self.node_id.clone(),
-                prev_log_index: last_log_index,
-                prev_log_term: last_log_term,
-                entries: Vec::new(),
+                prev_log_index,
+                prev_log_term,
+                entries,
                 leader_commit: state.commit_index,
             };
             map.insert(peer_id.clone(), (peer_addr.clone(), args));
         }
         map
+    }
+
+    /// Process an AppendEntriesReply from a follower and advance `commit_index` once majority quorum is reached
+    pub fn record_append_reply(&self, peer_id: &str, reply: &AppendEntriesReply) -> LogIndex {
+        let mut state = self.state.write();
+        if reply.term > state.current_term {
+            state.current_term = reply.term;
+            state.role = NodeRole::Follower;
+            state.voted_for = None;
+            state.leader_id = None;
+            if let Some(ref store) = self.disk_store {
+                let _ = store.save_meta(state.current_term, None);
+            }
+            return state.commit_index;
+        }
+
+        if state.role != NodeRole::Leader {
+            return state.commit_index;
+        }
+
+        if reply.success {
+            let prev_match = state.peer_match_index.get(peer_id).copied().unwrap_or(0);
+            let new_match = prev_match.max(reply.match_index);
+            state
+                .peer_match_index
+                .insert(peer_id.to_string(), new_match);
+            state
+                .peer_next_index
+                .insert(peer_id.to_string(), new_match + 1);
+
+            let total_nodes = state.peers.len() + 1;
+            let quorum = (total_nodes / 2) + 1;
+            let last_log_idx = state.log.last().map(|e| e.index).unwrap_or(0);
+            let current_term = state.current_term;
+
+            for candidate_n in (state.commit_index + 1)..=last_log_idx {
+                let is_current_term = state
+                    .log
+                    .iter()
+                    .find(|e| e.index == candidate_n)
+                    .map(|e| e.term == current_term)
+                    .unwrap_or(false);
+                if !is_current_term {
+                    continue;
+                }
+                let mut replicated_nodes = 1usize; // Leader self
+                for pid in state.peers.keys() {
+                    if state.peer_match_index.get(pid).copied().unwrap_or(0) >= candidate_n {
+                        replicated_nodes += 1;
+                    }
+                }
+                if replicated_nodes >= quorum {
+                    state.commit_index = candidate_n;
+                }
+            }
+        } else {
+            let cur_next = state
+                .peer_next_index
+                .get(peer_id)
+                .copied()
+                .unwrap_or(1)
+                .max(1);
+            let backoff = if reply.match_index > 0 && reply.match_index < cur_next {
+                reply.match_index + 1
+            } else {
+                cur_next.saturating_sub(1).max(1)
+            };
+            state.peer_next_index.insert(peer_id.to_string(), backoff);
+        }
+
+        state.commit_index
+    }
+
+    /// Drain newly committed log entries (`last_applied < index <= commit_index`) for state-machine execution
+    pub fn take_unapplied_committed(&self) -> Vec<LogEntry> {
+        let mut state = self.state.write();
+        if state.commit_index <= state.last_applied {
+            return Vec::new();
+        }
+        let from_idx = state.last_applied;
+        let to_idx = state.commit_index;
+        let entries: Vec<LogEntry> = state
+            .log
+            .iter()
+            .filter(|e| e.index > from_idx && e.index <= to_idx && e.index > 0)
+            .cloned()
+            .collect();
+        state.last_applied = to_idx;
+        entries
     }
 
     /// Handle incoming RequestVote RPC from a candidate
@@ -841,7 +967,9 @@ impl RaftNode {
         }
     }
 
-    /// Propose a new write log entry on the Leader and persist to disk
+    /// Propose a new write log entry on the Leader and persist to disk.
+    /// In single-node mode (`peers.is_empty()`), commits immediately.
+    /// In multi-node mode, appends to the leader's log and advances `commit_index` once majority quorum acknowledges replication.
     pub fn propose(
         &self,
         command: impl Into<String>,
@@ -855,7 +983,7 @@ impl RaftNode {
             ));
         }
 
-        let index = state.log.len() as u64;
+        let index = state.log.last().map(|e| e.index + 1).unwrap_or(1);
         let entry = LogEntry {
             index,
             term: state.current_term,
@@ -869,8 +997,44 @@ impl RaftNode {
         }
 
         state.log.push(entry);
-        state.commit_index = index; // Immediate commit for single/quorum node
+        if state.peers.is_empty() {
+            state.commit_index = index;
+        }
         Ok(index)
+    }
+
+    /// Propose an entry and replicate it to peers via `RaftRpcTransport`, requiring majority quorum to advance `commit_index`.
+    pub async fn propose_and_replicate(
+        &self,
+        command: impl Into<String>,
+        payload: Option<serde_json::Value>,
+        transport: &dyn RaftRpcTransport,
+    ) -> Result<LogIndex, String> {
+        let index = self.propose(command, payload)?;
+        if self.list_peers().is_empty() {
+            return Ok(index);
+        }
+
+        let batches = self.prepare_heartbeats();
+        for (peer_id, (peer_addr, args)) in batches {
+            if let Ok(reply) = transport.append_entries(&peer_addr, args).await {
+                self.record_append_reply(&peer_id, &reply);
+            }
+        }
+
+        let committed = self.get_info().commit_index;
+        if committed >= index {
+            // Broadcast updated leader_commit to followers
+            let commit_batches = self.prepare_heartbeats();
+            for (_peer_id, (peer_addr, args)) in commit_batches {
+                let _ = transport.append_entries(&peer_addr, args).await;
+            }
+            Ok(index)
+        } else {
+            Err(format!(
+                "Replication did not reach majority quorum for log index {index} (commit_index={committed})"
+            ))
+        }
     }
 
     /// Trigger election manually (used in tests and failover testing)
@@ -1279,5 +1443,38 @@ mod tests {
         assert_eq!(recovered.len(), 1);
         assert_eq!(recovered[0].index, 1);
         assert_eq!(recovered[0].command, "SET user:1 = 100");
+    }
+
+    #[test]
+    fn test_raft_quorum_replication_and_state_machine_applier() {
+        let router = InMemoryRaftRouter::new();
+        let node1 = RaftNode::new("node_1", "127.0.0.1:29001");
+        let node2 = RaftNode::new("node_2", "127.0.0.1:29002");
+        let node3 = RaftNode::new("node_3", "127.0.0.1:29003");
+
+        node1.add_peer("node_2", "127.0.0.1:29002");
+        node1.add_peer("node_3", "127.0.0.1:29003");
+
+        router.register(node1.clone());
+        router.register(node2.clone());
+        router.register(node3.clone());
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let idx = rt
+            .block_on(node1.propose_and_replicate(
+                "INSERT orders",
+                Some(serde_json::json!({ "_id": "ord_1", "amount": 250 })),
+                &router,
+            ))
+            .unwrap();
+        assert_eq!(idx, 1);
+        assert_eq!(node1.get_info().commit_index, 1);
+        assert_eq!(node2.get_info().commit_index, 1);
+        assert_eq!(node3.get_info().commit_index, 1);
+
+        let applied_on_follower = node2.take_unapplied_committed();
+        assert_eq!(applied_on_follower.len(), 1);
+        assert_eq!(applied_on_follower[0].command, "INSERT orders");
+        assert!(node2.take_unapplied_committed().is_empty());
     }
 }

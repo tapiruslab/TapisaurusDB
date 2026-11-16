@@ -17,7 +17,8 @@ use super::codec::{
     encode_ready_for_query, encode_row_description,
 };
 use super::handler::{
-    handle_postgres_execute_query_state, handle_postgres_query_state, infer_query_row_description,
+    handle_postgres_execute_query_state_with_txn, handle_postgres_query_state_with_txn,
+    infer_query_row_description,
 };
 use tapisaurus_query::DatabaseContext;
 use tapisaurus_security::UserStore;
@@ -331,34 +332,12 @@ async fn handle_postgres_connection(
                     .trim_end_matches('\0')
                     .to_string();
 
-                let upper_trim = query_str.trim().trim_end_matches(';').trim().to_uppercase();
-                if upper_trim == "BEGIN"
-                    || upper_trim == "BEGIN TRANSACTION"
-                    || upper_trim.starts_with("START TRANSACTION")
-                {
-                    let txn = db.tx_manager().begin();
-                    current_txn = Some(Arc::new(parking_lot::Mutex::new(txn)));
-                } else if upper_trim == "COMMIT"
-                    || upper_trim == "COMMIT TRANSACTION"
-                    || upper_trim == "COMMIT WORK"
-                    || upper_trim == "END"
-                {
-                    if let Some(t_mutex) = current_txn.take() {
-                        let mut t = t_mutex.lock();
-                        let _ = db.tx_manager().commit(&mut t);
-                    }
-                } else if upper_trim == "ROLLBACK"
-                    || upper_trim == "ROLLBACK TRANSACTION"
-                    || upper_trim == "ROLLBACK WORK"
-                    || upper_trim.starts_with("ROLLBACK TO")
-                {
-                    if let Some(t_mutex) = current_txn.take() {
-                        let mut t = t_mutex.lock();
-                        db.tx_manager().abort(&mut t);
-                    }
-                }
-
-                let response_bytes = handle_postgres_query_state(&db, &query_str, &mut txn_state);
+                let response_bytes = handle_postgres_query_state_with_txn(
+                    &db,
+                    &query_str,
+                    &mut txn_state,
+                    &mut current_txn,
+                );
                 stream.write_all(&response_bytes).await?;
                 stream.flush().await?;
             }
@@ -558,39 +537,12 @@ async fn handle_postgres_connection(
                     // Safe parameter substitution: matches $N whole tokens outside quotes
                     let resolved_query = substitute_postgres_params(&portal.query, &portal.params);
 
-                    let upper_trim = resolved_query
-                        .trim()
-                        .trim_end_matches(';')
-                        .trim()
-                        .to_uppercase();
-                    if upper_trim == "BEGIN"
-                        || upper_trim == "BEGIN TRANSACTION"
-                        || upper_trim.starts_with("START TRANSACTION")
-                    {
-                        let txn = db.tx_manager().begin();
-                        current_txn = Some(Arc::new(parking_lot::Mutex::new(txn)));
-                    } else if upper_trim == "COMMIT"
-                        || upper_trim == "COMMIT TRANSACTION"
-                        || upper_trim == "COMMIT WORK"
-                        || upper_trim == "END"
-                    {
-                        if let Some(t_mutex) = current_txn.take() {
-                            let mut t = t_mutex.lock();
-                            let _ = db.tx_manager().commit(&mut t);
-                        }
-                    } else if upper_trim == "ROLLBACK"
-                        || upper_trim == "ROLLBACK TRANSACTION"
-                        || upper_trim == "ROLLBACK WORK"
-                        || upper_trim.starts_with("ROLLBACK TO")
-                    {
-                        if let Some(t_mutex) = current_txn.take() {
-                            let mut t = t_mutex.lock();
-                            db.tx_manager().abort(&mut t);
-                        }
-                    }
-
-                    let response_bytes =
-                        handle_postgres_execute_query_state(&db, &resolved_query, &mut txn_state);
+                    let response_bytes = handle_postgres_execute_query_state_with_txn(
+                        &db,
+                        &resolved_query,
+                        &mut txn_state,
+                        &mut current_txn,
+                    );
                     stream.write_all(&response_bytes).await?;
                     stream.flush().await?;
                 } else {

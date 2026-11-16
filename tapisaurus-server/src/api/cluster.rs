@@ -187,7 +187,9 @@ pub async fn raft_append_entries(
     State(state): State<Arc<AppState>>,
     Json(args): Json<AppendEntriesArgs>,
 ) -> impl IntoResponse {
-    Json(state.db.raft().handle_append_entries(args))
+    let reply = state.db.raft().handle_append_entries(args);
+    let _ = state.db.apply_committed_raft_entries();
+    Json(reply)
 }
 
 /// POST /v1/cluster/raft/snapshot — Raft InstallSnapshot RPC
@@ -215,14 +217,12 @@ pub fn spawn_raft_tick_daemon(
                         tapisaurus_core::cluster::RaftTickAction::None => {}
                         tapisaurus_core::cluster::RaftTickAction::SendHeartbeat => {
                             let heartbeats = raft.prepare_heartbeats();
-                            for (_peer_id, (peer_addr, args)) in heartbeats {
+                            for (peer_id, (peer_addr, args)) in heartbeats {
                                 let raft_clone = raft.clone();
                                 let transport_clone = transport.clone();
                                 tokio::spawn(async move {
                                     if let Some(reply) = transport_clone.send_append(&peer_addr, &args).await {
-                                        if reply.term > args.term {
-                                            raft_clone.step_down(reply.term);
-                                        }
+                                        raft_clone.record_append_reply(&peer_id, &reply);
                                     }
                                 });
                             }

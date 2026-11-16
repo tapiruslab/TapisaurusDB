@@ -64,6 +64,9 @@ pub struct Transaction {
     /// Keys read during the transaction (for conflict detection)
     read_set: HashSet<Vec<u8>>,
 
+    /// Document-level undo log `(collection, doc_id, previous_doc_json)` for rolling back in-flight collection mutations
+    undo_log: Vec<(String, String, Option<serde_json::Value>)>,
+
     /// Creation instant of the transaction (for idle transaction timeout & reaping)
     created_at: std::time::Instant,
 }
@@ -79,8 +82,25 @@ impl Transaction {
             snapshot_ts: id, // Simple: snapshot = txn id
             write_buffer: BTreeMap::new(),
             read_set: HashSet::new(),
+            undo_log: Vec::new(),
             created_at: std::time::Instant::now(),
         }
+    }
+
+    /// Record a document before-image so `ROLLBACK` or aborted `COMMIT` restores collection state
+    pub fn record_undo(
+        &mut self,
+        collection: impl Into<String>,
+        doc_id: impl Into<String>,
+        before_image: Option<serde_json::Value>,
+    ) {
+        self.undo_log
+            .push((collection.into(), doc_id.into(), before_image));
+    }
+
+    /// Drain the undo log in order
+    pub fn take_undo_log(&mut self) -> Vec<(String, String, Option<serde_json::Value>)> {
+        std::mem::take(&mut self.undo_log)
     }
 
     /// Check if transaction has exceeded the idle timeout duration

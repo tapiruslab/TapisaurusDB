@@ -14,7 +14,24 @@ use super::codec::{
     PG_TYPE_INT2, PG_TYPE_INT8, PG_TYPE_JSONB, PG_TYPE_TEXT,
 };
 
-/// Handles a raw SQL string received via PostgreSQL protocol 'Q' message with explicit transaction state:
+fn rollback_txn_undo_log(
+    db: &Arc<DatabaseContext>,
+    txn: &mut tapisaurus_core::transaction::mvcc::Transaction,
+) {
+    let undo_entries = txn.take_undo_log();
+    for (col_name, doc_id, before_image) in undo_entries.into_iter().rev() {
+        let col = db.get_or_create_collection(&col_name);
+        let _ = col.delete_by_id(&doc_id);
+        if let Some(prev_val) = before_image {
+            if let Ok(prev_doc) = serde_json::from_value::<tapisaurus_core::Document>(prev_val) {
+                let _ = col.insert(prev_doc);
+            }
+        }
+    }
+}
+
+/// Handles a raw SQL string received via PostgreSQL protocol 'Q' message with explicit transaction state
+/// and an optional MVCC SSI `Transaction` handle:
 /// - b'I': Idle (outside transaction)
 /// - b'T': In active transaction block
 /// - b'E': In aborted/failed transaction block (all commands rejected until ROLLBACK)
@@ -22,6 +39,18 @@ pub fn handle_postgres_query_state(
     db: &Arc<DatabaseContext>,
     query_str: &str,
     txn_state: &mut u8,
+) -> Vec<u8> {
+    let mut no_txn = None;
+    handle_postgres_query_state_with_txn(db, query_str, txn_state, &mut no_txn)
+}
+
+pub fn handle_postgres_query_state_with_txn(
+    db: &Arc<DatabaseContext>,
+    query_str: &str,
+    txn_state: &mut u8,
+    current_txn: &mut Option<
+        Arc<parking_lot::Mutex<tapisaurus_core::transaction::mvcc::Transaction>>,
+    >,
 ) -> Vec<u8> {
     let trimmed = query_str.trim().trim_end_matches(';').trim();
     if trimmed.is_empty() {
@@ -39,6 +68,11 @@ pub fn handle_postgres_query_state(
             || upper == "ROLLBACK WORK"
             || upper.starts_with("ROLLBACK TO")
         {
+            if let Some(t_mutex) = current_txn.take() {
+                let mut t = t_mutex.lock();
+                rollback_txn_undo_log(db, &mut t);
+                db.tx_manager().abort(&mut t);
+            }
             *txn_state = b'I';
             let mut out = encode_command_complete("ROLLBACK");
             out.extend_from_slice(&encode_ready_for_query(b'I'));
@@ -49,6 +83,11 @@ pub fn handle_postgres_query_state(
             || upper == "COMMIT WORK"
             || upper == "END"
         {
+            if let Some(t_mutex) = current_txn.take() {
+                let mut t = t_mutex.lock();
+                rollback_txn_undo_log(db, &mut t);
+                db.tx_manager().abort(&mut t);
+            }
             *txn_state = b'I';
             let mut out = encode_command_complete("ROLLBACK");
             out.extend_from_slice(&encode_ready_for_query(b'I'));
@@ -77,8 +116,10 @@ pub fn handle_postgres_query_state(
         return out;
     }
 
-    // 3. Handle Transactions
+    // 3. Handle Transactions with Real MVCC SSI Validation
     if upper == "BEGIN" || upper == "BEGIN TRANSACTION" || upper.starts_with("START TRANSACTION") {
+        let txn = db.tx_manager().begin();
+        *current_txn = Some(Arc::new(parking_lot::Mutex::new(txn)));
         *txn_state = b'T';
         let mut out = encode_command_complete("BEGIN");
         out.extend_from_slice(&encode_ready_for_query(b'T'));
@@ -89,12 +130,31 @@ pub fn handle_postgres_query_state(
         || upper == "COMMIT WORK"
         || upper == "END"
     {
+        if let Some(t_mutex) = current_txn.take() {
+            let mut t = t_mutex.lock();
+            if let Err(conflict_err) = db.tx_manager().commit(&mut t) {
+                rollback_txn_undo_log(db, &mut t);
+                *txn_state = b'I';
+                let mut out = encode_error_response(
+                    "ERROR",
+                    "40001",
+                    &format!("could not serialize access due to concurrent update: {conflict_err}"),
+                );
+                out.extend_from_slice(&encode_ready_for_query(b'I'));
+                return out;
+            }
+        }
         *txn_state = b'I';
         let mut out = encode_command_complete("COMMIT");
         out.extend_from_slice(&encode_ready_for_query(b'I'));
         return out;
     }
     if upper == "ROLLBACK" || upper == "ROLLBACK TRANSACTION" || upper == "ROLLBACK WORK" {
+        if let Some(t_mutex) = current_txn.take() {
+            let mut t = t_mutex.lock();
+            rollback_txn_undo_log(db, &mut t);
+            db.tx_manager().abort(&mut t);
+        }
         *txn_state = b'I';
         let mut out = encode_command_complete("ROLLBACK");
         out.extend_from_slice(&encode_ready_for_query(b'I'));
@@ -251,17 +311,109 @@ pub fn handle_postgres_query_state(
 
     // 6. Execute general SQL query through `tapisaurus-query`
     match parse_query(trimmed) {
-        Ok(stmt) => match db.execute(stmt) {
-            Ok(result) => format_query_result(result, *txn_state),
-            Err(exec_err) => {
-                if *txn_state == b'T' {
-                    *txn_state = b'E'; // Transition to aborted transaction state
+        Ok(stmt) => {
+            // Track MVCC read/write sets and before-images when inside an active transaction block
+            if *txn_state == b'T' {
+                if current_txn.is_none() {
+                    *current_txn = Some(Arc::new(parking_lot::Mutex::new(db.tx_manager().begin())));
                 }
-                let mut out = encode_error_response("ERROR", "XX000", &exec_err);
-                out.extend_from_slice(&encode_ready_for_query(*txn_state));
-                out
+                if let Some(ref t_mutex) = current_txn {
+                    let mut t = t_mutex.lock();
+                    match &stmt {
+                        tapisaurus_query::ast::Statement::Insert {
+                            collection,
+                            documents,
+                        } => {
+                            let col = db.get_or_create_collection(collection);
+                            for doc in documents {
+                                let doc_id = doc.id.as_str().to_string();
+                                let prev = col
+                                    .find_by_id(&doc_id)
+                                    .ok()
+                                    .and_then(|d| serde_json::to_value(&d).ok());
+                                let mvcc_key = format!("doc:{collection}:{doc_id}").into_bytes();
+                                let mvcc_val = serde_json::to_vec(doc).unwrap_or_default();
+                                let _ = t.put(mvcc_key, mvcc_val);
+                                t.record_undo(collection.clone(), doc_id, prev);
+                            }
+                        }
+                        tapisaurus_query::ast::Statement::Update {
+                            collection, filter, ..
+                        } => {
+                            let col = db.get_or_create_collection(collection);
+                            for doc in col.find_all(None) {
+                                if filter.matches(&doc) {
+                                    let doc_id = doc.id.as_str().to_string();
+                                    let prev = serde_json::to_value(&doc).ok();
+                                    let mvcc_key =
+                                        format!("doc:{collection}:{doc_id}").into_bytes();
+                                    t.record_read(&mvcc_key);
+                                    let _ = t.put(
+                                        mvcc_key,
+                                        serde_json::to_vec(&doc).unwrap_or_default(),
+                                    );
+                                    t.record_undo(collection.clone(), doc_id, prev);
+                                }
+                            }
+                        }
+                        tapisaurus_query::ast::Statement::Delete { collection, filter } => {
+                            let col = db.get_or_create_collection(collection);
+                            for doc in col.find_all(None) {
+                                if filter.matches(&doc) {
+                                    let doc_id = doc.id.as_str().to_string();
+                                    let prev = serde_json::to_value(&doc).ok();
+                                    let mvcc_key =
+                                        format!("doc:{collection}:{doc_id}").into_bytes();
+                                    t.record_read(&mvcc_key);
+                                    let _ = t.delete(mvcc_key);
+                                    t.record_undo(collection.clone(), doc_id, prev);
+                                }
+                            }
+                        }
+                        tapisaurus_query::ast::Statement::Find { collection, .. } => {
+                            let mvcc_scan_key = format!("scan:{collection}").into_bytes();
+                            t.record_read(&mvcc_scan_key);
+                        }
+                        _ => {}
+                    }
+                }
             }
-        },
+
+            let find_col = match &stmt {
+                tapisaurus_query::ast::Statement::Find { collection, .. } => {
+                    Some(collection.clone())
+                }
+                _ => None,
+            };
+
+            match db.execute(stmt) {
+                Ok(result) => {
+                    if *txn_state == b'T' {
+                        if let (Some(ref col_name), QueryResult::Documents(ref docs)) =
+                            (&find_col, &result)
+                        {
+                            if let Some(ref t_mutex) = current_txn {
+                                let mut t = t_mutex.lock();
+                                for doc in docs {
+                                    let key =
+                                        format!("doc:{col_name}:{}", doc.id.as_str()).into_bytes();
+                                    t.record_read(&key);
+                                }
+                            }
+                        }
+                    }
+                    format_query_result(result, *txn_state)
+                }
+                Err(exec_err) => {
+                    if *txn_state == b'T' {
+                        *txn_state = b'E'; // Transition to aborted transaction state
+                    }
+                    let mut out = encode_error_response("ERROR", "XX000", &exec_err);
+                    out.extend_from_slice(&encode_ready_for_query(*txn_state));
+                    out
+                }
+            }
+        }
         Err(parse_err) => {
             if *txn_state == b'T' {
                 *txn_state = b'E'; // Transition to aborted transaction state
@@ -983,7 +1135,19 @@ pub fn handle_postgres_execute_query_state(
     query_str: &str,
     txn_state: &mut u8,
 ) -> Vec<u8> {
-    let mut out = handle_postgres_query_state(db, query_str, txn_state);
+    let mut no_txn = None;
+    handle_postgres_execute_query_state_with_txn(db, query_str, txn_state, &mut no_txn)
+}
+
+pub fn handle_postgres_execute_query_state_with_txn(
+    db: &Arc<DatabaseContext>,
+    query_str: &str,
+    txn_state: &mut u8,
+    current_txn: &mut Option<
+        Arc<parking_lot::Mutex<tapisaurus_core::transaction::mvcc::Transaction>>,
+    >,
+) -> Vec<u8> {
+    let mut out = handle_postgres_query_state_with_txn(db, query_str, txn_state, current_txn);
     if out.len() >= 6 && out[out.len() - 6] == b'Z' {
         out.truncate(out.len() - 6);
     }
@@ -1184,4 +1348,75 @@ pub fn infer_query_row_description(
     }
 
     Some(vec![PgField::text("id")])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pg_simple_query_mvcc_rollback_and_ssi_conflict() {
+        let db = Arc::new(DatabaseContext::new());
+        let mut state1 = b'I';
+        let mut txn1 = None;
+
+        // 1. BEGIN -> INSERT -> ROLLBACK must undo the inserted document
+        handle_postgres_query_state_with_txn(&db, "BEGIN", &mut state1, &mut txn1);
+        assert_eq!(state1, b'T');
+        handle_postgres_query_state_with_txn(
+            &db,
+            "INSERT INTO accounts (_id, balance) VALUES ('acc_1', 500)",
+            &mut state1,
+            &mut txn1,
+        );
+        assert!(db
+            .get_or_create_collection("accounts")
+            .find_by_id("acc_1")
+            .is_ok());
+
+        handle_postgres_query_state_with_txn(&db, "ROLLBACK", &mut state1, &mut txn1);
+        assert_eq!(state1, b'I');
+        assert!(db
+            .get_or_create_collection("accounts")
+            .find_by_id("acc_1")
+            .is_err());
+
+        // 2. Seed acc_1 outside txn, then test concurrent SSI conflict on COMMIT
+        handle_postgres_query_state_with_txn(
+            &db,
+            "INSERT INTO accounts (_id, balance) VALUES ('acc_1', 500)",
+            &mut state1,
+            &mut txn1,
+        );
+
+        let mut state_a = b'I';
+        let mut txn_a = None;
+        let mut state_b = b'I';
+        let mut txn_b = None;
+
+        handle_postgres_query_state_with_txn(&db, "BEGIN", &mut state_a, &mut txn_a);
+        handle_postgres_query_state_with_txn(&db, "BEGIN", &mut state_b, &mut txn_b);
+
+        handle_postgres_query_state_with_txn(
+            &db,
+            "UPDATE accounts SET balance = 600 WHERE _id = 'acc_1'",
+            &mut state_a,
+            &mut txn_a,
+        );
+        handle_postgres_query_state_with_txn(
+            &db,
+            "UPDATE accounts SET balance = 700 WHERE _id = 'acc_1'",
+            &mut state_b,
+            &mut txn_b,
+        );
+
+        // Txn A commits first -> succeeds
+        let out_a = handle_postgres_query_state_with_txn(&db, "COMMIT", &mut state_a, &mut txn_a);
+        assert!(String::from_utf8_lossy(&out_a).contains("COMMIT"));
+
+        // Txn B attempts to commit -> fails with SQLSTATE 40001 and rolls back to 600
+        let out_b = handle_postgres_query_state_with_txn(&db, "COMMIT", &mut state_b, &mut txn_b);
+        let out_b_str = String::from_utf8_lossy(&out_b);
+        assert!(out_b_str.contains("40001"));
+    }
 }

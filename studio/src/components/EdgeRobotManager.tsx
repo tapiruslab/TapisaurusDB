@@ -48,19 +48,33 @@ export const EdgeRobotManager: React.FC<EdgeRobotManagerProps> = ({ apiBaseUrl =
   const [tickCount, setTickCount] = useState(0);
   const [meshOnline, setMeshOnline] = useState(true);
 
-  // Test Ping
-  const handleTestPing = () => {
+  // Test Ping via real HTTP round-trip timing against /v1/health
+  const handleTestPing = async () => {
     setConnectionStatus('checking');
-    setTimeout(() => {
-      if (deviceTarget === 'local') {
-        setPingLatency(Number((0.2 + Math.random() * 0.3).toFixed(2)));
+    const targetUrl =
+      deviceTarget === 'local'
+        ? `${apiBaseUrl.replace(/\/$/, '')}/health`
+        : `http://${remoteHost}:${remotePort}/v1/health`;
+    const t0 = performance.now();
+    try {
+      const resp = await fetch(targetUrl, { method: 'GET', cache: 'no-store' });
+      const elapsedMs = Number((performance.now() - t0).toFixed(2));
+      if (resp.ok) {
+        setPingLatency(elapsedMs);
         setConnectionStatus('connected');
       } else {
-        setPingLatency(Number((1.8 + Math.random() * 1.5).toFixed(2)));
-        setConnectionStatus('connected');
+        setPingLatency(elapsedMs);
+        setConnectionStatus('disconnected');
       }
-    }, 400);
+    } catch {
+      setPingLatency(0);
+      setConnectionStatus('disconnected');
+    }
   };
+
+  useEffect(() => {
+    handleTestPing();
+  }, [deviceTarget, remoteHost, remotePort]);
 
   // Profile presets
   const profiles = [

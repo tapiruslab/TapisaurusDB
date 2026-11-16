@@ -47,35 +47,91 @@ impl Cipher {
         }
     }
 
-    /// Create a cipher by deriving a 256-bit key from a user passphrase using **HKDF-SHA256**.
-    ///
-    /// Uses HKDF (HMAC-based Extract-and-Expand Key Derivation Function) which is the
-    /// standard way to derive strong cryptographic keys from passphrases. Unlike raw SHA-256,
-    /// HKDF provides proper key separation via the info label and resistance to related-key
-    /// attacks via the salt.
-    ///
-    /// For interactive password-to-key scenarios, consider using Argon2id instead (which is
-    /// already used in the auth module for password hashing).
-    pub fn from_passphrase(passphrase: &str) -> Self {
-        // HKDF-Extract: derive a pseudorandom key (PRK) from the passphrase with a salt.
-        // Using a fixed application-specific salt ensures consistent key derivation.
-        let salt = ring::hkdf::Salt::new(
-            ring::hkdf::HKDF_SHA256,
-            b"TapisaurusDB-Encryption-Key-v1", // Application-specific fixed salt
-        );
-        let prk = salt.extract(passphrase.as_bytes());
+    /// Create a cipher by deriving a 256-bit key from a user passphrase and an explicit 16-byte salt
+    /// using **Argon2id** (memory-hard key derivation) followed by HKDF-SHA256 domain separation.
+    pub fn from_passphrase_with_salt(passphrase: &str, salt: &[u8; 16]) -> Self {
+        let mut argon_out = [0u8; 32];
+        if argon2::Argon2::default()
+            .hash_password_into(passphrase.as_bytes(), salt, &mut argon_out)
+            .is_ok()
+        {
+            let hkdf_salt = ring::hkdf::Salt::new(ring::hkdf::HKDF_SHA256, salt);
+            let prk = hkdf_salt.extract(&argon_out);
+            argon_out.fill(0);
+            std::hint::black_box(&mut argon_out);
 
-        // HKDF-Expand: derive the final 256-bit encryption key with context info.
+            let info = [b"tapisaurus-aes256gcm-data-at-rest".as_ref()];
+            let okm = prk
+                .expand(&info, HkdfLen(32))
+                .expect("HKDF-SHA256 expand should not fail for 32-byte output");
+            let mut key = [0u8; 32];
+            okm.fill(&mut key)
+                .expect("HKDF fill should not fail for matching length");
+            return Self::new(key);
+        }
+
+        // Fallback if Argon2id parameter allocation fails
+        let hkdf_salt = ring::hkdf::Salt::new(ring::hkdf::HKDF_SHA256, salt);
+        let prk = hkdf_salt.extract(passphrase.as_bytes());
         let info = [b"tapisaurus-aes256gcm-data-at-rest".as_ref()];
         let okm = prk
             .expand(&info, HkdfLen(32))
             .expect("HKDF-SHA256 expand should not fail for 32-byte output");
-
         let mut key = [0u8; 32];
         okm.fill(&mut key)
             .expect("HKDF fill should not fail for matching length");
-
         Self::new(key)
+    }
+
+    /// Create a deterministic cipher from a user passphrase using **Argon2id** with a domain-separated salt
+    /// derived from the passphrase and application label.
+    /// For per-payload random-salt encryption, prefer `encrypt_with_passphrase` / `decrypt_with_passphrase`.
+    pub fn from_passphrase(passphrase: &str) -> Self {
+        let domain_salt =
+            ring::hkdf::Salt::new(ring::hkdf::HKDF_SHA256, b"TapisaurusDB-Encryption-Salt-v2");
+        let prk = domain_salt.extract(passphrase.as_bytes());
+        let salt_info = [b"tapisaurus-argon2id-salt".as_ref()];
+        let okm = prk
+            .expand(&salt_info, HkdfLen(16))
+            .expect("HKDF-SHA256 expand should not fail for 16-byte salt");
+        let mut salt16 = [0u8; 16];
+        okm.fill(&mut salt16)
+            .expect("HKDF fill should not fail for 16-byte salt");
+        Self::from_passphrase_with_salt(passphrase, &salt16)
+    }
+
+    /// Encrypt plaintext with a passphrase using a fresh random 16-byte Argon2id salt prepended to the ciphertext
+    pub fn encrypt_with_passphrase(
+        passphrase: &str,
+        plaintext: &[u8],
+    ) -> Result<EncryptedData, String> {
+        let rng = SystemRandom::new();
+        let mut salt = [0u8; 16];
+        rng.fill(&mut salt)
+            .map_err(|_| "Failed to generate random KDF salt".to_string())?;
+        let cipher = Self::from_passphrase_with_salt(passphrase, &salt);
+        let inner = cipher.encrypt(plaintext)?;
+        let mut out = Vec::with_capacity(16 + inner.ciphertext.len());
+        out.extend_from_slice(&salt);
+        out.extend_from_slice(&inner.ciphertext);
+        Ok(EncryptedData { ciphertext: out })
+    }
+
+    /// Decrypt payload produced by `encrypt_with_passphrase` (extracts 16-byte Argon2id salt prefix)
+    pub fn decrypt_with_passphrase(
+        passphrase: &str,
+        encrypted: &EncryptedData,
+    ) -> Result<Vec<u8>, String> {
+        if encrypted.ciphertext.len() < 16 + NONCE_LEN + 16 {
+            return Err("Salted ciphertext is too short".to_string());
+        }
+        let mut salt = [0u8; 16];
+        salt.copy_from_slice(&encrypted.ciphertext[..16]);
+        let cipher = Self::from_passphrase_with_salt(passphrase, &salt);
+        let inner = EncryptedData {
+            ciphertext: encrypted.ciphertext[16..].to_vec(),
+        };
+        cipher.decrypt(&inner)
     }
 
     /// Generate a cryptographically secure random 256-bit key
@@ -136,9 +192,30 @@ impl Cipher {
     }
 }
 
+impl Drop for Cipher {
+    fn drop(&mut self) {
+        self.key_bytes.fill(0);
+        std::hint::black_box(&mut self.key_bytes);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_argon2id_salted_passphrase_encrypt_decrypt() {
+        let pass = "correct-horse-battery-staple-2026";
+        let plaintext = b"Confidential TapisaurusDB WAL Page";
+        let enc1 = Cipher::encrypt_with_passphrase(pass, plaintext).unwrap();
+        let enc2 = Cipher::encrypt_with_passphrase(pass, plaintext).unwrap();
+        // Random 16-byte salt + random 12-byte nonce ensures distinct ciphertexts
+        assert_ne!(enc1.ciphertext, enc2.ciphertext);
+
+        let dec1 = Cipher::decrypt_with_passphrase(pass, &enc1).unwrap();
+        assert_eq!(dec1, plaintext);
+        assert!(Cipher::decrypt_with_passphrase("wrong-passphrase", &enc1).is_err());
+    }
 
     #[test]
     fn test_aes256_encrypt_decrypt() {

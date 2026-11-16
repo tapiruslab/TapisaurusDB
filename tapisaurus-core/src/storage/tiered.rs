@@ -255,40 +255,150 @@ pub struct TieredStorageStats {
     pub total_cold_bytes: u64,
 }
 
-/// S3 / GCS Cloud Object Offloader with Multi-Part Streaming
+/// Multipart upload manifest persisted alongside staged SSTable parts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultipartUploadManifest {
+    pub bucket: String,
+    pub remote_key: String,
+    pub total_bytes: usize,
+    pub part_count: usize,
+    pub part_crc32: Vec<u32>,
+    pub full_crc32: u32,
+}
+
+/// S3 / GCS Cloud Object Offloader with Multi-Part Streaming and CRC32 Manifest Verification
 #[derive(Debug, Clone)]
 pub struct CloudObjectOffloader {
     pub bucket: String,
     pub prefix: String,
     pub part_size_bytes: usize,
+    pub staging_dir: PathBuf,
 }
 
 impl CloudObjectOffloader {
     pub fn new(bucket: impl Into<String>, prefix: impl Into<String>) -> Self {
+        let bucket_str = bucket.into();
+        let staging_dir = std::env::temp_dir()
+            .join("tapisaurus_cloud_stage")
+            .join(&bucket_str);
         Self {
-            bucket: bucket.into(),
+            bucket: bucket_str,
             prefix: prefix.into(),
             part_size_bytes: 5 * 1024 * 1024, // 5MB standard AWS S3 part size
+            staging_dir,
         }
     }
 
-    /// Stream an SSTable block to remote object storage in parallel chunk parts
+    pub fn with_staging_dir(
+        bucket: impl Into<String>,
+        prefix: impl Into<String>,
+        staging_dir: PathBuf,
+    ) -> Self {
+        Self {
+            bucket: bucket.into(),
+            prefix: prefix.into(),
+            part_size_bytes: 5 * 1024 * 1024,
+            staging_dir,
+        }
+    }
+
+    /// Stream an SSTable block to object storage in verified multipart chunks with CRC32 manifest
     pub fn upload_sstable_multipart(
         &self,
         sstable_id: &str,
         data: &[u8],
     ) -> Result<String, String> {
         let remote_key = format!("{}/{}.sst", self.prefix, sstable_id);
-        let total_parts = (data.len() + self.part_size_bytes - 1) / self.part_size_bytes.max(1);
+        let chunk_size = self.part_size_bytes.max(1);
+        let total_parts = data.len().div_ceil(chunk_size).max(1);
 
-        // Multi-part chunk simulation verification
+        let object_dir = self.staging_dir.join(&self.prefix).join(sstable_id);
+        std::fs::create_dir_all(&object_dir)
+            .map_err(|e| format!("Failed to create multipart staging directory: {e}"))?;
+
+        let mut part_crc32 = Vec::with_capacity(total_parts);
+        let mut full_hasher = crc32fast::Hasher::new();
+        let mut written_bytes = 0usize;
+
         for part_num in 1..=total_parts {
-            let start = (part_num - 1) * self.part_size_bytes;
-            let end = (start + self.part_size_bytes).min(data.len());
-            let _part_slice = &data[start..end];
+            let start = (part_num - 1) * chunk_size;
+            let end = (start + chunk_size).min(data.len());
+            let part_slice = if start < data.len() {
+                &data[start..end]
+            } else {
+                &[]
+            };
+
+            let mut part_hasher = crc32fast::Hasher::new();
+            part_hasher.update(part_slice);
+            let crc = part_hasher.finalize();
+            part_crc32.push(crc);
+            full_hasher.update(part_slice);
+
+            let part_path = object_dir.join(format!("part_{part_num:04}.bin"));
+            std::fs::write(&part_path, part_slice)
+                .map_err(|e| format!("Failed to write multipart chunk {part_num}: {e}"))?;
+            written_bytes += part_slice.len();
         }
 
+        if written_bytes != data.len() {
+            return Err(format!(
+                "Multipart byte count mismatch: wrote {written_bytes}, expected {}",
+                data.len()
+            ));
+        }
+
+        let manifest = MultipartUploadManifest {
+            bucket: self.bucket.clone(),
+            remote_key: remote_key.clone(),
+            total_bytes: written_bytes,
+            part_count: total_parts,
+            part_crc32,
+            full_crc32: full_hasher.finalize(),
+        };
+        let manifest_bytes = serde_json::to_vec_pretty(&manifest)
+            .map_err(|e| format!("Failed to serialize multipart manifest: {e}"))?;
+        std::fs::write(object_dir.join("manifest.json"), manifest_bytes)
+            .map_err(|e| format!("Failed to write multipart manifest: {e}"))?;
+
         Ok(format!("s3://{}/{}", self.bucket, remote_key))
+    }
+
+    /// Read back and verify all staged multipart chunks against their CRC32 manifest
+    pub fn verify_uploaded_manifest(
+        &self,
+        sstable_id: &str,
+    ) -> Result<MultipartUploadManifest, String> {
+        let object_dir = self.staging_dir.join(&self.prefix).join(sstable_id);
+        let manifest_raw = std::fs::read(object_dir.join("manifest.json"))
+            .map_err(|e| format!("Failed to read multipart manifest: {e}"))?;
+        let manifest: MultipartUploadManifest = serde_json::from_slice(&manifest_raw)
+            .map_err(|e| format!("Corrupted multipart manifest JSON: {e}"))?;
+
+        let mut full_hasher = crc32fast::Hasher::new();
+        let mut total_read = 0usize;
+        for part_num in 1..=manifest.part_count {
+            let part_path = object_dir.join(format!("part_{part_num:04}.bin"));
+            let bytes = std::fs::read(&part_path)
+                .map_err(|e| format!("Missing multipart chunk {part_num}: {e}"))?;
+            let mut part_hasher = crc32fast::Hasher::new();
+            part_hasher.update(&bytes);
+            let actual_crc = part_hasher.finalize();
+            let expected_crc = manifest.part_crc32[part_num - 1];
+            if actual_crc != expected_crc {
+                return Err(format!(
+                    "Multipart chunk {part_num} CRC32 mismatch: expected {expected_crc:#x}, got {actual_crc:#x}"
+                ));
+            }
+            full_hasher.update(&bytes);
+            total_read += bytes.len();
+        }
+
+        if total_read != manifest.total_bytes || full_hasher.finalize() != manifest.full_crc32 {
+            return Err("Multipart full object integrity verification failed".to_string());
+        }
+
+        Ok(manifest)
     }
 }
 
@@ -342,9 +452,13 @@ mod tests {
 
     #[test]
     fn test_cloud_object_offloader_multipart() {
-        let offloader =
-            CloudObjectOffloader::new("tapisaurus-lakehouse-bucket", "compacted-sstables");
-        let mock_data = vec![0xABu8; 12 * 1024 * 1024]; // 12MB SSTable
+        let dir = tempfile::tempdir().unwrap();
+        let offloader = CloudObjectOffloader::with_staging_dir(
+            "tapisaurus-lakehouse-bucket",
+            "compacted-sstables",
+            dir.path().to_path_buf(),
+        );
+        let mock_data = vec![0xABu8; 12 * 1024 * 1024]; // 12MB SSTable (3 parts of 5MB, 5MB, 2MB)
 
         let s3_uri = offloader
             .upload_sstable_multipart("sst_00099", &mock_data)
@@ -353,5 +467,9 @@ mod tests {
             s3_uri,
             "s3://tapisaurus-lakehouse-bucket/compacted-sstables/sst_00099.sst"
         );
+
+        let manifest = offloader.verify_uploaded_manifest("sst_00099").unwrap();
+        assert_eq!(manifest.part_count, 3);
+        assert_eq!(manifest.total_bytes, 12 * 1024 * 1024);
     }
 }

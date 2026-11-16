@@ -293,6 +293,58 @@ impl DatabaseContext {
         self.raft.clone()
     }
 
+    /// Apply any newly committed Raft log entries (`last_applied < index <= commit_index`)
+    /// to the local database collections on follower nodes.
+    pub fn apply_committed_raft_entries(&self) -> usize {
+        let entries = self.raft.take_unapplied_committed();
+        if entries.is_empty() {
+            return 0;
+        }
+        // Leader already applied its own local mutations prior to proposing
+        if self.raft.get_info().is_leader {
+            return entries.len();
+        }
+
+        let mut applied = 0usize;
+        for entry in entries {
+            let cmd = entry.command.trim();
+            if let Some(col_name) = cmd.strip_prefix("INSERT ") {
+                let col_name = col_name.trim();
+                if let Some(payload) = entry.payload {
+                    if let Ok(doc) = serde_json::from_value::<Document>(payload) {
+                        let col = self.get_or_create_collection(col_name);
+                        let _ = col.delete_by_id(doc.id.as_str());
+                        if col.insert(doc).is_ok() {
+                            applied += 1;
+                        }
+                    }
+                }
+            } else if let Some(col_name) = cmd.strip_prefix("UPDATE ") {
+                let col_name = col_name.trim();
+                if let Some(payload) = entry.payload {
+                    if let Ok(doc) = serde_json::from_value::<Document>(payload) {
+                        let col = self.get_or_create_collection(col_name);
+                        let _ = col.delete_by_id(doc.id.as_str());
+                        if col.insert(doc).is_ok() {
+                            applied += 1;
+                        }
+                    }
+                }
+            } else if let Some(col_name) = cmd.strip_prefix("DELETE ") {
+                let col_name = col_name.trim();
+                if let Some(payload) = entry.payload {
+                    if let Some(id) = payload.get("id").and_then(|v| v.as_str()) {
+                        let col = self.get_or_create_collection(col_name);
+                        if col.delete_by_id(id).is_ok() {
+                            applied += 1;
+                        }
+                    }
+                }
+            }
+        }
+        applied
+    }
+
     /// Access the auto-sharding router
     pub fn shards(&self) -> Arc<tapisaurus_core::cluster::ShardRouter> {
         self.shards.clone()
@@ -508,8 +560,10 @@ impl DatabaseContext {
                             index_field,
                             index_name.as_deref(),
                         );
+                        let plan_time_us = start.elapsed().as_micros() as u64;
 
-                        let (docs_returned, execution_time_us) = if analyze {
+                        let (docs_returned, execution_time_us, actual_result_bytes) = if analyze {
+                            let exec_start = Instant::now();
                             let res = self.execute(Statement::Find {
                                 collection: collection.clone(),
                                 filter: filter.clone(),
@@ -520,11 +574,22 @@ impl DatabaseContext {
                                 traverse,
                                 joins: joins.clone(),
                             })?;
-                            let returned = match res {
-                                QueryResult::Documents(d) => d.len(),
-                                _ => 0,
+                            let exec_us = exec_start.elapsed().as_micros() as u64;
+                            let (returned, bytes) = match res {
+                                QueryResult::Documents(d) => {
+                                    let b: u64 = d
+                                        .iter()
+                                        .map(|doc| {
+                                            serde_json::to_vec(doc)
+                                                .map(|v| v.len() as u64)
+                                                .unwrap_or(128)
+                                        })
+                                        .sum();
+                                    (d.len(), b)
+                                }
+                                _ => (0, 0),
                             };
-                            (returned, start.elapsed().as_micros() as u64)
+                            (returned, exec_us, bytes)
                         } else {
                             let est_returned = if index_field.is_some() {
                                 (stats.total_documents as f64 * (decision.selectivity_pct / 100.0))
@@ -532,7 +597,7 @@ impl DatabaseContext {
                             } else {
                                 stats.total_documents
                             };
-                            (est_returned.max(1), start.elapsed().as_micros() as u64)
+                            (est_returned.max(1), plan_time_us, 0u64)
                         };
 
                         // Evaluate distributed join strategy if joins are present
@@ -558,9 +623,21 @@ impl DatabaseContext {
                                 _ => false,
                             };
 
+                            let right_scan_start = Instant::now();
                             let right_col = self.get_or_create_collection(&first_join.collection);
-                            let right_doc_count = right_col.count(&[]) as usize;
-                            let dimension_bytes = (right_doc_count * 128) as u64;
+                            let right_docs = right_col.find_all(None);
+                            let right_scan_us = right_scan_start.elapsed().as_micros() as u64;
+                            let right_doc_count = right_docs.len();
+                            let measured_right_bytes: u64 = right_docs
+                                .iter()
+                                .map(|doc| {
+                                    serde_json::to_vec(doc)
+                                        .map(|v| v.len() as u64)
+                                        .unwrap_or(128)
+                                })
+                                .sum();
+                            let dimension_bytes =
+                                measured_right_bytes.max((right_doc_count * 128) as u64);
 
                             let coordinator =
                                 crate::distributed::DistributedQueryCoordinator::new(Vec::new());
@@ -577,16 +654,28 @@ impl DatabaseContext {
                                 DistributedJoinStrategy::BroadcastHashJoin => (
                                     "BroadcastHashJoin",
                                     dimension_bytes * 16,
-                                    if analyze { dimension_bytes * 16 } else { 0 },
+                                    if analyze {
+                                        measured_right_bytes.saturating_add(actual_result_bytes)
+                                    } else {
+                                        0
+                                    },
                                     None,
                                 ),
                                 DistributedJoinStrategy::DistributedIndexNestedLoopFallback => (
                                     "DistributedIndexNestedLoopFallback",
                                     (dimension_bytes * 2).max(10_485_760),
-                                    if analyze { 15_728_640 } else { 0 },
+                                    if analyze {
+                                        measured_right_bytes
+                                            .saturating_add(actual_result_bytes)
+                                            .max(dimension_bytes)
+                                    } else {
+                                        0
+                                    },
                                     Some("[Strategy: DistributedIndexNestedLoop (FALLBACK)] - Dimension size exceeded 10MB threshold. High network latency expected. Consider colocating tables with {...} hash tags.".to_string()),
                                 ),
                             };
+
+                            let left_scan_us = execution_time_us.saturating_sub(right_scan_us);
 
                             let child_scan_left = PlanNode {
                                 node_type: if index_name.is_some() {
@@ -599,9 +688,13 @@ impl DatabaseContext {
                                 estimated_cost_start: 0.0,
                                 estimated_cost_total: decision.seq_scan_cost,
                                 estimated_rows: stats.total_documents,
-                                actual_time_start_us: if analyze { Some(5) } else { None },
+                                actual_time_start_us: if analyze {
+                                    Some(plan_time_us)
+                                } else {
+                                    None
+                                },
                                 actual_time_total_us: if analyze {
-                                    Some(execution_time_us / 2)
+                                    Some(left_scan_us)
                                 } else {
                                     None
                                 },
@@ -621,9 +714,13 @@ impl DatabaseContext {
                                 estimated_cost_start: 0.0,
                                 estimated_cost_total: 15.0,
                                 estimated_rows: right_doc_count,
-                                actual_time_start_us: if analyze { Some(2) } else { None },
+                                actual_time_start_us: if analyze {
+                                    Some(plan_time_us)
+                                } else {
+                                    None
+                                },
                                 actual_time_total_us: if analyze {
-                                    Some(execution_time_us / 3)
+                                    Some(right_scan_us)
                                 } else {
                                     None
                                 },
@@ -637,9 +734,13 @@ impl DatabaseContext {
                                     estimated_cost_start: 0.0,
                                     estimated_cost_total: 10.0,
                                     estimated_rows: right_doc_count,
-                                    actual_time_start_us: if analyze { Some(2) } else { None },
+                                    actual_time_start_us: if analyze {
+                                        Some(plan_time_us)
+                                    } else {
+                                        None
+                                    },
                                     actual_time_total_us: if analyze {
-                                        Some(execution_time_us / 3)
+                                        Some(right_scan_us)
                                     } else {
                                         None
                                     },
@@ -660,7 +761,11 @@ impl DatabaseContext {
                                 estimated_cost_start: 10.0,
                                 estimated_cost_total: decision.estimated_cost + 20.0,
                                 estimated_rows: docs_returned.max(1),
-                                actual_time_start_us: if analyze { Some(10) } else { None },
+                                actual_time_start_us: if analyze {
+                                    Some(plan_time_us)
+                                } else {
+                                    None
+                                },
                                 actual_time_total_us: if analyze {
                                     Some(execution_time_us)
                                 } else {
@@ -864,8 +969,12 @@ impl DatabaseContext {
                         }
                         let formatted_pg_tree = Some(pg_lines.join("\n"));
 
-                        let cache_hits = (docs_returned * 9) / 10;
-                        let cache_misses = docs_returned - cache_hits;
+                        let in_memory_resident = self.collections.contains_key(&collection);
+                        let (cache_hits, cache_misses) = if in_memory_resident {
+                            (docs_returned, docs_examined.saturating_sub(docs_returned))
+                        } else {
+                            (0, docs_examined)
+                        };
 
                         Ok(QueryResult::Explain(Box::new(ExplainPlan {
                             plan_type: decision.chosen_plan,
@@ -1943,5 +2052,51 @@ mod tests {
 
         // Must be purged from disk
         assert!(storage.get(&disk_key).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_raft_follower_applies_committed_entries_to_database_context() {
+        let leader_ctx = DatabaseContext::new();
+        let follower_ctx = DatabaseContext::new();
+
+        leader_ctx.raft().add_peer("follower_1", "127.0.0.1:29102");
+        let router = tapisaurus_core::cluster::InMemoryRaftRouter::new();
+        router.register(leader_ctx.raft().as_ref().clone());
+
+        // Set follower_ctx's raft node to match address 127.0.0.1:29102
+        router.register(follower_ctx.raft().as_ref().clone());
+
+        let doc: Document = serde_json::from_value(serde_json::json!({
+            "_id": "rep_doc_1",
+            "title": "Replicated via Raft"
+        }))
+        .unwrap();
+        let doc_val = serde_json::to_value(&doc).unwrap();
+
+        let idx = leader_ctx
+            .raft()
+            .propose("INSERT articles", Some(doc_val))
+            .unwrap();
+        let batches = leader_ctx.raft().prepare_heartbeats();
+        let (_, args) = batches.get("follower_1").unwrap().clone();
+
+        // Follower receives AppendEntries RPC with term+1 so it steps down to Follower and appends entry
+        let mut append_args = args;
+        append_args.term = 2;
+        append_args.leader_commit = idx;
+        let reply = follower_ctx.raft().handle_append_entries(append_args);
+        assert!(reply.success);
+
+        let applied = follower_ctx.apply_committed_raft_entries();
+        assert_eq!(applied, 1);
+
+        let replicated = follower_ctx
+            .get_or_create_collection("articles")
+            .find_by_id("rep_doc_1")
+            .unwrap();
+        assert_eq!(
+            replicated.get("title"),
+            Some(&Value::String("Replicated via Raft".to_string()))
+        );
     }
 }
