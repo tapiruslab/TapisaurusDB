@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 
 use tapisaurus_core::storage::engine::{StorageConfig, StorageEngine};
 use tapisaurus_core::{
-    DeterministicOp, DeterministicTxSpec, Document, TapirSyncBundle, TapirSyncHlc, TapirSyncRecord,
-    WasmSandboxModule, WasmTriggerAction, ZonePredicateOp,
+    DeterministicOp, DeterministicTxSpec, Document, SlottedBinaryCodec, TapirSyncBundle,
+    TapirSyncHlc, TapirSyncRecord, Value, WasmSandboxModule, WasmTriggerAction, ZonePredicateOp,
 };
 use tapisaurus_graph::{Edge, GraphStore, Vertex};
 use tapisaurus_query::{parse_query, DatabaseContext};
@@ -326,5 +326,41 @@ fn main() {
         500.0 / sync_dur.as_secs_f64(),
         wire_bytes.len() / 1024,
         ack.records_applied
+    );
+
+    // 8. TPBIN001 Slotted Binary Zero-Deserialization Field Projection vs Full JSON Decode
+    let sample_doc = Document::with_id("doc_bench_1")
+        .field("active", true)
+        .field("bio", "A".repeat(2048))
+        .field("city", "Kuala Lumpur")
+        .field("department", "Core Storage Engineering")
+        .field("embedding", Value::Vector(deterministic_vec(42, 128)))
+        .field("score", 98_765i64)
+        .field("status", "verified");
+    let tpbin_bytes = SlottedBinaryCodec::encode(&sample_doc).unwrap();
+    let json_bytes = serde_json::to_vec(&sample_doc).unwrap();
+
+    let mut tpbin_lat = Vec::with_capacity(n_rows);
+    let mut json_lat = Vec::with_capacity(n_rows);
+    for _ in 0..n_rows {
+        let t1 = Instant::now();
+        let val = SlottedBinaryCodec::extract_field(&tpbin_bytes, "score").unwrap();
+        std::hint::black_box(val);
+        tpbin_lat.push(t1.elapsed().as_nanos());
+
+        let t2 = Instant::now();
+        let full: Document = serde_json::from_slice(&json_bytes).unwrap();
+        std::hint::black_box(full.get("score"));
+        json_lat.push(t2.elapsed().as_nanos());
+    }
+    tpbin_lat.sort_unstable();
+    json_lat.sort_unstable();
+    let tpbin_p50 = percentile_us(&tpbin_lat, 0.50);
+    let json_p50 = percentile_us(&json_lat, 0.50);
+    println!(
+        "[8] TPBIN001 Zero-Copy Field Extract     : p50: {:>5.2} µs vs JSON Decode {:>5.2} µs ({:.1}x faster)",
+        tpbin_p50,
+        json_p50,
+        json_p50 / tpbin_p50.max(0.01)
     );
 }

@@ -138,6 +138,9 @@ pub struct Collection {
     /// Time-To-Live (TTL) & Auto-Expiry Cache Scheduler
     ttl: crate::ttl::TtlManager,
 
+    /// Clock-Pro / Second-Chance hot-cold cache residency tracker
+    cache_tracker: super::binary::HotColdCacheTracker,
+
     /// Optional underlying LSM-Tree storage engine for durability
     storage: Option<Arc<crate::storage::engine::StorageEngine>>,
 }
@@ -158,6 +161,7 @@ impl Collection {
             total_size: AtomicU64::new(0),
             text_index: crate::search::InvertedIndex::new(),
             ttl: crate::ttl::TtlManager::new(),
+            cache_tracker: super::binary::HotColdCacheTracker::new(),
             storage: None,
         }
     }
@@ -194,6 +198,7 @@ impl Collection {
             total_size: AtomicU64::new(0),
             text_index: crate::search::InvertedIndex::new(),
             ttl: crate::ttl::TtlManager::new(),
+            cache_tracker: super::binary::HotColdCacheTracker::new(),
             storage: None,
         }
     }
@@ -213,6 +218,11 @@ impl Collection {
         self.documents.len()
     }
 
+    /// Return live telemetry for the Tiered Hot-Cold Document Cache & `TPBIN001` zero-copy engine
+    pub fn cache_stats(&self) -> super::binary::HotColdCacheStats {
+        self.cache_tracker.stats()
+    }
+
     /// Get the collection name
     pub fn name(&self) -> &str {
         &self.config.name
@@ -230,21 +240,14 @@ impl Collection {
         }
     }
 
-    /// Enforce max in-memory documents if configured by evicting older entries from RAM
+    /// Enforce max in-memory documents if configured using Clock-Pro / Second-Chance eviction
     fn enforce_memory_cap(&self, keep_id: Option<&str>) {
         if let Some(max_docs) = self.config.max_memory_documents {
             while self.documents.len() > max_docs {
-                let evict_key = {
-                    let mut iter = self.documents.iter();
-                    let found = iter
-                        .find(|e| keep_id.is_none_or(|kid| e.key() != kid))
-                        .map(|e| e.key().clone());
-                    drop(iter);
-                    found
-                };
-                if let Some(key) = evict_key {
-                    self.documents.remove(&key);
-                } else {
+                if !self
+                    .cache_tracker
+                    .select_victim_and_evict(&self.documents, keep_id)
+                {
                     break;
                 }
             }
@@ -323,17 +326,17 @@ impl Collection {
 
         // Insert into primary store
         self.documents.insert(id_str.clone(), doc.clone());
+        self.cache_tracker.touch(&id_str);
         self.doc_count.fetch_add(1, Ordering::Relaxed);
         self.total_size.fetch_add(size as u64, Ordering::Relaxed);
 
-        // If storage engine is connected, persist through WAL and MemTable
+        // If storage engine is connected, persist through WAL and MemTable in TPBIN001 slotted binary format
         if let Some(storage) = &self.storage {
             let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
-            if let Ok(val) = serde_json::to_vec(&doc) {
-                storage.put(&key, &val)?;
-            }
+            let val = super::binary::SlottedBinaryCodec::encode(&doc)?;
+            storage.put(&key, &val)?;
 
-            // Enforce max in-memory documents if configured by evicting older entry from RAM
+            // Enforce max in-memory documents if configured by evicting cold entry from RAM
             self.enforce_memory_cap(Some(&id_str));
         }
 
@@ -418,11 +421,11 @@ impl Collection {
 
             if self.storage.is_some() {
                 let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
-                if let Ok(val) = serde_json::to_vec(&doc) {
-                    storage_kv.push((key, val));
-                }
+                let val = super::binary::SlottedBinaryCodec::encode(&doc)?;
+                storage_kv.push((key, val));
             }
 
+            self.cache_tracker.touch(&id_str);
             self.documents.insert(id_str, doc);
             self.doc_count.fetch_add(1, Ordering::Relaxed);
             self.total_size.fetch_add(size as u64, Ordering::Relaxed);
@@ -482,6 +485,7 @@ impl Collection {
             }
         }
 
+        self.cache_tracker.touch(&id_str);
         self.documents.insert(id_str.clone(), doc);
         if !already_present {
             self.doc_count.fetch_add(1, Ordering::Relaxed);
@@ -495,6 +499,7 @@ impl Collection {
     /// Clear all documents and secondary indexes from memory and persistent storage
     pub fn clear(&self) -> TapisaurusResult<()> {
         self.documents.clear();
+        self.cache_tracker.clear();
         self.doc_count.store(0, Ordering::Relaxed);
         self.total_size.store(0, Ordering::Relaxed);
         self.text_index.clear();
@@ -515,7 +520,7 @@ impl Collection {
         Ok(())
     }
 
-    /// Find a document by its ID (with lazy TTL evaluation).
+    /// Find a document by its ID (with lazy TTL evaluation and Clock-Pro hot promotion).
     pub fn find_by_id(&self, id: &str) -> TapisaurusResult<Document> {
         if self.ttl.is_expired(id, crate::ttl::current_time_ms()) {
             let _ = self.delete_by_id(id);
@@ -526,6 +531,8 @@ impl Collection {
         }
 
         if let Some(entry) = self.documents.get(id) {
+            self.cache_tracker.hot_hits.fetch_add(1, Ordering::Relaxed);
+            self.cache_tracker.touch(id);
             return Ok(entry.value().clone());
         }
 
@@ -533,8 +540,10 @@ impl Collection {
         if let Some(storage) = &self.storage {
             let key = format!("doc:{}:{}", self.config.name, id).into_bytes();
             if let Ok(Some(val_bytes)) = storage.get(&key) {
-                if let Ok(doc) = serde_json::from_slice::<Document>(&val_bytes) {
-                    // Populate back into memory cache for subsequent fast reads with memory cap enforcement
+                if let Ok(doc) = super::binary::SlottedBinaryCodec::decode_any(&val_bytes) {
+                    self.cache_tracker.cold_hits.fetch_add(1, Ordering::Relaxed);
+                    self.cache_tracker.touch(id);
+                    // Populate back into memory cache for subsequent fast reads with Clock-Pro cap enforcement
                     self.documents.insert(id.to_string(), doc.clone());
                     self.enforce_memory_cap(Some(id));
                     return Ok(doc);
@@ -566,17 +575,8 @@ impl Collection {
 
     /// Find all documents matching a filter.
     ///
-    /// The filter is a set of key-value pairs that must all match.
-    /// Supports nested field access with dot notation.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// // Find users older than 25 in Kuala Lumpur
-    /// let filter = vec![
-    ///     ("city".to_string(), Value::String("KL".into())),
-    /// ];
-    /// let results = collection.find(&filter, None, None)?;
-    /// ```
+    /// When scanning cold LSM-Tree storage, uses `TPBIN001` **Zero-Deserialization Filter Pushdown**
+    /// to evaluate predicates directly on slotted binary offsets before materializing matching `Document` structs.
     pub fn find(
         &self,
         filter: &[(String, Value)],
@@ -602,17 +602,91 @@ impl Collection {
             return Ok(results);
         }
 
-        // Out-of-Core Disk Scan: scan directly from persistent LSM-Tree storage when dataset exceeds RAM capacity
+        // Out-of-Core Cold Scan: evaluate filter directly on TPBIN001 binary slices without deserializing non-matching documents
         if let Some(storage) = &self.storage {
             let prefix = format!("doc:{}:", self.config.name).into_bytes();
             let entries = storage.prefix_scan(&prefix)?;
+            self.cache_tracker
+                .zero_copy_filter_evals
+                .fetch_add(entries.len() as u64, Ordering::Relaxed);
             let results: Vec<Document> = entries
                 .into_iter()
-                .filter_map(|(_k, v)| serde_json::from_slice::<Document>(&v).ok())
-                .filter(|doc| Self::matches_filter(doc, filter))
+                .filter(|(_k, v)| super::binary::SlottedBinaryCodec::matches_filter(v, filter))
                 .skip(skip)
                 .take(limit)
+                .filter_map(|(_k, v)| super::binary::SlottedBinaryCodec::decode_any(&v).ok())
                 .collect();
+            return Ok(results);
+        }
+
+        Ok(Vec::new())
+    }
+
+    /// Find and project only specific `fields` for documents matching `filter`.
+    ///
+    /// On cold `TPBIN001` LSM records, combines **Zero-Deserialization Filter Pushdown** with
+    /// **Zero-Deserialization Field Projection** (`O(log F)` directory lookup), never decoding
+    /// unrequested columns (such as large text blobs or dense vectors).
+    pub fn find_projected(
+        &self,
+        filter: &[(String, Value)],
+        fields: &[&str],
+        limit: Option<usize>,
+        skip: Option<usize>,
+    ) -> TapisaurusResult<Vec<Document>> {
+        self.purge_expired();
+        let skip = skip.unwrap_or(0);
+        let limit = limit.unwrap_or(usize::MAX);
+        let doc_count = self.doc_count.load(Ordering::Relaxed);
+        let mem_count = self.documents.len() as u64;
+
+        if mem_count >= doc_count || self.storage.is_none() {
+            let results: Vec<Document> = self
+                .documents
+                .iter()
+                .filter(|entry| Self::matches_filter(entry.value(), filter))
+                .skip(skip)
+                .take(limit)
+                .map(|entry| {
+                    let src = entry.value();
+                    let mut proj = Document::with_id(src.id.clone());
+                    for &f in fields {
+                        if let Some(v) = src.get_nested(f) {
+                            proj.set(f, v.clone());
+                        }
+                    }
+                    proj
+                })
+                .collect();
+            return Ok(results);
+        }
+
+        if let Some(storage) = &self.storage {
+            let prefix = format!("doc:{}:", self.config.name).into_bytes();
+            let entries = storage.prefix_scan(&prefix)?;
+            self.cache_tracker
+                .zero_copy_filter_evals
+                .fetch_add(entries.len() as u64, Ordering::Relaxed);
+            let mut results = Vec::new();
+            let mut matched = 0usize;
+            for (_k, v) in entries {
+                if super::binary::SlottedBinaryCodec::matches_filter(&v, filter) {
+                    if matched >= skip {
+                        if let Ok(proj) =
+                            super::binary::SlottedBinaryCodec::project_fields(&v, fields)
+                        {
+                            self.cache_tracker
+                                .zero_copy_projections
+                                .fetch_add(1, Ordering::Relaxed);
+                            results.push(proj);
+                            if results.len() >= limit {
+                                break;
+                            }
+                        }
+                    }
+                    matched += 1;
+                }
+            }
             return Ok(results);
         }
 
@@ -642,7 +716,7 @@ impl Collection {
             if let Ok(entries) = storage.prefix_scan(&prefix) {
                 return entries
                     .into_iter()
-                    .filter_map(|(_k, v)| serde_json::from_slice::<Document>(&v).ok())
+                    .filter_map(|(_k, v)| super::binary::SlottedBinaryCodec::decode_any(&v).ok())
                     .take(limit)
                     .collect();
             }
@@ -690,7 +764,7 @@ impl Collection {
                     .into_iter()
                     .skip(skip)
                     .take(limit)
-                    .filter_map(|(_k, v)| serde_json::from_slice::<Document>(&v).ok())
+                    .filter_map(|(_k, v)| super::binary::SlottedBinaryCodec::decode_any(&v).ok())
                     .collect();
             }
         }
@@ -726,6 +800,7 @@ impl Collection {
 
             let updated = entry.value().clone();
             drop(entry);
+            self.cache_tracker.touch(id);
 
             // Re-index for full-text search & secondary indexes
             let doc_text = extract_doc_text(&updated);
@@ -734,7 +809,7 @@ impl Collection {
 
             if let Some(storage) = &self.storage {
                 let key = format!("doc:{}:{}", self.config.name, id).into_bytes();
-                let val = serde_json::to_vec(&updated)?;
+                let val = super::binary::SlottedBinaryCodec::encode(&updated)?;
                 storage.put(&key, &val)?;
             }
 
@@ -745,7 +820,7 @@ impl Collection {
         if let Some(storage) = &self.storage {
             let key = format!("doc:{}:{}", self.config.name, id).into_bytes();
             if let Ok(Some(val_bytes)) = storage.get(&key) {
-                if let Ok(mut doc) = serde_json::from_slice::<Document>(&val_bytes) {
+                if let Ok(mut doc) = super::binary::SlottedBinaryCodec::decode_any(&val_bytes) {
                     let old_size = doc.size_bytes() as u64;
                     update_fn(&mut doc);
                     let new_size = doc.size_bytes() as u64;
@@ -761,10 +836,11 @@ impl Collection {
                     self.text_index.index_document(id, &doc_text);
                     self.update_indexes_insert(&doc);
 
-                    let val = serde_json::to_vec(&doc)?;
+                    let val = super::binary::SlottedBinaryCodec::encode(&doc)?;
                     storage.put(&key, &val)?;
 
-                    // Put back to RAM cache with cap enforcement
+                    // Put back to RAM cache with Clock-Pro cap enforcement
+                    self.cache_tracker.touch(id);
                     self.documents.insert(id.to_string(), doc.clone());
                     self.enforce_memory_cap(Some(id));
 
@@ -799,7 +875,7 @@ impl Collection {
                 if let Some(storage) = &self.storage {
                     let key =
                         format!("doc:{}:{}", self.config.name, updated.id.as_str()).into_bytes();
-                    if let Ok(val) = serde_json::to_vec(&updated) {
+                    if let Ok(val) = super::binary::SlottedBinaryCodec::encode(&updated) {
                         let _ = storage.put(&key, &val);
                     }
                 }
@@ -815,23 +891,23 @@ impl Collection {
                 let prefix = format!("doc:{}:", self.config.name).into_bytes();
                 if let Ok(entries) = storage.prefix_scan(&prefix) {
                     for (_k, v) in entries {
-                        if let Ok(mut doc) = serde_json::from_slice::<Document>(&v) {
+                        if !super::binary::SlottedBinaryCodec::matches_filter(&v, filter) {
+                            continue;
+                        }
+                        if let Ok(mut doc) = super::binary::SlottedBinaryCodec::decode_any(&v) {
                             let id_str = doc.id.as_str().to_string();
                             if self.documents.contains_key(&id_str) {
                                 continue; // Already processed in RAM loop
                             }
-                            let matches = Self::matches_filter(&doc, filter);
-                            if matches {
-                                for (key, value) in updates {
-                                    doc.set(key.clone(), value.clone());
-                                }
-                                let key =
-                                    format!("doc:{}:{}", self.config.name, id_str).into_bytes();
-                                if let Ok(val) = serde_json::to_vec(&doc) {
-                                    let _ = storage.put(&key, &val);
-                                }
-                                count += 1;
+                            for (key, value) in updates {
+                                doc.set(key.clone(), value.clone());
                             }
+                            let key =
+                                format!("doc:{}:{}", self.config.name, id_str).into_bytes();
+                            if let Ok(val) = super::binary::SlottedBinaryCodec::encode(&doc) {
+                                let _ = storage.put(&key, &val);
+                            }
+                            count += 1;
                         }
                     }
                 }
@@ -843,6 +919,7 @@ impl Collection {
 
     /// Delete a document by ID.
     pub fn delete_by_id(&self, id: &str) -> TapisaurusResult<Document> {
+        self.cache_tracker.remove(id);
         let doc_opt = self.documents.remove(id).map(|(_, d)| d);
 
         let doc = match doc_opt {
@@ -852,7 +929,7 @@ impl Collection {
                 if let Some(storage) = &self.storage {
                     let key = format!("doc:{}:{}", self.config.name, id).into_bytes();
                     if let Ok(Some(val_bytes)) = storage.get(&key) {
-                        serde_json::from_slice::<Document>(&val_bytes).map_err(|_| {
+                        super::binary::SlottedBinaryCodec::decode_any(&val_bytes).map_err(|_| {
                             TapisaurusError::DocumentNotFound {
                                 collection: self.config.name.clone(),
                                 id: id.to_string(),
@@ -954,9 +1031,20 @@ impl Collection {
                 .count() as u64;
         }
 
-        self.find(filter, None, None)
-            .map(|docs| docs.len() as u64)
-            .unwrap_or(0)
+        if let Some(storage) = &self.storage {
+            let prefix = format!("doc:{}:", self.config.name).into_bytes();
+            if let Ok(entries) = storage.prefix_scan(&prefix) {
+                self.cache_tracker
+                    .zero_copy_filter_evals
+                    .fetch_add(entries.len() as u64, Ordering::Relaxed);
+                return entries
+                    .into_iter()
+                    .filter(|(_k, v)| super::binary::SlottedBinaryCodec::matches_filter(v, filter))
+                    .count() as u64;
+            }
+        }
+
+        0
     }
 
     // ── Index Operations ─────────────────────────────────────────
@@ -1277,5 +1365,70 @@ mod tests {
         let filter = vec![("category".to_string(), Value::String("electronics".into()))];
         assert_eq!(col.count(&filter), 25);
         assert_eq!(col.count(&[]), 50);
+    }
+
+    #[test]
+    fn test_tiered_hot_cold_cache_and_tpbin001_zero_copy_projection() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Arc::new(
+            crate::storage::engine::StorageEngine::open(crate::storage::engine::StorageConfig {
+                data_dir: dir.path().to_path_buf(),
+                sync_writes: false,
+                enable_wal: true,
+                ..Default::default()
+            })
+            .unwrap(),
+        );
+
+        let col = Collection::with_config_and_storage(
+            CollectionConfig {
+                name: "users".into(),
+                max_memory_documents: Some(5),
+                ..Default::default()
+            },
+            storage.clone(),
+        );
+
+        // Insert 40 documents; RAM cache is capped at 5 while all 40 live in LSM as TPBIN001
+        let mut docs = Vec::with_capacity(40);
+        for i in 0..40 {
+            docs.push(
+                Document::with_id(format!("u_{i}"))
+                    .field("city", if i % 4 == 0 { "KL" } else { "SG" })
+                    .field("score", (i * 100) as i64)
+                    .field("bio", "Large cold payload string that is skipped during zero-copy projection"),
+            );
+        }
+        col.insert_many(docs).unwrap();
+        assert_eq!(col.in_memory_count(), 5);
+        assert_eq!(col.stats().document_count, 40);
+
+        // Verify raw LSM value starts with TPBIN001 magic bytes
+        let raw = storage.get(b"doc:users:u_0").unwrap().unwrap();
+        assert!(raw.starts_with(super::super::binary::SLOTTED_BINARY_MAGIC));
+
+        // Zero-Deserialization cold count & projected query
+        let filter = vec![("city".into(), Value::String("KL".into()))];
+        assert_eq!(col.count(&filter), 10);
+
+        let projected = col
+            .find_projected(&filter, &["score"], Some(5), Some(0))
+            .unwrap();
+        assert_eq!(projected.len(), 5);
+        assert!(projected[0].get("score").is_some());
+        assert!(projected[0].get("bio").is_none());
+
+        // Fetch cold document u_0 -> promotes into Clock-Pro hot cache
+        let d0 = col.find_by_id("u_0").unwrap();
+        assert_eq!(d0.get("city"), Some(&Value::String("KL".into())));
+        // Second fetch of u_0 is now a hot hit in RAM
+        let _ = col.find_by_id("u_0").unwrap();
+
+        let stats = col.cache_stats();
+        assert!(stats.clock_evictions >= 35);
+        assert!(stats.cold_hits >= 1);
+        assert!(stats.hot_hits >= 1);
+        assert!(stats.zero_copy_filter_evals >= 40);
+        assert_eq!(stats.zero_copy_projections, 5);
     }
 }

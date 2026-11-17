@@ -255,7 +255,9 @@ impl DatabaseContext {
                     let parts: Vec<&str> = key_str.splitn(3, ':').collect();
                     if parts.len() == 3 {
                         let col_name = parts[1];
-                        if let Ok(doc) = serde_json::from_slice::<Document>(&val_bytes) {
+                        if let Ok(doc) =
+                            tapisaurus_core::SlottedBinaryCodec::decode_any(&val_bytes)
+                        {
                             let col = self.get_or_create_collection(col_name);
                             col.load_document(doc);
                         }

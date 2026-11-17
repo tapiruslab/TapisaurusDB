@@ -49,7 +49,10 @@ pub use cluster::{
     DeterministicEpochBatch, DeterministicOp, DeterministicSequencer, DeterministicTxReceipt,
     DeterministicTxSpec, NodeRole, RaftNode, ShardDistribution, ShardRouter,
 };
-pub use document::{Document, DocumentId, Value};
+pub use document::{
+    Document, DocumentId, HotColdCacheStats, HotColdCacheTracker, SlottedBinaryCodec, Value,
+    SLOTTED_BINARY_MAGIC, SLOTTED_BINARY_VERSION,
+};
 pub use error::{TapisaurusError, TapisaurusResult};
 pub use search::{InvertedIndex, SearchResult};
 pub use storage::columnar::{

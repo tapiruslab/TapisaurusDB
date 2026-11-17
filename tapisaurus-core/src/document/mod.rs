@@ -8,10 +8,15 @@
 //! - Auto-generated IDs (UUID v7 — time-sortable)
 //! - Optional schema validation
 
+pub mod binary;
 pub mod collection;
 pub mod index;
 pub mod model;
 
+pub use binary::{
+    HotColdCacheStats, HotColdCacheTracker, SlottedBinaryCodec, SLOTTED_BINARY_MAGIC,
+    SLOTTED_BINARY_VERSION,
+};
 pub use collection::Collection;
 pub use index::{SecondaryIndex, SecondaryIndexDef};
 pub use model::{Document, DocumentId, Value};
