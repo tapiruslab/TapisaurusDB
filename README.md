@@ -1,15 +1,15 @@
-# 🔥 TapisaurusDB — The Universal High-Performance Multi-Model Database Kernel
+# TapisaurusDB — Polyglot Multi-Model Database Server & Cluster Kernel
 
 <div align="center">
 
 [![Rust](https://img.shields.io/badge/rust-1.88+_|__edition_2024-orange.svg?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![Status](https://img.shields.io/badge/status-v0.1.0--Developer_Preview-blue.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
+[![Core Lint](https://img.shields.io/badge/core-unsafe_code_forbidden-brightgreen.svg?style=for-the-badge)](tapisaurus-server/src/lib.rs)
+[![Tests](https://img.shields.io/badge/tests-380%2B_verified-success.svg?style=for-the-badge)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-BSL_1.1-purple.svg?style=for-the-badge)](LICENSE)
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg?style=for-the-badge&logo=githubactions)](https://github.com/tapiruslab/TapisaurusDB/actions)
-[![Audit](https://img.shields.io/badge/audit-Grade_A+_(98.5%2F100)-success.svg?style=for-the-badge)](CHANGELOG.md)
 [![Security](https://img.shields.io/badge/security-EdDSA_Ed25519_%7C_AES--256--GCM-red.svg?style=for-the-badge)](SECURITY.md)
 [![Protocols](https://img.shields.io/badge/gateways-MySQL_%7C_PostgreSQL_%7C_MongoDB_%7C_gRPC_%7C_REST-cyan.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
-[![Architecture](https://img.shields.io/badge/consensus-Raft_%7C_CRDT_Geo_Replication-purple.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
+[![Architecture](https://img.shields.io/badge/consensus-Raft_%7C_Calvin_Deterministic_%7C_CRDT-purple.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
 
 <br/>
 
@@ -220,19 +220,21 @@ TapisaurusDB is engineered not only for laboratory speed, but for **uncompromisi
 
 > 📖 **Full Engineering Specification:** For in-depth architectural details, configuration parameters, and Kubernetes StatefulSet templates, see [**docs/PRODUCTION_STANDARDS_AND_OPERATIONAL_HARDENING.md**](docs/PRODUCTION_STANDARDS_AND_OPERATIONAL_HARDENING.md) and [**docs/ENTERPRISE_STANDARDS.md**](docs/ENTERPRISE_STANDARDS.md).
 
-### 🏛️ Production Audit Hardening (Grade A+, Score: 98.5/100)
+### 🏛️ Systems Engineering & Storage Architecture Hardening
 
-Prior to enterprise acquisition review, TapisaurusDB underwent an exhaustive systems engineering audit across storage, concurrency, consensus, vector search, and security layers. **All 14 identified architectural enhancements have been fully implemented and verified**:
+TapisaurusDB enforces `#![forbid(unsafe_code)]` across its server and query crates, verified by **380+ unit, MVCC SSI, Raft, and chaos tests** across storage, concurrency, consensus, vector search, and security layers:
 
 #### 1. 💾 Storage Engine & Zero-Data-Loss Durability
-- **Lock-Free MemTable SkipList (`crossbeam_skiplist::SkipMap`)**: Replaced coarse `RwLock<BTreeMap>` with lock-free skip lists. Multiple threads insert concurrently with zero writer-lock contention under 100K+ req/s.
-- **Guaranteed WAL fsync Durability (`file.sync_data()`)**: Replaced userspace `flush()` with low-overhead OS `sync_data()`. Guarantees zero data loss across power cuts, kernel panics, or ungraceful terminations.
+- **Lock-Free MemTable SkipList (`crossbeam_skiplist::SkipMap`)**: Replaced coarse `RwLock<BTreeMap>` with lock-free skip lists. Multiple threads insert concurrently with zero writer-lock contention (`81,141 ops/s` multi-thread buffered WAL, `363,016 rows/s` batch fsync).
+- **Guaranteed WAL fsync Durability (`file.sync_data()`)**: Configurable OS `sync_data()` via `StorageConfig::sync_writes`. Guarantees crash durability across power cuts, kernel panics, or ungraceful terminations.
 - **Native LZ4 SSTable Compression**: Frame-header compressed blocks enabled by default, delivering **50%–70% disk space reduction** with hardware-assisted streaming decompression.
 - **Sparse-Index Prefix Scan ($O(\log N + M)$)**: Direct sparse index seek with early termination as soon as SSTable keys exceed the prefix range, eliminating expensive full SSTable scans.
 - **Sharded ARC Block Cache (`ShardedArcCache`)**: 16 independently locked mutex shards eliminating cache lock contention under multi-threaded parallel read workloads.
+- **HTAP Columnar Store (`TPHTAP01`)**: Morsel-sized (`2,048` rows) columnar stripes with per-stripe `min`/`max`/`null_count` Zone-Map predicate pushdown, vectorized `SUM` / `GROUP BY`, and LZ4 + CRC32 disk persistence (`ANALYZE <collection>`).
 
-#### 2. ⏱️ Transactions & MVCC Concurrency
-- **Watermark-Based MVCC Garbage Collection**: Automatic GC prunes historical versions older than the `oldest_active_snapshot` watermark with a 50,000 emergency safety cap, completely preventing unbounded MVCC memory leaks during long-running analytical queries.
+#### 2. ⏱️ Transactions, MVCC & Deterministic Sharding
+- **Watermark-Based MVCC Garbage Collection**: Automatic GC prunes historical versions older than the `oldest_active_snapshot` watermark with a 50,000 emergency safety cap, preventing unbounded MVCC memory growth during long-running analytical queries.
+- **Calvin-Style Deterministic Multi-Shard Sequencer (`DeterministicSequencer`)**: Sequences cross-shard transactions (`Put`, `Add`, conditional `Transfer`) through the Raft log first and executes them in canonical `(shard_slot, key)` order without Two-Phase Commit (`2PC`) network lock roundtrips or distributed deadlocks.
 
 #### 3. 🌐 Distributed Consensus & Raft Clustering
 - **$O(1)$ Raft Log Index Lookup**: Direct arithmetic vector index lookup replacing $O(N)$ linear scans across Raft log entries.
@@ -240,10 +242,12 @@ Prior to enterprise acquisition review, TapisaurusDB underwent an exhaustive sys
 - **Follower-First Cluster Startup**: Multi-node clusters boot directly into `Follower` state, eliminating split-brain election hazards on node reboot.
 - **Commit Index Reboot Recovery**: Reboots safely restore `commit_index = initial_snapshot_index` strictly adhering to textbook Raft invariants.
 
-#### 4. 🤖 Vector Search & Graph Persistence
-- **Binary HNSW Graph Format (`TPSHNSW1`)**: Compact binary persistence encoding raw 4-byte LE IEEE 754 floats. Index files are **5x–8x smaller** and load **50x faster** than legacy JSON format, with automatic backwards-compatible JSON fallback.
+#### 4. 🤖 Vector Search, SSD DiskANN & Graph Persistence
+- **Binary HNSW Graph Format (`TPSHNSW1`)**: Compact binary persistence encoding raw 4-byte LE IEEE 754 floats with dense L1-cache-friendly visited bitsets (`421.60 µs` `p50` search).
+- **SSD-Resident Vamana / DiskANN (`TPDANN01`)**: Single-layer $\alpha$-RNG Vamana disk graph (`alpha = 1.2`) paired with an in-memory 1-bit Binary Quantized (`32x` smaller) routing directory and hot LSM delta buffer, queryable directly via `FIND ... VECTOR NEAR [...] USING INDEX '<dann_idx>'`.
 
-#### 5. 🔒 Security, Cryptography & Gateway Rate Limiting
+#### 5. 🔒 Security, Sandboxed WASM Triggers & Gateway Rate Limiting
+- **Sandboxed WebAssembly (`\0asm`) UDF & In-Transaction Triggers (`WasmUdfRegistry`)**: Deterministic, fuel-metered (`DEFAULT_WASM_FUEL = 10,000`) WebAssembly v1 stack VM executing `ValidateField` and `ComputeField` triggers atomically during `INSERT` and `UPDATE` before WAL commit.
 - **Strict IP Rate Limiter**: Built-in concurrent `DashMap` rate limiter on `/api/auth/login` (5 attempts / 60-second window) stopping distributed credential stuffing.
 - **HKDF-SHA256 Key Derivation**: Upgraded cryptographic passphrases to HMAC-based Extract-and-Expand Key Derivation (RFC 5869) for AES-256-GCM storage encryption.
 - **Global Gateway Governor**: Semaphore-based connection cap uniformly enforced across MySQL (3306), PostgreSQL (5432), and MongoDB (27017) wire protocols.

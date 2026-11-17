@@ -140,6 +140,11 @@ impl DeterministicSequencer {
         self.shard_state.read().get(key).copied()
     }
 
+    /// Return a snapshot of all committed key-value balances in the deterministic sequencer
+    pub fn snapshot_state(&self) -> BTreeMap<String, i64> {
+        self.shard_state.read().clone()
+    }
+
     /// Seal the current pending queue into a `DeterministicEpochBatch`, propose it to `RaftNode`,
     /// and execute all transactions in canonical lock order without 2PC.
     pub fn flush_epoch(&self) -> Result<Vec<DeterministicTxReceipt>, String> {

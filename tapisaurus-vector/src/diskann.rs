@@ -108,7 +108,7 @@ impl Ord for BeamCandidate {
 
 /// Hybrid LSM + SSD-Resident Vamana (`DiskANN`) Vector Index
 pub struct DiskAnnIndex {
-    config: DiskAnnConfig,
+    pub config: DiskAnnConfig,
     /// Hot in-memory buffer for real-time OLTP inserts/updates before compaction to disk
     hot_buffer: HashMap<String, Vec<f32>>,
     /// Tombstone set for deleted document IDs

@@ -36,6 +36,9 @@ pub struct DatabaseContext {
     active_txns:
         DashMap<String, Arc<parking_lot::Mutex<tapisaurus_core::transaction::mvcc::Transaction>>>,
     vector_indexes: DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::HnswIndex>>>,
+    diskann_indexes: DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::DiskAnnIndex>>>,
+    htap_tables: DashMap<String, Arc<parking_lot::RwLock<tapisaurus_core::HtapColumnarTable>>>,
+    deterministic_sequencer: Arc<tapisaurus_core::DeterministicSequencer>,
     graph_store: Arc<parking_lot::RwLock<tapisaurus_graph::GraphStore>>,
     semantic_cache: Arc<tapisaurus_graph::SemanticCache>,
     collection_stats: DashMap<String, crate::optimizer::TableStatistics>,
@@ -50,6 +53,10 @@ impl Default for DatabaseContext {
         ));
         let shards = Arc::new(tapisaurus_core::cluster::ShardRouter::new());
         shards.register_node("node_1", "127.0.0.1:27018");
+        let deterministic_sequencer = Arc::new(tapisaurus_core::DeterministicSequencer::new(
+            shards.clone(),
+            raft.clone(),
+        ));
 
         Self {
             collections: DashMap::new(),
@@ -60,6 +67,9 @@ impl Default for DatabaseContext {
             tx_manager: Arc::new(tapisaurus_core::transaction::mvcc::TransactionManager::new()),
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
+            diskann_indexes: DashMap::new(),
+            htap_tables: DashMap::new(),
+            deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
@@ -81,16 +91,24 @@ impl DatabaseContext {
 
         let shards = Arc::new(tapisaurus_core::cluster::ShardRouter::new());
         shards.register_node(node_id, address);
+        let raft = Arc::new(tapisaurus_core::cluster::RaftNode::new(node_id, address));
+        let deterministic_sequencer = Arc::new(tapisaurus_core::DeterministicSequencer::new(
+            shards.clone(),
+            raft.clone(),
+        ));
 
         let ctx = Self {
             collections: DashMap::new(),
             bus: Arc::new(ChangeStreamBus::new()),
-            raft: Arc::new(tapisaurus_core::cluster::RaftNode::new(node_id, address)),
+            raft,
             shards,
             storage: Some(storage),
             tx_manager: Arc::new(tapisaurus_core::transaction::mvcc::TransactionManager::new()),
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
+            diskann_indexes: DashMap::new(),
+            htap_tables: DashMap::new(),
+            deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
@@ -110,6 +128,10 @@ impl DatabaseContext {
         ));
         let shards = Arc::new(tapisaurus_core::cluster::ShardRouter::new());
         shards.register_node("node_1", "127.0.0.1:27018");
+        let deterministic_sequencer = Arc::new(tapisaurus_core::DeterministicSequencer::new(
+            shards.clone(),
+            raft.clone(),
+        ));
 
         let ctx = Self {
             collections: DashMap::new(),
@@ -120,6 +142,9 @@ impl DatabaseContext {
             tx_manager: Arc::new(tapisaurus_core::transaction::mvcc::TransactionManager::new()),
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
+            diskann_indexes: DashMap::new(),
+            htap_tables: DashMap::new(),
+            deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
@@ -138,6 +163,10 @@ impl DatabaseContext {
         ));
         let shards = Arc::new(tapisaurus_core::cluster::ShardRouter::new());
         shards.register_node("node_1", "127.0.0.1:27018");
+        let deterministic_sequencer = Arc::new(tapisaurus_core::DeterministicSequencer::new(
+            shards.clone(),
+            raft.clone(),
+        ));
 
         let ctx = Self {
             collections: DashMap::new(),
@@ -148,6 +177,9 @@ impl DatabaseContext {
             tx_manager: Arc::new(tapisaurus_core::transaction::mvcc::TransactionManager::new()),
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
+            diskann_indexes: DashMap::new(),
+            htap_tables: DashMap::new(),
+            deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
@@ -167,6 +199,10 @@ impl DatabaseContext {
         let raft = Arc::new(tapisaurus_core::cluster::RaftNode::new(node_id, address));
         let shards = Arc::new(tapisaurus_core::cluster::ShardRouter::new());
         shards.register_node(node_id, address);
+        let deterministic_sequencer = Arc::new(tapisaurus_core::DeterministicSequencer::new(
+            shards.clone(),
+            raft.clone(),
+        ));
 
         let ctx = Self {
             collections: DashMap::new(),
@@ -177,6 +213,9 @@ impl DatabaseContext {
             tx_manager: Arc::new(tapisaurus_core::transaction::mvcc::TransactionManager::new()),
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
+            diskann_indexes: DashMap::new(),
+            htap_tables: DashMap::new(),
+            deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
@@ -468,6 +507,106 @@ impl DatabaseContext {
         &self.vector_indexes
     }
 
+    /// Access SSD-resident DiskANN (`TPDANN01`) vector indexes
+    pub fn diskann_indexes(
+        &self,
+    ) -> &DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::DiskAnnIndex>>> {
+        &self.diskann_indexes
+    }
+
+    /// Access HTAP (`TPHTAP01`) columnar stripe tables
+    pub fn htap_tables(
+        &self,
+    ) -> &DashMap<String, Arc<parking_lot::RwLock<tapisaurus_core::HtapColumnarTable>>> {
+        &self.htap_tables
+    }
+
+    /// Access the Calvin-style deterministic multi-shard transaction sequencer
+    pub fn deterministic_sequencer(&self) -> Arc<tapisaurus_core::DeterministicSequencer> {
+        self.deterministic_sequencer.clone()
+    }
+
+    /// Build or refresh an HTAP (`TPHTAP01`) striped columnar table from a collection's documents
+    pub fn build_htap_columnar(
+        &self,
+        collection: &str,
+        stripe_rows: usize,
+    ) -> Result<usize, String> {
+        let col = self.get_or_create_collection(collection);
+        let docs = col.find_all(None);
+        let mut json_docs = Vec::with_capacity(docs.len());
+        for doc in &docs {
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "_id".to_string(),
+                serde_json::Value::String(doc.id.as_str().to_string()),
+            );
+            for (k, v) in &doc.fields {
+                if let Ok(jv) = serde_json::to_value(v) {
+                    map.insert(k.clone(), jv);
+                }
+            }
+            json_docs.push(serde_json::Value::Object(map));
+        }
+        let htap =
+            tapisaurus_core::HtapColumnarTable::from_json_documents(&json_docs, stripe_rows)?;
+        let stripe_count = htap.stripes.len();
+        self.htap_tables.insert(
+            collection.to_string(),
+            Arc::new(parking_lot::RwLock::new(htap)),
+        );
+        Ok(stripe_count)
+    }
+
+    /// Execute a Zone-Map pruned vectorized `SUM` over a collection's HTAP columnar table
+    /// (building it on demand with 2,048-row stripes if not yet materialized).
+    pub fn query_htap_sum(
+        &self,
+        collection: &str,
+        target_col: &str,
+        pred_col: &str,
+        op: tapisaurus_core::ZonePredicateOp,
+        threshold: f64,
+    ) -> Result<(f64, usize, usize), String> {
+        if !self.htap_tables.contains_key(collection) {
+            self.build_htap_columnar(collection, 2048)?;
+        }
+        let table_lock = self
+            .htap_tables
+            .get(collection)
+            .ok_or_else(|| format!("HTAP table for '{collection}' not found"))?;
+        let table = table_lock.read();
+        Ok(table.sum_filtered(target_col, pred_col, op, threshold))
+    }
+
+    /// Sequence pending deterministic multi-shard transactions through Raft, execute them in
+    /// canonical `(shard_slot, key)` order without 2PC, and materialize committed balances into `collection`.
+    pub fn commit_deterministic_epoch(
+        &self,
+        collection: &str,
+        balance_field: &str,
+    ) -> Result<Vec<tapisaurus_core::DeterministicTxReceipt>, String> {
+        let receipts = self.deterministic_sequencer.flush_epoch()?;
+        if receipts.iter().any(|r| r.committed) {
+            let col = self.get_or_create_collection(collection);
+            let snapshot = self.deterministic_sequencer.snapshot_state();
+            for (key, val) in snapshot {
+                if col.find_by_id(&key).is_ok() {
+                    let field_name = balance_field.to_string();
+                    let _ = col.update_by_id(&key, move |doc| {
+                        doc.set(field_name, Value::Integer(val));
+                    });
+                } else {
+                    let mut doc = Document::new();
+                    doc.set("_id", key);
+                    doc.set(balance_field, Value::Integer(val));
+                    let _ = col.insert(doc);
+                }
+            }
+        }
+        Ok(receipts)
+    }
+
     /// Access knowledge graph store
     pub fn graph_store(&self) -> Arc<parking_lot::RwLock<tapisaurus_graph::GraphStore>> {
         self.graph_store.clone()
@@ -503,6 +642,7 @@ impl DatabaseContext {
         let stats = crate::optimizer::TableStatistics::analyze(collection, &docs);
         self.collection_stats
             .insert(collection.to_string(), stats.clone());
+        let _ = self.build_htap_columnar(collection, 2048);
         stats
     }
 
@@ -1190,11 +1330,23 @@ impl DatabaseContext {
 
                 // Vector search ranking if specified
                 if let Some(v_clause) = vector_search {
-                    // Check if an accelerated HNSW index exists:
+                    // Check if an accelerated HNSW or DiskANN index exists:
                     // 1. Check v_clause.index_name if explicitly provided
                     // 2. Otherwise check collection name
                     // 3. Otherwise if there is exactly 1 index registered, use it as fallback
-                    let resolved_idx_opt = if let Some(ref custom_idx) = v_clause.index_name {
+                    let resolved_diskann_opt = if let Some(ref custom_idx) = v_clause.index_name {
+                        self.diskann_indexes
+                            .get(custom_idx)
+                            .map(|entry| entry.value().clone())
+                    } else if let Some(idx_lock) = self.diskann_indexes.get(&collection) {
+                        Some(idx_lock.clone())
+                    } else {
+                        None
+                    };
+
+                    let resolved_idx_opt = if resolved_diskann_opt.is_some() {
+                        None
+                    } else if let Some(ref custom_idx) = v_clause.index_name {
                         if let Some(idx_lock) = self.vector_indexes.get(custom_idx) {
                             Some(idx_lock.clone())
                         } else {
@@ -1211,7 +1363,34 @@ impl DatabaseContext {
                         None
                     };
 
-                    if let Some(idx_lock) = resolved_idx_opt {
+                    if let Some(diskann_lock) = resolved_diskann_opt {
+                        let idx = diskann_lock.read();
+                        if v_clause.vector.len() != idx.config.dimensions {
+                            return Err(format!(
+                                "Query vector dimension mismatch: expected {}, got {}",
+                                idx.config.dimensions,
+                                v_clause.vector.len()
+                            ));
+                        }
+                        let candidate_k = if filter.is_some() || traverse.is_some() {
+                            std::cmp::max(v_clause.top_k * 10, 100)
+                                .min(idx.len().max(v_clause.top_k))
+                        } else {
+                            v_clause.top_k
+                        };
+                        let hits = idx.search(&v_clause.vector, candidate_k)?;
+                        let id_rank: std::collections::HashMap<String, usize> = hits
+                            .into_iter()
+                            .enumerate()
+                            .map(|(rank, hit)| (hit.id, rank))
+                            .collect();
+
+                        filtered.retain(|d| id_rank.contains_key(d.id.as_str()));
+                        filtered.sort_by_key(|d| {
+                            id_rank.get(d.id.as_str()).copied().unwrap_or(usize::MAX)
+                        });
+                        filtered.truncate(v_clause.top_k);
+                    } else if let Some(idx_lock) = resolved_idx_opt {
                         let idx = idx_lock.read();
                         if v_clause.vector.len() != idx.config.dimensions {
                             return Err(format!(
@@ -1567,41 +1746,57 @@ impl DatabaseContext {
                         updates_map.insert(k.clone(), v.clone());
                     }
 
-                    let res = col.update_by_id(&id, |doc| {
-                        for (k, v) in &updates {
-                            if let Value::String(s) = v {
-                                let trimmed_s = s.trim();
-                                if let Some(rest) = trimmed_s.strip_prefix(k.as_str()) {
-                                    let rest = rest.trim();
-                                    if let Some(num_str) = rest.strip_prefix('+') {
-                                        if let Ok(delta) = num_str.trim().parse::<i64>() {
-                                            let cur =
-                                                doc.get(k).and_then(|x| x.as_i64()).unwrap_or(0);
-                                            doc.set(k.clone(), Value::Integer(cur + delta));
-                                            continue;
-                                        } else if let Ok(delta) = num_str.trim().parse::<f64>() {
-                                            let cur =
-                                                doc.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
-                                            doc.set(k.clone(), Value::Float(cur + delta));
-                                            continue;
-                                        }
-                                    } else if let Some(num_str) = rest.strip_prefix('-') {
-                                        if let Ok(delta) = num_str.trim().parse::<i64>() {
-                                            let cur =
-                                                doc.get(k).and_then(|x| x.as_i64()).unwrap_or(0);
-                                            doc.set(k.clone(), Value::Integer(cur - delta));
-                                            continue;
-                                        } else if let Ok(delta) = num_str.trim().parse::<f64>() {
-                                            let cur =
-                                                doc.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
-                                            doc.set(k.clone(), Value::Float(cur - delta));
-                                            continue;
-                                        }
+                    let mut candidate_doc = col.find_by_id(&id).map_err(|e| e.to_string())?;
+                    for (k, v) in &updates {
+                        if let Value::String(s) = v {
+                            let trimmed_s = s.trim();
+                            if let Some(rest) = trimmed_s.strip_prefix(k.as_str()) {
+                                let rest = rest.trim();
+                                if let Some(num_str) = rest.strip_prefix('+') {
+                                    if let Ok(delta) = num_str.trim().parse::<i64>() {
+                                        let cur = candidate_doc
+                                            .get(k)
+                                            .and_then(|x| x.as_i64())
+                                            .unwrap_or(0);
+                                        candidate_doc.set(k.clone(), Value::Integer(cur + delta));
+                                        continue;
+                                    } else if let Ok(delta) = num_str.trim().parse::<f64>() {
+                                        let cur = candidate_doc
+                                            .get(k)
+                                            .and_then(|x| x.as_f64())
+                                            .unwrap_or(0.0);
+                                        candidate_doc.set(k.clone(), Value::Float(cur + delta));
+                                        continue;
+                                    }
+                                } else if let Some(num_str) = rest.strip_prefix('-') {
+                                    if let Ok(delta) = num_str.trim().parse::<i64>() {
+                                        let cur = candidate_doc
+                                            .get(k)
+                                            .and_then(|x| x.as_i64())
+                                            .unwrap_or(0);
+                                        candidate_doc.set(k.clone(), Value::Integer(cur - delta));
+                                        continue;
+                                    } else if let Ok(delta) = num_str.trim().parse::<f64>() {
+                                        let cur = candidate_doc
+                                            .get(k)
+                                            .and_then(|x| x.as_f64())
+                                            .unwrap_or(0.0);
+                                        candidate_doc.set(k.clone(), Value::Float(cur - delta));
+                                        continue;
                                     }
                                 }
                             }
-                            doc.set(k.clone(), v.clone());
                         }
+                        candidate_doc.set(k.clone(), v.clone());
+                    }
+
+                    // Enforce any sandboxed WebAssembly triggers registered on this collection before persisting
+                    self.wasm_registry
+                        .apply_triggers(&collection, &mut candidate_doc)?;
+
+                    let validated_fields = candidate_doc.fields.clone();
+                    let res = col.update_by_id(&id, move |doc| {
+                        doc.fields = validated_fields;
                     });
                     if res.is_ok() {
                         let updated_doc = col.find_by_id(&id).ok();
@@ -2245,5 +2440,108 @@ mod tests {
             .find_by_id("p_100")
             .unwrap();
         assert_eq!(doc.get("total_xp"), Some(&Value::Integer(900)));
+
+        // Also verify WASM trigger recalculates on SQL UPDATE
+        let upd = parse_query("UPDATE players SET base_xp = 700 WHERE _id = 'p_100'").unwrap();
+        ctx.execute(upd).unwrap();
+        let updated = ctx
+            .get_or_create_collection("players")
+            .find_by_id("p_100")
+            .unwrap();
+        assert_eq!(updated.get("total_xp"), Some(&Value::Integer(1400)));
+    }
+
+    #[test]
+    fn test_executor_diskann_htap_and_deterministic_epoch_wired() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ctx = DatabaseContext::new();
+
+        // 1. Insert documents into 'telemetry'
+        for i in 0..100i64 {
+            let stmt = parse_query(&format!(
+                "INSERT INTO telemetry (_id, seq, reading) VALUES ('t_{i}', {i}, {})",
+                i * 10
+            ))
+            .unwrap();
+            ctx.execute(stmt).unwrap();
+        }
+
+        // 2. ANALYZE builds HTAP columnar stripes automatically; verify Zone-Map pruned SUM
+        ctx.execute(parse_query("ANALYZE telemetry").unwrap())
+            .unwrap();
+        let (sum, scanned, _pruned) = ctx
+            .query_htap_sum(
+                "telemetry",
+                "reading",
+                "seq",
+                tapisaurus_core::ZonePredicateOp::Gte,
+                90.0,
+            )
+            .unwrap();
+        // sum of i*10 for i in 90..100 = 10 * (90+91+...+99) = 10 * 945 = 9450
+        assert_eq!(sum as i64, 9450);
+        assert!(scanned >= 1);
+
+        // 3. Register an SSD DiskANN index and execute FIND ... VECTOR SEARCH USING INDEX
+        let dann_path = temp_dir.path().join("telemetry.dann");
+        let mut dann = tapisaurus_vector::DiskAnnIndex::new(tapisaurus_vector::DiskAnnConfig::new(
+            4, &dann_path,
+        ));
+        dann.insert("t_10", vec![1.0, 0.0, 0.0, 0.0]).unwrap();
+        dann.insert("t_20", vec![0.0, 1.0, 0.0, 0.0]).unwrap();
+        dann.flush_to_disk().unwrap();
+        ctx.diskann_indexes().insert(
+            "dann_idx".to_string(),
+            Arc::new(parking_lot::RwLock::new(dann)),
+        );
+
+        let v_stmt = parse_query(
+            "FIND telemetry VECTOR NEAR [1.0, 0.0, 0.0, 0.0] TOP 1 USING INDEX 'dann_idx'",
+        )
+        .unwrap();
+        match ctx.execute(v_stmt).unwrap() {
+            QueryResult::Documents(docs) => {
+                assert_eq!(docs.len(), 1);
+                assert_eq!(docs[0].id.as_str(), "t_10");
+            }
+            _ => panic!("Expected Documents from DiskANN vector search"),
+        }
+
+        // 4. Execute Calvin deterministic multi-shard transactions and materialize into 'wallets'
+        ctx.deterministic_sequencer()
+            .submit(tapisaurus_core::DeterministicTxSpec::new(
+                "tx_1",
+                vec![
+                    tapisaurus_core::DeterministicOp::Put {
+                        key: "w_alice".into(),
+                        value: 1000,
+                    },
+                    tapisaurus_core::DeterministicOp::Put {
+                        key: "w_bob".into(),
+                        value: 500,
+                    },
+                    tapisaurus_core::DeterministicOp::Transfer {
+                        from_key: "w_alice".into(),
+                        to_key: "w_bob".into(),
+                        amount: 250,
+                        min_balance: 0,
+                    },
+                ],
+            ));
+        let receipts = ctx
+            .commit_deterministic_epoch("wallets", "balance")
+            .unwrap();
+        assert_eq!(receipts.len(), 1);
+        assert!(receipts[0].committed);
+        let alice = ctx
+            .get_or_create_collection("wallets")
+            .find_by_id("w_alice")
+            .unwrap();
+        let bob = ctx
+            .get_or_create_collection("wallets")
+            .find_by_id("w_bob")
+            .unwrap();
+        assert_eq!(alice.get("balance"), Some(&Value::Integer(750)));
+        assert_eq!(bob.get("balance"), Some(&Value::Integer(750)));
     }
 }

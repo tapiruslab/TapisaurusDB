@@ -191,6 +191,19 @@ pub fn parse_query(input: &str) -> Result<Statement, String> {
         return parse_alter_table(trimmed);
     }
 
+    if upper.starts_with("ANALYZE ") || upper.starts_with("ANALYSE ") {
+        let mut raw_col = trimmed[7..].trim().trim_end_matches(';').trim();
+        if raw_col.to_uppercase().starts_with("TABLE ") {
+            raw_col = raw_col[6..].trim();
+        } else if raw_col.to_uppercase().starts_with("COLLECTION ") {
+            raw_col = raw_col[11..].trim();
+        }
+        let collection = raw_col
+            .trim_matches(|c| c == '`' || c == '"' || c == '\'')
+            .to_string();
+        return Ok(Statement::Analyze { collection });
+    }
+
     Err(format!("Unrecognized query syntax: '{trimmed}'"))
 }
 
