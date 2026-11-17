@@ -444,6 +444,29 @@ impl GraphStore {
         self.vertices.keys().cloned().collect()
     }
 
+    /// Return all vertices in the graph store
+    pub fn all_vertices(&self) -> Vec<Vertex> {
+        let mut list: Vec<Vertex> = self.vertices.values().cloned().collect();
+        list.sort_by(|a, b| a.id.cmp(&b.id));
+        list
+    }
+
+    /// Return all directed edges in the graph store
+    pub fn all_edges(&self) -> Vec<Edge> {
+        let mut list: Vec<Edge> = self
+            .outgoing
+            .values()
+            .flat_map(|edges| edges.iter().cloned())
+            .collect();
+        list.sort_by(|a, b| {
+            a.from
+                .cmp(&b.from)
+                .then_with(|| a.relation.cmp(&b.relation))
+                .then_with(|| a.to.cmp(&b.to))
+        });
+        list
+    }
+
     /// Find vertices matching a given label
     pub fn find_vertices_by_label(&self, label: &str) -> Vec<String> {
         self.vertices

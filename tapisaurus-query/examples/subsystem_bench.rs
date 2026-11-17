@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 
 use tapisaurus_core::storage::engine::{StorageConfig, StorageEngine};
 use tapisaurus_core::{
-    DeterministicOp, DeterministicTxSpec, Document, WasmSandboxModule, WasmTriggerAction,
-    ZonePredicateOp,
+    DeterministicOp, DeterministicTxSpec, Document, TapirSyncBundle, TapirSyncHlc, TapirSyncRecord,
+    WasmSandboxModule, WasmTriggerAction, ZonePredicateOp,
 };
 use tapisaurus_graph::{Edge, GraphStore, Vertex};
 use tapisaurus_query::{parse_query, DatabaseContext};
@@ -297,5 +297,34 @@ fn main() {
         "[6] HTAP ZoneMap SUM & Calvin Epoch      : {:>6.2} µs (sum={sum:.0}, scanned={scanned}, pruned={pruned}, calvin_committed={})",
         htap_us,
         receipts[0].committed
+    );
+
+    // 7. TapirSync (TPSYNC01) Edge-to-Cloud Incremental Replication Bundle (500 records)
+    let mut sync_records = Vec::with_capacity(500);
+    let mut hlc = TapirSyncHlc::new("edge-kl-01", 1_700_000_000_000);
+    for i in 0..500 {
+        let stamp = hlc.tick(1_700_000_000_000 + i as u64);
+        sync_records.push(TapirSyncRecord::TableRowUpsert {
+            table: "edge_telemetry".into(),
+            row_id: i.to_string(),
+            columns: std::collections::BTreeMap::from([
+                ("id".into(), serde_json::json!(i)),
+                ("voltage".into(), serde_json::json!(3.7 + (i as f64) * 0.001)),
+            ]),
+            hlc: stamp,
+        });
+    }
+    let t_sync = Instant::now();
+    let bundle = TapirSyncBundle::new("edge-kl-01", 0, 1, hlc, sync_records, None);
+    let wire_bytes = bundle.to_bytes().unwrap();
+    let decoded = TapirSyncBundle::from_bytes(&wire_bytes).unwrap();
+    let ack = ctx.tapirsync_apply_bundle(&decoded).unwrap();
+    let sync_dur = t_sync.elapsed();
+    println!(
+        "[7] TapirSync (TPSYNC01) 500 Edge Records: {:>8.2} ms | {:>10.0} recs/s | Wire: {} KB (applied={})",
+        sync_dur.as_secs_f64() * 1000.0,
+        500.0 / sync_dur.as_secs_f64(),
+        wire_bytes.len() / 1024,
+        ack.records_applied
     );
 }

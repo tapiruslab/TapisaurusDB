@@ -43,6 +43,7 @@ pub struct DatabaseContext {
     semantic_cache: Arc<tapisaurus_graph::SemanticCache>,
     collection_stats: DashMap<String, crate::optimizer::TableStatistics>,
     wasm_registry: Arc<tapisaurus_core::WasmUdfRegistry>,
+    tapirsync_registry: Arc<tapisaurus_core::TapirSyncRegistry>,
 }
 
 impl Default for DatabaseContext {
@@ -74,6 +75,7 @@ impl Default for DatabaseContext {
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
             wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
+            tapirsync_registry: Arc::new(tapisaurus_core::TapirSyncRegistry::new("node_1")),
         }
     }
 }
@@ -113,6 +115,7 @@ impl DatabaseContext {
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
             wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
+            tapirsync_registry: Arc::new(tapisaurus_core::TapirSyncRegistry::new(node_id)),
         };
         ctx.recover_from_storage()?;
         Ok(ctx)
@@ -149,6 +152,7 @@ impl DatabaseContext {
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
             wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
+            tapirsync_registry: Arc::new(tapisaurus_core::TapirSyncRegistry::new("node_1")),
         };
 
         ctx.recover_from_storage()?;
@@ -184,6 +188,7 @@ impl DatabaseContext {
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
             wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
+            tapirsync_registry: Arc::new(tapisaurus_core::TapirSyncRegistry::new("node_1")),
         };
 
         let _ = ctx.recover_from_storage();
@@ -220,6 +225,7 @@ impl DatabaseContext {
             semantic_cache: Arc::new(tapisaurus_graph::SemanticCache::default()),
             collection_stats: DashMap::new(),
             wasm_registry: Arc::new(tapisaurus_core::WasmUdfRegistry::new()),
+            tapirsync_registry: Arc::new(tapisaurus_core::TapirSyncRegistry::new(node_id)),
         };
 
         let _ = ctx.recover_from_storage();
@@ -620,6 +626,406 @@ impl DatabaseContext {
     /// Access sandboxed WebAssembly UDF and in-transaction trigger registry
     pub fn wasm_registry(&self) -> Arc<tapisaurus_core::WasmUdfRegistry> {
         self.wasm_registry.clone()
+    }
+
+    /// Access the `TapirSync` (`TPSYNC01`) Edge-to-Cloud replication coordinator
+    pub fn tapirsync_registry(&self) -> Arc<tapisaurus_core::TapirSyncRegistry> {
+        self.tapirsync_registry.clone()
+    }
+
+    /// Apply an incoming `TapirSyncBundle` (`TPSYNC01`) from an edge `.tapir` node into this
+    /// `TapisaurusDB` cluster context with deterministic HLC Last-Write-Wins (LWW) conflict resolution
+    /// and group-committed LSM batch persistence.
+    pub fn tapirsync_apply_bundle(
+        &self,
+        bundle: &tapisaurus_core::TapirSyncBundle,
+    ) -> Result<tapisaurus_core::TapirSyncAck, String> {
+        bundle.verify().map_err(|e| e.to_string())?;
+
+        let mut records_applied = 0usize;
+        let mut conflicts_resolved = 0usize;
+        let mut batched_upserts: BTreeMap<String, BTreeMap<String, Document>> = BTreeMap::new();
+
+        for rec in &bundle.records {
+            if !self.tapirsync_registry.try_accept_record(rec) {
+                conflicts_resolved += 1;
+                continue;
+            }
+
+            match rec {
+                tapisaurus_core::TapirSyncRecord::TableRowUpsert {
+                    table,
+                    row_id,
+                    columns,
+                    ..
+                } => {
+                    let mut doc = Document::with_id(row_id.as_str());
+                    for (k, v) in columns {
+                        if k != "_id" {
+                            doc.set(k.clone(), Value::from(v.clone()));
+                        }
+                    }
+                    self.wasm_registry.apply_triggers(table, &mut doc)?;
+                    batched_upserts
+                        .entry(table.clone())
+                        .or_default()
+                        .insert(row_id.clone(), doc);
+                    records_applied += 1;
+                }
+                tapisaurus_core::TapirSyncRecord::TableRowDelete { table, row_id, .. } => {
+                    if let Some(map) = batched_upserts.get_mut(table) {
+                        map.remove(row_id);
+                    }
+                    let col = self.get_or_create_collection(table);
+                    let _ = col.delete_by_id(row_id);
+                    self.bus
+                        .publish(ChangeEvent::delete(table, row_id.as_str()));
+                    records_applied += 1;
+                }
+                tapisaurus_core::TapirSyncRecord::DocumentUpsert {
+                    collection,
+                    doc_id,
+                    document,
+                    ..
+                } => {
+                    let mut doc = Document::with_id(doc_id.as_str());
+                    if let serde_json::Value::Object(map) = document {
+                        for (k, v) in map {
+                            if k != "_id" {
+                                doc.set(k.clone(), Value::from(v.clone()));
+                            }
+                        }
+                    } else {
+                        doc.set("value", Value::from(document.clone()));
+                    }
+                    self.wasm_registry.apply_triggers(collection, &mut doc)?;
+                    batched_upserts
+                        .entry(collection.clone())
+                        .or_default()
+                        .insert(doc_id.clone(), doc);
+                    records_applied += 1;
+                }
+                tapisaurus_core::TapirSyncRecord::DocumentDelete {
+                    collection, doc_id, ..
+                } => {
+                    if let Some(map) = batched_upserts.get_mut(collection) {
+                        map.remove(doc_id);
+                    }
+                    let col = self.get_or_create_collection(collection);
+                    let _ = col.delete_by_id(doc_id);
+                    self.bus
+                        .publish(ChangeEvent::delete(collection, doc_id.as_str()));
+                    records_applied += 1;
+                }
+                tapisaurus_core::TapirSyncRecord::GraphVertexUpsert {
+                    vertex_id,
+                    label,
+                    properties,
+                    vector,
+                    ..
+                } => {
+                    let mut prop_doc = Document::with_id(vertex_id.as_str());
+                    if let serde_json::Value::Object(map) = properties {
+                        for (k, v) in map {
+                            prop_doc.set(k.clone(), Value::from(v.clone()));
+                        }
+                    }
+                    if let Some(vec) = vector {
+                        prop_doc.set("_vector", Value::Vector(vec.clone()));
+                        if !vec.is_empty() {
+                            let idx_lock = self
+                                .vector_indexes
+                                .entry("_graph_vectors".to_string())
+                                .or_insert_with(|| {
+                                    let cfg = tapisaurus_vector::HnswConfig {
+                                        dimensions: vec.len(),
+                                        ..Default::default()
+                                    };
+                                    Arc::new(parking_lot::RwLock::new(
+                                        tapisaurus_vector::HnswIndex::new(cfg),
+                                    ))
+                                })
+                                .clone();
+                            let _ = idx_lock.write().insert(vertex_id.clone(), vec.clone());
+                        }
+                    }
+                    let vertex = tapisaurus_graph::Vertex::with_properties(
+                        vertex_id.clone(),
+                        label.clone(),
+                        prop_doc,
+                    );
+                    if let Some(storage) = &self.storage {
+                        if let Ok(bytes) = serde_json::to_vec(&vertex) {
+                            let _ = storage.put(format!("graph:v:{vertex_id}").as_bytes(), &bytes);
+                        }
+                    }
+                    self.graph_store.write().add_vertex(vertex);
+                    records_applied += 1;
+                }
+                tapisaurus_core::TapirSyncRecord::GraphEdgeUpsert {
+                    edge_id,
+                    from_id,
+                    to_id,
+                    relation,
+                    weight,
+                    properties,
+                    ..
+                } => {
+                    let mut prop_doc = Document::with_id(edge_id.as_str());
+                    if let serde_json::Value::Object(map) = properties {
+                        for (k, v) in map {
+                            prop_doc.set(k.clone(), Value::from(v.clone()));
+                        }
+                    }
+                    let mut edge = tapisaurus_graph::Edge::with_weight(
+                        from_id.clone(),
+                        to_id.clone(),
+                        relation.clone(),
+                        *weight,
+                    );
+                    edge.properties = prop_doc;
+                    if let Some(storage) = &self.storage {
+                        if let Ok(bytes) = serde_json::to_vec(&edge) {
+                            let _ = storage
+                                .put(format!("graph:e:{from_id}:{relation}:{to_id}").as_bytes(), &bytes);
+                        }
+                    }
+                    self.graph_store.write().add_edge(edge);
+                    records_applied += 1;
+                }
+                tapisaurus_core::TapirSyncRecord::AgentMemoryUpsert {
+                    memory_id,
+                    content,
+                    vector,
+                    importance,
+                    tags,
+                    namespace,
+                    session_id,
+                    created_at,
+                    ..
+                } => {
+                    let mem_id_str = memory_id.to_string();
+                    let mut doc = Document::with_id(mem_id_str.as_str());
+                    doc.set("content", Value::String(content.clone()));
+                    doc.set("importance", Value::Float(*importance as f64));
+                    doc.set(
+                        "tags",
+                        Value::Array(tags.iter().cloned().map(Value::String).collect()),
+                    );
+                    if let Some(ns) = namespace {
+                        doc.set("namespace", Value::String(ns.clone()));
+                    }
+                    if let Some(sid) = session_id {
+                        doc.set("session_id", Value::String(sid.clone()));
+                    }
+                    doc.set("created_at", Value::Integer(*created_at as i64));
+                    if let Some(vec) = vector {
+                        doc.set("vector", Value::Vector(vec.clone()));
+                        if !vec.is_empty() {
+                            let idx_lock = self
+                                .vector_indexes
+                                .entry("_agent_memories_vec".to_string())
+                                .or_insert_with(|| {
+                                    let cfg = tapisaurus_vector::HnswConfig {
+                                        dimensions: vec.len(),
+                                        ..Default::default()
+                                    };
+                                    Arc::new(parking_lot::RwLock::new(
+                                        tapisaurus_vector::HnswIndex::new(cfg),
+                                    ))
+                                })
+                                .clone();
+                            let _ = idx_lock.write().insert(mem_id_str.clone(), vec.clone());
+                        }
+                    }
+                    batched_upserts
+                        .entry("_agent_memories".to_string())
+                        .or_default()
+                        .insert(mem_id_str, doc);
+                    records_applied += 1;
+                }
+            }
+        }
+
+        for (col_name, doc_map) in batched_upserts {
+            if doc_map.is_empty() {
+                continue;
+            }
+            let col = self.get_or_create_collection(&col_name);
+            let mut to_insert = Vec::with_capacity(doc_map.len());
+            for (doc_id, doc) in doc_map {
+                if col.find_by_id(&doc_id).is_ok() {
+                    let _ = col.delete_by_id(&doc_id);
+                }
+                self.bus.publish(ChangeEvent::insert(&col_name, doc.clone()));
+                to_insert.push(doc);
+            }
+            col.insert_many(to_insert).map_err(|e| e.to_string())?;
+        }
+
+        Ok(self
+            .tapirsync_registry
+            .finalize_bundle_push(bundle, records_applied, conflicts_resolved))
+    }
+
+    /// Export a `TapirSyncBundle` (`TPSYNC01`) from this `TapisaurusDB` cluster so an edge
+    /// `.tapir` node (`TapirusDB`) can pull and converge with cloud state.
+    pub fn tapirsync_export_bundle(
+        &self,
+        collections_filter: Option<&[String]>,
+    ) -> Result<tapisaurus_core::TapirSyncBundle, String> {
+        let (base_seq, target_seq) = self.tapirsync_registry.next_export_sequence();
+        let mut records = Vec::new();
+
+        let mut all_cols = self.all_collections();
+        all_cols.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (col_name, col) in all_cols {
+            if let Some(filter) = collections_filter {
+                if !filter.iter().any(|f| f == &col_name) {
+                    continue;
+                }
+            }
+            let mut docs = col.find_all(None);
+            docs.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+
+            if col_name == "_agent_memories" {
+                for doc in docs {
+                    let hlc = self.tapirsync_registry.tick_hlc();
+                    let memory_id = doc
+                        .id
+                        .as_str()
+                        .parse::<u64>()
+                        .unwrap_or_else(|_| u64::from(crc32fast::hash(doc.id.as_str().as_bytes())));
+                    let content = doc
+                        .get("content")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let importance = doc
+                        .get("importance")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.5) as f32;
+                    let tags = doc
+                        .get("tags")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|x| x.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let namespace = doc
+                        .get("namespace")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
+                    let session_id = doc
+                        .get("session_id")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
+                    let created_at = doc
+                        .get("created_at")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0)
+                        .max(0) as u64;
+                    let vector = doc.get("vector").and_then(|v| match v {
+                        Value::Vector(vec) => Some(vec.clone()),
+                        Value::Array(arr) => Some(
+                            arr.iter()
+                                .filter_map(|x| x.as_f64().map(|f| f as f32))
+                                .collect(),
+                        ),
+                        _ => None,
+                    });
+                    records.push(tapisaurus_core::TapirSyncRecord::AgentMemoryUpsert {
+                        memory_id,
+                        content,
+                        vector,
+                        importance,
+                        tags,
+                        namespace,
+                        session_id,
+                        created_at,
+                        hlc,
+                    });
+                }
+            } else {
+                for doc in docs {
+                    let hlc = self.tapirsync_registry.tick_hlc();
+                    let row_id = doc.id.as_str().to_string();
+                    let mut columns = BTreeMap::new();
+                    if let Ok(id_num) = row_id.parse::<i64>() {
+                        columns.insert("id".to_string(), serde_json::json!(id_num));
+                    } else {
+                        columns.insert("id".to_string(), serde_json::json!(row_id));
+                    }
+                    for (k, v) in &doc.fields {
+                        if let Ok(jv) = serde_json::to_value(v) {
+                            columns.insert(k.clone(), jv);
+                        }
+                    }
+                    records.push(tapisaurus_core::TapirSyncRecord::TableRowUpsert {
+                        table: col_name.clone(),
+                        row_id,
+                        columns,
+                        hlc,
+                    });
+                }
+            }
+        }
+
+        if collections_filter.is_none() {
+            let graph = self.graph_store.read();
+            for v in graph.all_vertices() {
+                let hlc = self.tapirsync_registry.tick_hlc();
+                let mut props_map = serde_json::Map::new();
+                let mut vector = None;
+                for (k, val) in &v.properties.fields {
+                    if k == "_vector" {
+                        if let Value::Vector(vec) = val {
+                            vector = Some(vec.clone());
+                        }
+                    } else if let Ok(jv) = serde_json::to_value(val) {
+                        props_map.insert(k.clone(), jv);
+                    }
+                }
+                records.push(tapisaurus_core::TapirSyncRecord::GraphVertexUpsert {
+                    vertex_id: v.id,
+                    label: v.label,
+                    properties: serde_json::Value::Object(props_map),
+                    vector,
+                    hlc,
+                });
+            }
+            for (idx, e) in graph.all_edges().into_iter().enumerate() {
+                let hlc = self.tapirsync_registry.tick_hlc();
+                let mut props_map = serde_json::Map::new();
+                for (k, val) in &e.properties.fields {
+                    if let Ok(jv) = serde_json::to_value(val) {
+                        props_map.insert(k.clone(), jv);
+                    }
+                }
+                records.push(tapisaurus_core::TapirSyncRecord::GraphEdgeUpsert {
+                    edge_id: (idx + 1).to_string(),
+                    from_id: e.from,
+                    to_id: e.to,
+                    relation: e.relation,
+                    weight: e.weight,
+                    properties: serde_json::Value::Object(props_map),
+                    hlc,
+                });
+            }
+        }
+
+        let bundle_hlc = self.tapirsync_registry.tick_hlc();
+        Ok(tapisaurus_core::TapirSyncBundle::new(
+            self.tapirsync_registry.server_node_id(),
+            base_seq,
+            target_seq,
+            bundle_hlc,
+            records,
+            None,
+        ))
     }
 
     /// List all collection names
@@ -2543,5 +2949,129 @@ mod tests {
             .unwrap();
         assert_eq!(alice.get("balance"), Some(&Value::Integer(750)));
         assert_eq!(bob.get("balance"), Some(&Value::Integer(750)));
+    }
+
+    #[test]
+    fn test_tapirsync_edge_to_cloud_roundtrip_and_conflict_resolution() {
+        let ctx = DatabaseContext::new();
+        let hlc_1 = tapisaurus_core::TapirSyncHlc {
+            wall_time_ms: 1700000000000,
+            logical_counter: 1,
+            node_id: "edge-kl-01".to_string(),
+        };
+
+        let records = vec![
+            tapisaurus_core::TapirSyncRecord::TableRowUpsert {
+                table: "edge_sensors".to_string(),
+                row_id: "101".to_string(),
+                columns: BTreeMap::from([
+                    ("id".to_string(), serde_json::json!(101)),
+                    ("site".to_string(), serde_json::json!("Cyberjaya")),
+                    ("temp_c".to_string(), serde_json::json!(28.4)),
+                ]),
+                hlc: hlc_1.clone(),
+            },
+            tapisaurus_core::TapirSyncRecord::GraphVertexUpsert {
+                vertex_id: "10".to_string(),
+                label: "Gateway".to_string(),
+                properties: serde_json::json!({"region": "MY-01"}),
+                vector: Some(vec![1.0, 0.0, 0.0, 0.0]),
+                hlc: hlc_1.clone(),
+            },
+            tapisaurus_core::TapirSyncRecord::GraphVertexUpsert {
+                vertex_id: "20".to_string(),
+                label: "Cluster".to_string(),
+                properties: serde_json::json!({"region": "SG-01"}),
+                vector: None,
+                hlc: hlc_1.clone(),
+            },
+            tapisaurus_core::TapirSyncRecord::GraphEdgeUpsert {
+                edge_id: "1".to_string(),
+                from_id: "10".to_string(),
+                to_id: "20".to_string(),
+                relation: "SYNCS_WITH".to_string(),
+                weight: 0.99,
+                properties: serde_json::json!({}),
+                hlc: hlc_1.clone(),
+            },
+            tapisaurus_core::TapirSyncRecord::AgentMemoryUpsert {
+                memory_id: 77,
+                content: "Edge gateway 10 synced telemetry to SG-01".to_string(),
+                vector: Some(vec![0.9, 0.1, 0.0, 0.0]),
+                importance: 0.85,
+                tags: vec!["tapirsync".to_string(), "edge".to_string()],
+                namespace: Some("iot_fleet".to_string()),
+                session_id: None,
+                created_at: 1700000000,
+                hlc: hlc_1.clone(),
+            },
+        ];
+
+        let bundle = tapisaurus_core::TapirSyncBundle::new(
+            "edge-kl-01",
+            0,
+            1,
+            hlc_1,
+            records,
+            None,
+        );
+        let wire_bytes = bundle.to_bytes().expect("encode TPSYNC01 wire bytes");
+        assert!(wire_bytes.starts_with(tapisaurus_core::TAPIRSYNC_WIRE_MAGIC));
+
+        let decoded =
+            tapisaurus_core::TapirSyncBundle::from_bytes(&wire_bytes).expect("decode TPSYNC01");
+        let ack = ctx
+            .tapirsync_apply_bundle(&decoded)
+            .expect("apply TapirSync bundle");
+        assert!(ack.accepted);
+        assert_eq!(ack.records_applied, 5);
+        assert_eq!(ack.conflicts_resolved, 0);
+
+        // Verify SQL query on synced edge table
+        let stmt = parse_query("SELECT * FROM edge_sensors WHERE _id = '101'").unwrap();
+        match ctx.execute(stmt).unwrap() {
+            QueryResult::Documents(docs) => {
+                assert_eq!(docs.len(), 1);
+                assert_eq!(
+                    docs[0].get("site"),
+                    Some(&Value::String("Cyberjaya".to_string()))
+                );
+            }
+            _ => panic!("Expected Documents"),
+        }
+
+        // Verify HNSW vector search on synced AI Agent Memories
+        let mem_stmt = parse_query(
+            "FIND _agent_memories VECTOR NEAR [0.9, 0.1, 0.0, 0.0] TOP 1 USING INDEX '_agent_memories_vec'",
+        )
+        .unwrap();
+        match ctx.execute(mem_stmt).unwrap() {
+            QueryResult::Documents(docs) => {
+                assert_eq!(docs.len(), 1);
+                assert_eq!(docs[0].id.as_str(), "77");
+            }
+            _ => panic!("Expected synced agent memory document"),
+        }
+
+        // Verify Graph shortest path on synced edge vertices/edges
+        let path = ctx
+            .graph_store()
+            .read()
+            .shortest_path("10", "20")
+            .expect("path exists");
+        assert_eq!(path, vec!["10".to_string(), "20".to_string()]);
+
+        // Verify Cloud -> Edge export bundle roundtrip
+        let exported = ctx.tapirsync_export_bundle(None).expect("export cloud bundle");
+        assert_eq!(exported.records.len(), 5);
+        let exported_bytes = exported.to_bytes().unwrap();
+        let redecoded = tapisaurus_core::TapirSyncBundle::from_bytes(&exported_bytes).unwrap();
+        assert_eq!(redecoded.records.len(), 5);
+
+        // Verify telemetry status summary
+        let summary = ctx.tapirsync_registry().status_summary();
+        assert_eq!(summary.connected_edge_peers.len(), 1);
+        assert_eq!(summary.connected_edge_peers[0].edge_node_id, "edge-kl-01");
+        assert_eq!(summary.total_records_applied, 5);
     }
 }

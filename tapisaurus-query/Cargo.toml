@@ -12,6 +12,7 @@ tapisaurus-vector = { path = "../tapisaurus-vector" }
 tapisaurus-graph = { path = "../tapisaurus-graph" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+crc32fast = { workspace = true }
 dashmap = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }

@@ -11,6 +11,7 @@ pub mod graph;
 pub mod health;
 pub mod metrics;
 pub mod middleware;
+pub mod tapirsync;
 pub mod vector;
 pub mod websocket;
 
@@ -136,6 +137,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/v1/graph/traverse", get(graph::traverse_graph))
         .route("/v1/graph/shortest_path", get(graph::shortest_path))
         .route("/v1/graph/stats", get(graph::graph_stats))
+        .route("/v1/tapirsync/status", get(tapirsync::tapirsync_status))
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),
             middleware::client_auth_middleware,
@@ -144,6 +146,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Write — requires Admin or ReadWrite
     let write_routes = Router::new()
         .route("/v1/query", post(collections::execute_query))
+        .route("/v1/tapirsync/push", post(tapirsync::tapirsync_push))
+        .route("/v1/tapirsync/pull", post(tapirsync::tapirsync_pull))
         .route(
             "/v1/collections/{name}",
             delete(collections::drop_collection_handler),

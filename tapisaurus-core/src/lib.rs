@@ -36,6 +36,7 @@ pub mod error;
 pub mod search;
 pub mod storage;
 pub mod stream;
+pub mod tapirsync;
 pub mod transaction;
 pub mod ttl;
 pub mod wasm_udf;
@@ -57,6 +58,10 @@ pub use storage::columnar::{
 };
 pub use storage::engine::StorageEngine;
 pub use stream::{ChangeEvent, ChangeStreamBus, OperationType};
+pub use tapirsync::{
+    TapirSyncAck, TapirSyncBundle, TapirSyncHlc, TapirSyncPeerStatus, TapirSyncRecord,
+    TapirSyncRegistry, TapirSyncStatusSummary, TAPIRSYNC_PROTOCOL_VERSION, TAPIRSYNC_WIRE_MAGIC,
+};
 pub use ttl::{TtlManager, TtlStats};
 pub use wasm_udf::{WasmSandboxModule, WasmTriggerAction, WasmUdfRegistry};
 
