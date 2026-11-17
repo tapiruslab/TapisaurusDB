@@ -514,6 +514,23 @@ impl DatabaseContext {
         self.analyze_collection(collection)
     }
 
+    /// Extract primary key equality target (`_id = ...` or `id = ...`) from a filter expression
+    fn extract_primary_key_eq(filter: &FilterExpr) -> Option<(&str, String)> {
+        match filter {
+            FilterExpr::Field {
+                field,
+                op: Operator::Eq,
+                value,
+            } if field == "_id" || field == "id" => match value {
+                Value::String(s) => Some((field.as_str(), s.clone())),
+                Value::Integer(n) => Some((field.as_str(), n.to_string())),
+                _ => None,
+            },
+            FilterExpr::And(clauses) => clauses.iter().find_map(Self::extract_primary_key_eq),
+            _ => None,
+        }
+    }
+
     /// Execute an AST statement
     pub fn execute(&self, stmt: Statement) -> Result<QueryResult, String> {
         match stmt {
@@ -1057,7 +1074,37 @@ impl DatabaseContext {
                 joins,
             } => {
                 let col = self.get_or_create_collection(&collection);
-                let stats = self.get_or_compute_stats(&collection);
+
+                // O(1) Primary Key Fast-Path when querying by `_id = <val>` (or `id = <val>` matching primary key)
+                if let Some((pk_field, pk_id)) =
+                    filter.as_ref().and_then(Self::extract_primary_key_eq)
+                {
+                    if let Ok(doc) = col.find_by_id(&pk_id) {
+                        if filter.as_ref().is_none_or(|f| f.matches(&doc)) {
+                            if joins.is_empty() && traverse.is_none() && vector_search.is_none() {
+                                let s = skip.unwrap_or(0);
+                                let l = limit.unwrap_or(usize::MAX);
+                                if s == 0 && l >= 1 {
+                                    return Ok(QueryResult::Documents(vec![doc]));
+                                } else {
+                                    return Ok(QueryResult::Documents(Vec::new()));
+                                }
+                            }
+                        } else if pk_field == "_id"
+                            && joins.is_empty()
+                            && traverse.is_none()
+                            && vector_search.is_none()
+                        {
+                            return Ok(QueryResult::Documents(Vec::new()));
+                        }
+                    } else if pk_field == "_id"
+                        && joins.is_empty()
+                        && traverse.is_none()
+                        && vector_search.is_none()
+                    {
+                        return Ok(QueryResult::Documents(Vec::new()));
+                    }
+                }
 
                 // Cost-Based Index vs Sequential Scan Selection (Adaptive Execution)
                 let mut index_name = None;
@@ -1077,21 +1124,25 @@ impl DatabaseContext {
                     }
                 }
 
-                let decision = crate::optimizer::QueryOptimizer::choose_best_plan(
-                    &stats,
-                    filter.as_ref(),
-                    index_field,
-                    index_name.as_deref(),
-                );
-
-                let candidate_docs = if decision.index_used.is_some() {
-                    if let (Some(field), Some(val)) = (index_field, filter_val) {
-                        col.find_by_secondary_index(field, val)
+                let candidate_docs = if index_field.is_some() {
+                    let stats = self.get_or_compute_stats(&collection);
+                    let decision = crate::optimizer::QueryOptimizer::choose_best_plan(
+                        &stats,
+                        filter.as_ref(),
+                        index_field,
+                        index_name.as_deref(),
+                    );
+                    if decision.index_used.is_some() {
+                        if let (Some(field), Some(val)) = (index_field, filter_val) {
+                            col.find_by_secondary_index(field, val)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 } else {
-                    None // Adaptive fallback to sequential scan
+                    None // Adaptive fallback to sequential scan without computing histogram stats unnecessarily
                 };
 
                 let docs_to_scan = candidate_docs.unwrap_or_else(|| {
@@ -1393,22 +1444,30 @@ impl DatabaseContext {
             }
             Statement::Insert {
                 collection,
-                documents,
+                mut documents,
             } => {
                 let col = self.get_or_create_collection(&collection);
-                let mut ids = Vec::with_capacity(documents.len());
-                for mut doc in documents {
+                for doc in &mut documents {
                     // Execute any sandboxed WebAssembly triggers registered on this collection
-                    self.wasm_registry.apply_triggers(&collection, &mut doc)?;
-                    let doc_clone = doc.clone();
-                    let id = col.insert(doc).map_err(|e| e.to_string())?;
-                    let id_str = id.as_str().to_string();
+                    self.wasm_registry.apply_triggers(&collection, doc)?;
+                }
 
-                    // Propose to Raft consensus replicated log
+                let docs_for_events = documents.clone();
+                let inserted_ids = if documents.len() > 1 {
+                    col.insert_many(documents).map_err(|e| e.to_string())?
+                } else {
+                    let mut out = Vec::with_capacity(documents.len());
+                    for doc in documents {
+                        out.push(col.insert(doc).map_err(|e| e.to_string())?);
+                    }
+                    out
+                };
+
+                let mut ids = Vec::with_capacity(inserted_ids.len());
+                for (id, doc_clone) in inserted_ids.into_iter().zip(docs_for_events) {
+                    let id_str = id.as_str().to_string();
                     let doc_val = serde_json::to_value(&doc_clone).ok();
                     let _ = self.raft.propose(format!("INSERT {collection}"), doc_val);
-
-                    // Emit real-time change stream event
                     self.bus
                         .publish(ChangeEvent::insert(&collection, doc_clone));
                     ids.push(id_str);
@@ -1418,6 +1477,13 @@ impl DatabaseContext {
             Statement::Count { collection, filter } => {
                 let col = self.get_or_create_collection(&collection);
                 if let Some(f) = filter {
+                    if let Some((pk_field, pk_id)) = Self::extract_primary_key_eq(&f) {
+                        if let Ok(doc) = col.find_by_id(&pk_id) {
+                            return Ok(QueryResult::Count(u64::from(f.matches(&doc))));
+                        } else if pk_field == "_id" {
+                            return Ok(QueryResult::Count(0));
+                        }
+                    }
                     let count = col.find_all(None).iter().filter(|d| f.matches(d)).count() as u64;
                     Ok(QueryResult::Count(count))
                 } else {
@@ -1426,12 +1492,30 @@ impl DatabaseContext {
             }
             Statement::Delete { collection, filter } => {
                 let col = self.get_or_create_collection(&collection);
-                let matching_ids: Vec<String> = col
-                    .find_all(None)
-                    .iter()
-                    .filter(|d| filter.matches(d))
-                    .map(|d| d.id.as_str().to_string())
-                    .collect();
+                let matching_ids: Vec<String> =
+                    if let Some((pk_field, pk_id)) = Self::extract_primary_key_eq(&filter) {
+                        if let Ok(doc) = col.find_by_id(&pk_id) {
+                            if filter.matches(&doc) {
+                                vec![doc.id.as_str().to_string()]
+                            } else {
+                                Vec::new()
+                            }
+                        } else if pk_field == "_id" {
+                            Vec::new()
+                        } else {
+                            col.find_all(None)
+                                .iter()
+                                .filter(|d| filter.matches(d))
+                                .map(|d| d.id.as_str().to_string())
+                                .collect()
+                        }
+                    } else {
+                        col.find_all(None)
+                            .iter()
+                            .filter(|d| filter.matches(d))
+                            .map(|d| d.id.as_str().to_string())
+                            .collect()
+                    };
 
                 let count = matching_ids.len() as u64;
                 for id in matching_ids {
@@ -1452,12 +1536,30 @@ impl DatabaseContext {
             } => {
                 let col = self.get_or_create_collection(&collection);
                 let mut count = 0u64;
-                let matching_ids: Vec<String> = col
-                    .find_all(None)
-                    .iter()
-                    .filter(|d| filter.matches(d))
-                    .map(|d| d.id.as_str().to_string())
-                    .collect();
+                let matching_ids: Vec<String> =
+                    if let Some((pk_field, pk_id)) = Self::extract_primary_key_eq(&filter) {
+                        if let Ok(doc) = col.find_by_id(&pk_id) {
+                            if filter.matches(&doc) {
+                                vec![doc.id.as_str().to_string()]
+                            } else {
+                                Vec::new()
+                            }
+                        } else if pk_field == "_id" {
+                            Vec::new()
+                        } else {
+                            col.find_all(None)
+                                .iter()
+                                .filter(|d| filter.matches(d))
+                                .map(|d| d.id.as_str().to_string())
+                                .collect()
+                        }
+                    } else {
+                        col.find_all(None)
+                            .iter()
+                            .filter(|d| filter.matches(d))
+                            .map(|d| d.id.as_str().to_string())
+                            .collect()
+                    };
 
                 for id in matching_ids {
                     let mut updates_map = BTreeMap::new();

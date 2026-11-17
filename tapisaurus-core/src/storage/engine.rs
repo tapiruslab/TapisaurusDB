@@ -128,9 +128,9 @@ impl StorageEngine {
         fs::create_dir_all(&wal_dir).map_err(|e| TapisaurusError::io(&wal_dir, e))?;
         fs::create_dir_all(&sst_dir).map_err(|e| TapisaurusError::io(&sst_dir, e))?;
 
-        // Open WAL
+        // Open WAL (honoring configured sync_writes durability policy)
         let wal = if config.enable_wal {
-            Some(Wal::open(&wal_dir)?)
+            Some(Wal::open_with_sync(&wal_dir, config.sync_writes)?)
         } else {
             None
         };

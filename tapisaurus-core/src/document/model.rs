@@ -401,6 +401,8 @@ impl Document {
         if k == "_id" {
             if let Some(s) = v.as_str() {
                 self.id = DocumentId::from(s);
+            } else if let Value::Integer(n) = &v {
+                self.id = DocumentId::from(n.to_string());
             }
         }
         self.fields.insert(k, v);

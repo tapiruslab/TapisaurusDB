@@ -531,21 +531,23 @@ impl HnswIndex {
         ef: usize,
         layer: usize,
     ) -> Vec<Candidate> {
-        let mut visited = HashSet::new();
-        let mut candidates = BinaryHeap::new(); // min-heap (best first)
-        let mut results = BinaryHeap::new(); // max-heap (furthest of top ef first)
+        let mut visited = vec![false; self.nodes.len()];
+        let mut candidates = BinaryHeap::with_capacity(ef * 2); // min-heap (best first)
+        let mut results = BinaryHeap::with_capacity(ef + 1); // max-heap (furthest of top ef first)
 
         for &ep in enter_points {
-            let dist = self.dist(query, ep);
-            visited.insert(ep);
-            candidates.push(Candidate {
-                idx: ep,
-                distance: dist,
-            });
-            results.push(MaxCandidate {
-                idx: ep,
-                distance: dist,
-            });
+            if ep < visited.len() && !visited[ep] {
+                visited[ep] = true;
+                let dist = self.dist(query, ep);
+                candidates.push(Candidate {
+                    idx: ep,
+                    distance: dist,
+                });
+                results.push(MaxCandidate {
+                    idx: ep,
+                    distance: dist,
+                });
+            }
         }
 
         while let Some(current) = candidates.pop() {
@@ -556,7 +558,8 @@ impl HnswIndex {
 
             if layer < self.nodes[current.idx].neighbors.len() {
                 for &nbr in &self.nodes[current.idx].neighbors[layer] {
-                    if visited.insert(nbr) {
+                    if nbr < visited.len() && !visited[nbr] {
+                        visited[nbr] = true;
                         let d = self.dist(query, nbr);
                         let furthest = results.peek().map(|c| c.distance).unwrap_or(f32::INFINITY);
                         if d < furthest || results.len() < ef {
@@ -693,22 +696,24 @@ impl HnswIndex {
     where
         F: Fn(usize, &str) -> bool,
     {
-        let mut visited = HashSet::new();
-        let mut candidates = BinaryHeap::new(); // min-heap (best first for graph exploration)
-        let mut results = BinaryHeap::new(); // max-heap (furthest of top ef first, ONLY valid matching nodes)
+        let mut visited = vec![false; self.nodes.len()];
+        let mut candidates = BinaryHeap::with_capacity(ef * 2); // min-heap (best first for graph exploration)
+        let mut results = BinaryHeap::with_capacity(ef + 1); // max-heap (furthest of top ef first, ONLY valid matching nodes)
 
         for &ep in enter_points {
-            let dist = self.dist(query, ep);
-            visited.insert(ep);
-            candidates.push(Candidate {
-                idx: ep,
-                distance: dist,
-            });
-            if !self.deleted.contains(&ep) && filter(ep, &self.nodes[ep].id) {
-                results.push(MaxCandidate {
+            if ep < visited.len() && !visited[ep] {
+                visited[ep] = true;
+                let dist = self.dist(query, ep);
+                candidates.push(Candidate {
                     idx: ep,
                     distance: dist,
                 });
+                if !self.deleted.contains(&ep) && filter(ep, &self.nodes[ep].id) {
+                    results.push(MaxCandidate {
+                        idx: ep,
+                        distance: dist,
+                    });
+                }
             }
         }
 
@@ -720,7 +725,8 @@ impl HnswIndex {
 
             if layer < self.nodes[current.idx].neighbors.len() {
                 for &nbr in &self.nodes[current.idx].neighbors[layer] {
-                    if visited.insert(nbr) {
+                    if nbr < visited.len() && !visited[nbr] {
+                        visited[nbr] = true;
                         let d = self.dist(query, nbr);
                         let furthest = results.peek().map(|c| c.distance).unwrap_or(f32::INFINITY);
 

@@ -313,18 +313,18 @@ impl GraphStore {
         results
     }
 
-    /// Shortest path between two vertices (BFS unweighted)
+    /// Shortest path between two vertices (BFS unweighted, zero intermediate String clones)
     pub fn shortest_path(&self, from_id: &str, to_id: &str) -> Option<Vec<String>> {
         if from_id == to_id {
             return Some(vec![from_id.to_string()]);
         }
 
-        let mut visited = HashSet::new();
-        let mut parent: HashMap<String, String> = HashMap::new();
-        let mut queue = VecDeque::new();
+        let mut visited: HashSet<&str> = HashSet::new();
+        let mut parent: HashMap<&str, &str> = HashMap::new();
+        let mut queue: VecDeque<&str> = VecDeque::new();
 
-        visited.insert(from_id.to_string());
-        queue.push_back(from_id.to_string());
+        visited.insert(from_id);
+        queue.push_back(from_id);
 
         let mut found = false;
 
@@ -334,11 +334,12 @@ impl GraphStore {
                 break;
             }
 
-            if let Some(edges) = self.outgoing.get(&curr) {
+            if let Some(edges) = self.outgoing.get(curr) {
                 for edge in edges {
-                    if visited.insert(edge.to.clone()) {
-                        parent.insert(edge.to.clone(), curr.clone());
-                        queue.push_back(edge.to.clone());
+                    let next_id = edge.to.as_str();
+                    if visited.insert(next_id) {
+                        parent.insert(next_id, curr);
+                        queue.push_back(next_id);
                     }
                 }
             }
@@ -351,8 +352,8 @@ impl GraphStore {
         // Reconstruct path
         let mut path = vec![to_id.to_string()];
         let mut curr = to_id;
-        while let Some(p) = parent.get(curr) {
-            path.push(p.clone());
+        while let Some(&p) = parent.get(curr) {
+            path.push(p.to_string());
             curr = p;
         }
         path.reverse();

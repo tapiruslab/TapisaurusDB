@@ -283,15 +283,17 @@ impl Collection {
             });
         }
 
-        // Check for duplicate key on primary ID in persistent storage
+        // Check for duplicate key on primary ID in persistent storage (only needed when RAM cap evicted older docs)
         if let Some(storage) = &self.storage {
-            let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
-            if let Ok(Some(_)) = storage.get(&key) {
-                return Err(TapisaurusError::DuplicateKey {
-                    collection: self.config.name.clone(),
-                    field: "_id".into(),
-                    value: id_str,
-                });
+            if (self.documents.len() as u64) < self.doc_count.load(Ordering::Relaxed) {
+                let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
+                if let Ok(Some(_)) = storage.get(&key) {
+                    return Err(TapisaurusError::DuplicateKey {
+                        collection: self.config.name.clone(),
+                        field: "_id".into(),
+                        value: id_str,
+                    });
+                }
             }
         }
 
@@ -338,15 +340,104 @@ impl Collection {
         Ok(id)
     }
 
-    /// Insert multiple documents at once (bulk insert).
+    /// Insert multiple documents at once (bulk insert with atomic WAL group commit).
     ///
-    /// Returns a vector of document IDs. More efficient than individual inserts
-    /// as it batches index updates.
+    /// Returns a vector of document IDs. Batches persistent storage writes into a single
+    /// `put_batch` call so multi-row inserts only flush the WAL once.
     pub fn insert_many(&self, docs: Vec<Document>) -> TapisaurusResult<Vec<DocumentId>> {
+        if docs.len() <= 1 {
+            let mut ids = Vec::with_capacity(docs.len());
+            for doc in docs {
+                ids.push(self.insert(doc)?);
+            }
+            return Ok(ids);
+        }
+
         let mut ids = Vec::with_capacity(docs.len());
+        let mut storage_kv: Vec<(Vec<u8>, Vec<u8>)> = if self.storage.is_some() {
+            Vec::with_capacity(docs.len())
+        } else {
+            Vec::new()
+        };
+
+        let evicted_to_disk = self.storage.is_some()
+            && (self.documents.len() as u64) < self.doc_count.load(Ordering::Relaxed);
 
         for doc in docs {
-            ids.push(self.insert(doc)?);
+            let size = doc.size_bytes();
+            if size > self.config.max_document_size {
+                return Err(TapisaurusError::DocumentTooLarge {
+                    size,
+                    max: self.config.max_document_size,
+                });
+            }
+
+            let id = doc.id.clone();
+            let id_str = id.as_str().to_string();
+
+            if self.documents.contains_key(&id_str) {
+                return Err(TapisaurusError::DuplicateKey {
+                    collection: self.config.name.clone(),
+                    field: "_id".into(),
+                    value: id_str,
+                });
+            }
+
+            if evicted_to_disk {
+                if let Some(storage) = &self.storage {
+                    let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
+                    if let Ok(Some(_)) = storage.get(&key) {
+                        return Err(TapisaurusError::DuplicateKey {
+                            collection: self.config.name.clone(),
+                            field: "_id".into(),
+                            value: id_str,
+                        });
+                    }
+                }
+            }
+
+            for idx_entry in self.secondary_indexes.iter() {
+                idx_entry.value().check_unique(&doc)?;
+            }
+
+            for idx_entry in self.secondary_indexes.iter() {
+                idx_entry.value().insert(&doc);
+            }
+            self.update_indexes_insert(&doc);
+
+            let doc_text = extract_doc_text(&doc);
+            self.text_index.index_document(&id_str, &doc_text);
+
+            if let Some(ttl_val) = doc.get("_ttl").or_else(|| doc.get("ttl")) {
+                if let Some(secs) = ttl_val.as_i64() {
+                    if secs > 0 {
+                        self.ttl.set_expiry(&id_str, secs as u64);
+                    }
+                }
+            }
+
+            if self.storage.is_some() {
+                let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
+                if let Ok(val) = serde_json::to_vec(&doc) {
+                    storage_kv.push((key, val));
+                }
+            }
+
+            self.documents.insert(id_str, doc);
+            self.doc_count.fetch_add(1, Ordering::Relaxed);
+            self.total_size.fetch_add(size as u64, Ordering::Relaxed);
+            ids.push(id);
+        }
+
+        if let Some(storage) = &self.storage {
+            if !storage_kv.is_empty() {
+                let refs: Vec<(&[u8], &[u8])> = storage_kv
+                    .iter()
+                    .map(|(k, v)| (k.as_slice(), v.as_slice()))
+                    .collect();
+                storage.put_batch(&refs)?;
+            }
+            self.enforce_memory_cap(ids.last().map(|id| id.as_str()));
         }
 
         Ok(ids)
