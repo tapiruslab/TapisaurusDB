@@ -141,6 +141,9 @@ pub struct Collection {
     /// Clock-Pro / Second-Chance hot-cold cache residency tracker
     cache_tracker: super::binary::HotColdCacheTracker,
 
+    /// Optional relational schema metadata (from CREATE TABLE / ALTER TABLE / JSON Schema)
+    relational_schema: RwLock<Option<super::schema::RelationalSchema>>,
+
     /// Optional underlying LSM-Tree storage engine for durability
     storage: Option<Arc<crate::storage::engine::StorageEngine>>,
 }
@@ -162,6 +165,7 @@ impl Collection {
             text_index: crate::search::InvertedIndex::new(),
             ttl: crate::ttl::TtlManager::new(),
             cache_tracker: super::binary::HotColdCacheTracker::new(),
+            relational_schema: RwLock::new(None),
             storage: None,
         }
     }
@@ -188,6 +192,10 @@ impl Collection {
 
     /// Create a collection with custom configuration
     pub fn with_config(config: CollectionConfig) -> Self {
+        let initial_rel = config
+            .schema
+            .as_ref()
+            .and_then(super::schema::RelationalSchema::from_json_schema);
         Self {
             config,
             documents: DashMap::new(),
@@ -199,6 +207,7 @@ impl Collection {
             text_index: crate::search::InvertedIndex::new(),
             ttl: crate::ttl::TtlManager::new(),
             cache_tracker: super::binary::HotColdCacheTracker::new(),
+            relational_schema: RwLock::new(initial_rel),
             storage: None,
         }
     }
@@ -211,6 +220,81 @@ impl Collection {
         let mut col = Self::with_config(config);
         col.storage = Some(storage);
         col
+    }
+
+    /// Store or update relational schema metadata for DDL / ORM catalog reflection.
+    pub fn set_relational_schema(&self, schema: super::schema::RelationalSchema) {
+        if let Some(storage) = &self.storage {
+            if let Ok(bytes) = serde_json::to_vec(&schema) {
+                let key = format!("meta:schema:{}", self.config.name);
+                let _ = storage.put(key.as_bytes(), &bytes);
+            }
+        }
+        *self.relational_schema.write() = Some(schema);
+    }
+
+    /// Load relational schema metadata into memory without re-writing storage.
+    pub fn load_relational_schema(&self, schema: super::schema::RelationalSchema) {
+        *self.relational_schema.write() = Some(schema);
+    }
+
+    /// Retrieve explicit relational schema metadata if defined.
+    pub fn relational_schema(&self) -> Option<super::schema::RelationalSchema> {
+        self.relational_schema.read().clone()
+    }
+
+    /// Apply a JSON Schema definition for ORM / virtual catalog materialization.
+    pub fn set_json_schema(&self, schema: &serde_json::Value) {
+        if let Some(rel) = super::schema::RelationalSchema::from_json_schema(schema) {
+            self.set_relational_schema(rel);
+        }
+    }
+
+    /// Compute effective columns combining explicit relational schema + sampled document fields.
+    pub fn effective_columns(&self) -> Vec<super::schema::ColumnSchema> {
+        let explicit = self.relational_schema.read().clone();
+        let mut cols: Vec<super::schema::ColumnSchema> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        if let Some(ref rel) = explicit {
+            if rel.columns.is_empty() {
+                let pk = super::schema::ColumnSchema::default_primary_id();
+                seen.insert(pk.name.clone());
+                cols.push(pk);
+            } else {
+                for c in &rel.columns {
+                    let mut col_def = c.clone();
+                    if rel.primary_key.iter().any(|pk| pk == &c.name) {
+                        col_def.is_primary_key = true;
+                        col_def.nullable = false;
+                    }
+                    if seen.insert(col_def.name.clone()) {
+                        cols.push(col_def);
+                    }
+                }
+            }
+        } else {
+            let pk = super::schema::ColumnSchema::default_primary_id();
+            seen.insert(pk.name.clone());
+            seen.insert("id".to_string());
+            cols.push(pk);
+        }
+
+        // Sample existing documents to discover dynamic/NoSQL fields not declared in DDL.
+        let samples = self.find_paginated(0, 16);
+        let has_explicit_pk = explicit.as_ref().is_some_and(|r| !r.primary_key.is_empty());
+        for doc in samples {
+            for (k, v) in &doc.fields {
+                if has_explicit_pk && (k == "_id" || k == "id") && !seen.contains(k.as_str()) {
+                    continue;
+                }
+                if seen.insert(k.clone()) {
+                    cols.push(super::schema::ColumnSchema::from_value(k.clone(), v));
+                }
+            }
+        }
+
+        cols
     }
 
     /// Number of active documents currently resident in RAM
@@ -902,8 +986,7 @@ impl Collection {
                             for (key, value) in updates {
                                 doc.set(key.clone(), value.clone());
                             }
-                            let key =
-                                format!("doc:{}:{}", self.config.name, id_str).into_bytes();
+                            let key = format!("doc:{}:{}", self.config.name, id_str).into_bytes();
                             if let Ok(val) = super::binary::SlottedBinaryCodec::encode(&doc) {
                                 let _ = storage.put(&key, &val);
                             }
@@ -1063,12 +1146,19 @@ impl Collection {
             unique,
         };
 
-        let index = Arc::new(crate::document::index::SecondaryIndex::new(def));
+        let index = Arc::new(crate::document::index::SecondaryIndex::new(def.clone()));
 
         // Index and validate all existing documents (RAM + Disk)
         for doc in self.find_all(None) {
             index.check_unique(&doc)?;
             index.insert(&doc);
+        }
+
+        if let Some(storage) = &self.storage {
+            if let Ok(bytes) = serde_json::to_vec(&def) {
+                let key = format!("meta:idx:{}:{}", self.config.name, field);
+                let _ = storage.put(key.as_bytes(), &bytes);
+            }
         }
 
         self.secondary_indexes.insert(index_name.clone(), index);
@@ -1112,6 +1202,10 @@ impl Collection {
     /// Drop a secondary index
     pub fn drop_secondary_index(&self, field: &str) -> bool {
         let index_name = format!("idx_{field}");
+        if let Some(storage) = &self.storage {
+            let key = format!("meta:idx:{}:{}", self.config.name, field);
+            let _ = storage.delete(key.as_bytes());
+        }
         self.secondary_indexes.remove(&index_name).is_some()
     }
 
@@ -1396,7 +1490,10 @@ mod tests {
                 Document::with_id(format!("u_{i}"))
                     .field("city", if i % 4 == 0 { "KL" } else { "SG" })
                     .field("score", (i * 100) as i64)
-                    .field("bio", "Large cold payload string that is skipped during zero-copy projection"),
+                    .field(
+                        "bio",
+                        "Large cold payload string that is skipped during zero-copy projection",
+                    ),
             );
         }
         col.insert_many(docs).unwrap();
@@ -1418,11 +1515,15 @@ mod tests {
         assert!(projected[0].get("score").is_some());
         assert!(projected[0].get("bio").is_none());
 
-        // Fetch cold document u_0 -> promotes into Clock-Pro hot cache
-        let d0 = col.find_by_id("u_0").unwrap();
-        assert_eq!(d0.get("city"), Some(&Value::String("KL".into())));
-        // Second fetch of u_0 is now a hot hit in RAM
-        let _ = col.find_by_id("u_0").unwrap();
+        // Pick an evicted (cold) document deterministically and promote it into Clock-Pro hot cache
+        let cold_id = (0..40)
+            .map(|i| format!("u_{i}"))
+            .find(|id| !col.documents.contains_key(id))
+            .expect("35 of 40 documents must be evicted from RAM");
+        let cold_doc = col.find_by_id(&cold_id).unwrap();
+        assert!(cold_doc.get("city").is_some());
+        // Second fetch of the same document is now a hot hit in RAM
+        let _ = col.find_by_id(&cold_id).unwrap();
 
         let stats = col.cache_stats();
         assert!(stats.clock_evictions >= 35);

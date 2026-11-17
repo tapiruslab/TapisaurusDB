@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 tapisaurus-core = { path = "../tapisaurus-core" }
+tapisaurus-catalog = { path = "../tapisaurus-catalog" }
 tapisaurus-vector = { path = "../tapisaurus-vector" }
 tapisaurus-graph = { path = "../tapisaurus-graph" }
 serde = { workspace = true }

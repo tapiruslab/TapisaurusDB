@@ -83,33 +83,23 @@ pub fn parse_query(input: &str) -> Result<Statement, String> {
         if raw_name.to_uppercase().starts_with("IF EXISTS ") {
             raw_name = raw_name[10..].trim();
         }
-        let name = raw_name
-            .trim_matches(|c| c == '`' || c == '"' || c == '\'')
-            .to_string();
+        let name = crate::ddl::normalize_table_ident(raw_name);
         return Ok(Statement::DropCollection { name });
     }
 
-    if (upper.starts_with("CREATE TABLE ") || upper.starts_with("CREATE COLLECTION "))
-        && !upper.contains("INDEX")
-    {
-        let raw_name = if upper.starts_with("CREATE TABLE ") {
-            let rest = trimmed[13..].trim();
-            if let Some(p_idx) = rest.find('(') {
-                rest[..p_idx].trim()
-            } else {
-                rest.trim_end_matches(';').trim()
-            }
-        } else {
-            trimmed[18..].trim().trim_end_matches(';').trim()
-        };
-        let mut name_part = raw_name;
+    if upper.starts_with("CREATE TABLE ") {
+        if let Some((name, schema)) = crate::ddl::parse_create_table_ddl(trimmed) {
+            return Ok(Statement::CreateCollection { name, schema });
+        }
+    }
+
+    if upper.starts_with("CREATE COLLECTION ") {
+        let mut name_part = trimmed[18..].trim().trim_end_matches(';').trim();
         if name_part.to_uppercase().starts_with("IF NOT EXISTS ") {
             name_part = name_part[14..].trim();
         }
-        let name = name_part
-            .trim_matches(|c| c == '`' || c == '"' || c == '\'')
-            .to_string();
-        return Ok(Statement::CreateCollection { name });
+        let name = crate::ddl::normalize_table_ident(name_part);
+        return Ok(Statement::CreateCollection { name, schema: None });
     }
 
     // 3. Index DDL: CREATE [UNIQUE] INDEX ... / DROP INDEX ...
@@ -1550,11 +1540,18 @@ fn parse_alter_table(input: &str) -> Result<Statement, String> {
         return Err("Expected table name after ALTER TABLE".to_string());
     }
 
-    let collection = parts[0]
-        .trim_matches(|c| c == '`' || c == '"' || c == '\'')
-        .to_string();
+    let collection = crate::ddl::normalize_table_ident(parts[0]);
     let after_name = rest[parts[0].len()..].trim();
     let upper_after = after_name.to_uppercase();
+
+    if upper_after.starts_with("ADD ") && upper_after.contains("FOREIGN KEY") {
+        if let Some(fk) = crate::ddl::parse_alter_add_foreign_key(&collection, after_name) {
+            return Ok(Statement::AlterTable {
+                collection,
+                action: crate::ast::AlterAction::AddForeignKey(fk),
+            });
+        }
+    }
 
     if upper_after.starts_with("ADD ") || upper_after.starts_with("ADD COLUMN ") {
         let after_add = if upper_after.starts_with("ADD COLUMN ") {
@@ -1569,6 +1566,7 @@ fn parse_alter_table(input: &str) -> Result<Statement, String> {
         let col_name = add_parts[0]
             .trim_matches(|c| c == '`' || c == '"' || c == '\'')
             .to_string();
+        let data_type = add_parts.get(1).map(|t| (*t).to_string());
 
         let mut default = None;
         if let Some(def_pos) = after_add.to_uppercase().find("DEFAULT ") {
@@ -1581,6 +1579,7 @@ fn parse_alter_table(input: &str) -> Result<Statement, String> {
             action: crate::ast::AlterAction::AddColumn {
                 name: col_name,
                 default,
+                data_type,
             },
         });
     }
@@ -1635,10 +1634,7 @@ fn parse_create_index_query(input: &str) -> Result<Statement, String> {
         .find(')')
         .ok_or("Expected ')' around indexed field name")?;
 
-    let collection = target[..paren_open]
-        .trim()
-        .trim_matches(|c| c == '`' || c == '"' || c == '\'')
-        .to_string();
+    let collection = crate::ddl::normalize_table_ident(&target[..paren_open]);
     let field = target[paren_open + 1..paren_close]
         .trim()
         .trim_matches(|c| c == '`' || c == '"' || c == '\'')

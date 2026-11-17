@@ -235,8 +235,20 @@ impl SlottedBinaryCodec {
             let meta_offset = buf.len() as u32;
             buf[20..24].copy_from_slice(&meta_offset.to_le_bytes());
             buf.extend_from_slice(&meta.version.to_le_bytes());
-            buf.extend_from_slice(&meta.created_at.timestamp_nanos_opt().unwrap_or(0).to_le_bytes());
-            buf.extend_from_slice(&meta.updated_at.timestamp_nanos_opt().unwrap_or(0).to_le_bytes());
+            buf.extend_from_slice(
+                &meta
+                    .created_at
+                    .timestamp_nanos_opt()
+                    .unwrap_or(0)
+                    .to_le_bytes(),
+            );
+            buf.extend_from_slice(
+                &meta
+                    .updated_at
+                    .timestamp_nanos_opt()
+                    .unwrap_or(0)
+                    .to_le_bytes(),
+            );
             if let Some(ref col) = meta.collection {
                 let col_b = col.as_bytes();
                 buf.extend_from_slice(&(col_b.len() as u16).to_le_bytes());
@@ -336,8 +348,7 @@ impl SlottedBinaryCodec {
     pub fn project_fields(bytes: &[u8], fields: &[&str]) -> TapisaurusResult<Document> {
         if !bytes.starts_with(SLOTTED_BINARY_MAGIC) {
             let mut doc: Document = serde_json::from_slice(bytes)?;
-            doc.fields
-                .retain(|k, _| fields.iter().any(|req| *req == k.as_str()));
+            doc.fields.retain(|k, _| fields.contains(&k.as_str()));
             return Ok(doc);
         }
 
@@ -428,12 +439,16 @@ fn read_slot(bytes: &[u8], slot_off: usize) -> TapisaurusResult<(&str, u8, &[u8]
 
     let name_bytes = bytes
         .get(name_offset..name_offset.saturating_add(name_len))
-        .ok_or_else(|| TapisaurusError::InvalidDocument("TPBIN001 field name out of bounds".into()))?;
+        .ok_or_else(|| {
+            TapisaurusError::InvalidDocument("TPBIN001 field name out of bounds".into())
+        })?;
     let name = std::str::from_utf8(name_bytes)
         .map_err(|e| TapisaurusError::InvalidDocument(format!("Invalid UTF-8 field name: {e}")))?;
     let val_slice = bytes
         .get(val_offset..val_offset.saturating_add(val_len))
-        .ok_or_else(|| TapisaurusError::InvalidDocument("TPBIN001 field value out of bounds".into()))?;
+        .ok_or_else(|| {
+            TapisaurusError::InvalidDocument("TPBIN001 field value out of bounds".into())
+        })?;
 
     Ok((name, type_tag, val_slice))
 }
@@ -515,9 +530,9 @@ fn decode_value_payload(type_tag: u8, slice: &[u8]) -> TapisaurusResult<Value> {
             Ok(Value::Boolean(b))
         }
         TAG_INT64 => {
-            let arr: [u8; 8] = slice.try_into().map_err(|_| {
-                TapisaurusError::InvalidDocument("Invalid TAG_INT64 length".into())
-            })?;
+            let arr: [u8; 8] = slice
+                .try_into()
+                .map_err(|_| TapisaurusError::InvalidDocument("Invalid TAG_INT64 length".into()))?;
             Ok(Value::Integer(i64::from_le_bytes(arr)))
         }
         TAG_FLOAT64 => {
@@ -534,15 +549,13 @@ fn decode_value_payload(type_tag: u8, slice: &[u8]) -> TapisaurusResult<Value> {
         }
         TAG_BINARY => Ok(Value::Binary(slice.to_vec())),
         TAG_VECTOR_F32 => {
-            if slice.len() % 4 != 0 {
+            if !slice.len().is_multiple_of(4) {
                 return Err(TapisaurusError::InvalidDocument(
                     "Invalid TAG_VECTOR_F32 byte length".into(),
                 ));
             }
-            let mut vec = Vec::with_capacity(slice.len() / 4);
-            for chunk in slice.chunks_exact(4) {
-                vec.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-            }
+            let (chunks, _) = slice.as_chunks::<4>();
+            let vec = chunks.iter().map(|&c| f32::from_le_bytes(c)).collect();
             Ok(Value::Vector(vec))
         }
         TAG_DATETIME_NS => {
@@ -553,9 +566,9 @@ fn decode_value_payload(type_tag: u8, slice: &[u8]) -> TapisaurusResult<Value> {
             Ok(Value::DateTime(Utc.timestamp_nanos(nanos)))
         }
         TAG_UUID => {
-            let arr: [u8; 16] = slice.try_into().map_err(|_| {
-                TapisaurusError::InvalidDocument("Invalid TAG_UUID length".into())
-            })?;
+            let arr: [u8; 16] = slice
+                .try_into()
+                .map_err(|_| TapisaurusError::InvalidDocument("Invalid TAG_UUID length".into()))?;
             Ok(Value::Uuid(Uuid::from_bytes(arr)))
         }
         TAG_JSON_COMPLEX => Ok(serde_json::from_slice(slice)?),

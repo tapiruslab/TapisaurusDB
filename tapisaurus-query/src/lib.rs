@@ -8,6 +8,7 @@
 pub mod aggregation;
 pub mod ast;
 pub mod cache;
+pub mod ddl;
 pub mod distributed;
 pub mod executor;
 pub mod optimizer;

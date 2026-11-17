@@ -50,8 +50,8 @@ pub use cluster::{
     DeterministicTxSpec, NodeRole, RaftNode, ShardDistribution, ShardRouter,
 };
 pub use document::{
-    Document, DocumentId, HotColdCacheStats, HotColdCacheTracker, SlottedBinaryCodec, Value,
-    SLOTTED_BINARY_MAGIC, SLOTTED_BINARY_VERSION,
+    ColumnSchema, Document, DocumentId, ForeignKeyDef, HotColdCacheStats, HotColdCacheTracker,
+    RelationalSchema, SlottedBinaryCodec, Value, SLOTTED_BINARY_MAGIC, SLOTTED_BINARY_VERSION,
 };
 pub use error::{TapisaurusError, TapisaurusResult};
 pub use search::{InvertedIndex, SearchResult};

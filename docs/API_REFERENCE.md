@@ -422,16 +422,18 @@ println!("Compactions Completed: {}", stats.compactions_completed);
 
 ---
 
-## 🐘 14. PostgreSQL Virtual System Catalog Reflection
+## 🐘 14. Dynamic Virtual System Catalog Engine (`tapisaurus-catalog`)
 
-To provide seamless, zero-config compatibility with modern ORMs and database management tools (Prisma, Drizzle, SQLAlchemy, DBeaver, TablePlus), TapisaurusDB's PostgreSQL wire protocol (Port 5432) synthesizes virtual catalog responses for standard metadata inspection queries:
+To provide seamless, zero-config compatibility with modern ORMs (**Prisma Migrate**, **SQLAlchemy**, **TypeORM**, **Drizzle**, **Laravel Eloquent**, **Doctrine DBAL**) and GUI tools (**DBeaver**, **TablePlus**, `psql`, `mysql`), **`tapisaurus-catalog`** materializes live virtual system catalogs (`pg_catalog.*` on Port `5432`/`5433` and `information_schema.*` on Ports `5432` & `3306`) directly from TapisaurusDB collection DDL schemas, JSON Schema contracts, foreign keys, secondary B-Tree indexes, and HNSW/DiskANN vector indexes, evaluating full relational `JOIN`, `= ANY(...)`, `format_type(...)`, `pg_get_expr(...)`, and correlated subquery introspection queries.
 
-| Catalog View / Table | Handled Columns | Supported Tools & ORMs |
+| Catalog View / Table | Materialized Metadata & Capabilities | Supported Tools & ORMs |
 |:---|:---|:---|
-| `pg_catalog.pg_database` | `datname`, `encoding`, `datcollate`, `datctype` | DBeaver, TablePlus, Navicat |
-| `pg_catalog.pg_namespace` | `nspname`, `nspowner`, `nspacl` | Prisma, Drizzle, pgAdmin |
-| `pg_catalog.pg_type` | `typname`, `typnamespace`, `typlen`, `typtype` | SQLAlchemy, Diesel, sqlx |
-| `information_schema.columns` | `table_schema`, `table_name`, `column_name`, `data_type` | ORM Schema Migrators & Introspectors |
+| `pg_catalog.pg_database` / `pg_namespace` | Deterministic database & schema OIDs (`public` = `2200`, `pg_catalog` = `11`, `information_schema` = `12345`) | DBeaver, TablePlus, pgAdmin, Prisma |
+| `pg_catalog.pg_class` & `pg_am` | Collection tables (`relkind = 'r'`), PK/B-Tree/HNSW/DiskANN index relations (`relkind = 'i'`), live `reltuples` | Prisma, Drizzle, SQLAlchemy, TypeORM |
+| `pg_catalog.pg_attribute` & `pg_attrdef` | DDL & inferred columns, `atttypid`, `atttypmod`, `attnotnull`, `DEFAULT` expressions (`adsrc`/`adbin`) | SQLAlchemy, Prisma, Diesel, sqlx |
+| `pg_catalog.pg_type` | Core & AI vector OIDs (`bool`, `int2`, `int4`, `int8`, `float8`, `numeric`, `text`, `varchar`, `uuid`, `jsonb`, `vector`) | PostgreSQL Wire Drivers & ORMs |
+| `pg_catalog.pg_index` & `pg_constraint` | Primary keys (`'p'`), unique keys (`'u'`), foreign keys (`'f'` with `ON DELETE`/`ON UPDATE`), `indkey` / `conkey` | Prisma `db pull`, SQLAlchemy `inspect()` |
+| `information_schema.*` | `schemata`, `tables`, `columns`, `table_constraints`, `key_column_usage`, `referential_constraints`, `constraint_column_usage`, `statistics` | PostgreSQL (5432) & MySQL (3306) ORMs |
 
 ---
 

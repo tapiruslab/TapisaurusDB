@@ -61,8 +61,8 @@ TapisaurusDB provides wire-level compatibility for PostgreSQL clients communicat
 | **Multi-Column Sorting** | ✅ **Supported** | `ORDER BY col1 ASC, col2 DESC, col3 ASC` with lexicographical tie-breaking. |
 | **Pagination** | ✅ **Supported** | `LIMIT <n> OFFSET <m>` with pushdown iterators. |
 | **Relational Joins** | ✅ **Supported** | Hash joins (`INNER JOIN`, `LEFT JOIN`) on indexed equality predicates. |
-| **Virtual System Catalogs** | ✅ **Supported** | `pg_class`, `pg_attribute`, `pg_type`, `pg_am`, `pg_constraint`, `pg_description`, `information_schema.tables`, `information_schema.columns`. |
-| **Postgres Built-in Functions** | ✅ **Supported** | `version()`, `current_schema()`, `current_database()`, `current_user`, `current_setting('server_version_num')`, `format_type()`. |
+| **Virtual System Catalogs** | ✅ **Supported** | Powered by `tapisaurus-catalog`: `pg_class`, `pg_namespace`, `pg_attribute`, `pg_attrdef`, `pg_index`, `pg_constraint` (PK/UNIQUE/FK), `pg_type`, `pg_am`, `pg_collation`, `pg_description`, `pg_indexes`, plus `information_schema.{tables,columns,table_constraints,key_column_usage,referential_constraints,constraint_column_usage}` with full SQL `JOIN`, `= ANY(...)`, and Extended Query `Describe` support. |
+| **Postgres Built-in Functions** | ✅ **Supported** | `version()`, `current_schema()`, `current_schemas()`, `current_database()`, `current_user`, `current_setting(...)`, `format_type()`, `pg_get_expr()`, `obj_description()`, `col_description()`, `pg_table_is_visible()`. |
 | **Window Functions (`OVER()`)** | 🟡 **Planned (v0.3)** | `ROW_NUMBER()`, `RANK()`, `PARTITION BY` currently in active design. |
 | **Common Table Expressions (WITH / CTE)**| 🟡 **Planned (v0.2)** | Non-recursive CTEs planned for next minor release; recursive CTEs out of scope for v0.x. |
 | **Procedural Languages (PL/pgSQL)** | ❌ **Non-Goal** | Procedural stored languages run inside TapisaurusDB are not planned; use native microservices or Rust embedded modules. |
@@ -117,7 +117,7 @@ TapisaurusDB provides wire compatibility for standard MySQL clients (v5.7 and v8
 | **Handshake Initialization** | ✅ **Supported** | Protocol version 10 handshake, capability flags negotiation, auth-plugin (`mysql_native_password` / cleartext). |
 | **`COM_QUERY` (Text Protocol)** | ✅ **Supported** | Standard SQL execution (`SELECT`, `INSERT`, `UPDATE`, `DELETE`). |
 | **`COM_PING` & `COM_QUIT`** | ✅ **Supported** | Connection keep-alive and graceful socket teardown. |
-| **Metadata & Reflection** | ✅ **Supported** | `SHOW TABLES`, `SHOW DATABASES`, `SHOW COLUMNS FROM`, `SHOW CREATE TABLE`, `SHOW TABLE STATUS`, `SHOW INDEX FROM`, `SHOW VARIABLES [LIKE ...]`, `DESCRIBE / DESC`. |
+| **Metadata & Reflection** | ✅ **Supported** | `SHOW FULL TABLES`, `SHOW TABLES`, `SHOW DATABASES`, `SHOW COLUMNS FROM`, `SHOW CREATE TABLE` (PK + FK + column types), `SHOW TABLE STATUS`, `SHOW INDEX FROM`, `SHOW VARIABLES [LIKE ...]`, `DESCRIBE / DESC`, and full `information_schema.{tables,columns,statistics,table_constraints,key_column_usage,referential_constraints,schemata}` SQL evaluation. |
 | **Laravel / PHP PDO Compatibility** | ✅ **Supported** | Standard Eloquent CRUD, table listings, and basic migration assertions. |
 | **MySQL Binary Prepared (`COM_STMT_*`)**| 🟡 **Partial** | Parameter binding for basic types; complete binary type coverage scheduled for v0.2. |
 | **Stored Procedures & Triggers** | ❌ **Non-Goal** | MySQL triggers and stored procedures not supported; handled via external microservices. |

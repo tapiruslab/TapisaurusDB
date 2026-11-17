@@ -340,6 +340,8 @@ pub enum Statement {
     },
     CreateCollection {
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        schema: Option<tapisaurus_core::RelationalSchema>,
     },
     DropCollection {
         name: String,
@@ -404,6 +406,8 @@ pub enum AlterAction {
     AddColumn {
         name: String,
         default: Option<Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data_type: Option<String>,
     },
     DropColumn {
         name: String,
@@ -411,4 +415,5 @@ pub enum AlterAction {
     RenameTable {
         new_name: String,
     },
+    AddForeignKey(tapisaurus_core::ForeignKeyDef),
 }

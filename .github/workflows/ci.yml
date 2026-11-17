@@ -44,3 +44,22 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --all --release
       - run: cargo test --all
+
+  # ── 4. Live ORM Introspection (Prisma & SQLAlchemy on 5432/3306) ─
+  orm-introspection:
+    name: ORM Introspection (5432 & 3306)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cargo build --release -p tapisaurus-cli
+      - run: python -m pip install sqlalchemy psycopg2-binary pymysql
+      - run: npm install -g prisma
+      - run: python scripts/ci/verify_orm_introspection.py --binary target/release/tapisaurus --pg-port 5432 --mysql-port 3306

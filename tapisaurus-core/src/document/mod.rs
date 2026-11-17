@@ -12,6 +12,7 @@ pub mod binary;
 pub mod collection;
 pub mod index;
 pub mod model;
+pub mod schema;
 
 pub use binary::{
     HotColdCacheStats, HotColdCacheTracker, SlottedBinaryCodec, SLOTTED_BINARY_MAGIC,
@@ -20,3 +21,4 @@ pub use binary::{
 pub use collection::Collection;
 pub use index::{SecondaryIndex, SecondaryIndexDef};
 pub use model::{Document, DocumentId, Value};
+pub use schema::{ColumnSchema, ForeignKeyDef, RelationalSchema};

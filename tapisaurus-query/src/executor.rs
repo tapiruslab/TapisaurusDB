@@ -255,8 +255,7 @@ impl DatabaseContext {
                     let parts: Vec<&str> = key_str.splitn(3, ':').collect();
                     if parts.len() == 3 {
                         let col_name = parts[1];
-                        if let Ok(doc) =
-                            tapisaurus_core::SlottedBinaryCodec::decode_any(&val_bytes)
+                        if let Ok(doc) = tapisaurus_core::SlottedBinaryCodec::decode_any(&val_bytes)
                         {
                             let col = self.get_or_create_collection(col_name);
                             col.load_document(doc);
@@ -330,6 +329,37 @@ impl DatabaseContext {
                     if let Ok(edge) = serde_json::from_slice::<tapisaurus_graph::Edge>(&val_bytes) {
                         graph.add_edge(edge);
                     }
+                }
+            }
+
+            // 6. Recover persisted relational schemas (meta:schema:<collection>)
+            let schema_entries = storage
+                .prefix_scan(b"meta:schema:")
+                .map_err(|e| format!("Failed to scan relational schemas from storage: {e}"))?;
+            for (key_bytes, val_bytes) in schema_entries {
+                if let Ok(key_str) = std::str::from_utf8(&key_bytes) {
+                    if let Some(col_name) = key_str.strip_prefix("meta:schema:") {
+                        if let Ok(rel_schema) =
+                            serde_json::from_slice::<tapisaurus_core::RelationalSchema>(&val_bytes)
+                        {
+                            let col = self.get_or_create_collection(col_name);
+                            col.load_relational_schema(rel_schema);
+                        }
+                    }
+                }
+            }
+
+            // 7. Recover persisted secondary B-Tree indexes (meta:idx:<collection>:<field>)
+            let idx_entries = storage
+                .prefix_scan(b"meta:idx:")
+                .map_err(|e| format!("Failed to scan secondary index metadata: {e}"))?;
+            for (_key_bytes, val_bytes) in idx_entries {
+                if let Ok(def) = serde_json::from_slice::<
+                    tapisaurus_core::document::SecondaryIndexDef,
+                >(&val_bytes)
+                {
+                    let col = self.get_or_create_collection(&def.collection);
+                    let _ = col.create_secondary_index(&def.field, def.unique);
                 }
             }
         }
@@ -428,6 +458,16 @@ impl DatabaseContext {
 
     /// Drop a collection from DatabaseContext and purge its persisted disk data
     pub fn drop_collection(&self, name: &str) -> bool {
+        if let Some(storage) = &self.storage {
+            let schema_key = format!("meta:schema:{name}");
+            let _ = storage.delete(schema_key.as_bytes());
+            let idx_prefix = format!("meta:idx:{name}:");
+            if let Ok(entries) = storage.prefix_scan(idx_prefix.as_bytes()) {
+                for (key, _) in entries {
+                    let _ = storage.delete(&key);
+                }
+            }
+        }
         let col_opt = self.collections.remove(name);
         if let Some((_, col)) = col_opt {
             let _ = col.clear();
@@ -445,6 +485,130 @@ impl DatabaseContext {
             }
             false
         }
+    }
+
+    /// Capture a live relational & index snapshot of all collections for virtual system catalog materialization.
+    pub fn catalog_snapshot(&self, database_name: &str) -> tapisaurus_catalog::CatalogSnapshot {
+        let mut collections_meta = Vec::new();
+
+        for (col_name, col) in self.all_collections() {
+            let columns = col.effective_columns();
+            let rel_opt = col.relational_schema();
+            let primary_key = rel_opt
+                .as_ref()
+                .filter(|r| !r.primary_key.is_empty())
+                .map(|r| r.primary_key.clone())
+                .unwrap_or_else(|| {
+                    columns
+                        .iter()
+                        .filter(|c| c.is_primary_key)
+                        .map(|c| c.name.clone())
+                        .collect()
+                });
+            let foreign_keys = rel_opt
+                .as_ref()
+                .map(|r| r.foreign_keys.clone())
+                .unwrap_or_default();
+            let comment = rel_opt.and_then(|r| r.comment);
+
+            let mut indexes = Vec::new();
+            for sec in col.list_secondary_indexes() {
+                indexes.push(tapisaurus_catalog::IndexCatalogMeta {
+                    name: sec.name,
+                    fields: vec![sec.field],
+                    unique: sec.unique,
+                    method: "btree".to_string(),
+                    is_primary: false,
+                });
+            }
+            for legacy in col.list_indexes() {
+                let method = match legacy.index_type {
+                    tapisaurus_core::document::collection::IndexType::Hash => "hash",
+                    tapisaurus_core::document::collection::IndexType::Vector { .. } => "hnsw",
+                    _ => "btree",
+                };
+                indexes.push(tapisaurus_catalog::IndexCatalogMeta {
+                    name: legacy.name,
+                    fields: legacy.fields.into_iter().map(|(f, _)| f).collect(),
+                    unique: legacy.unique,
+                    method: method.to_string(),
+                    is_primary: false,
+                });
+            }
+
+            // Attach matching vector HNSW or DiskANN index if present
+            if self.vector_indexes.contains_key(&col_name) {
+                indexes.push(tapisaurus_catalog::IndexCatalogMeta {
+                    name: format!("{col_name}_vector_hnsw_idx"),
+                    fields: vec![columns
+                        .iter()
+                        .find(|c| c.udt_name == "vector")
+                        .map_or_else(|| "vector".to_string(), |c| c.name.clone())],
+                    unique: false,
+                    method: "hnsw".to_string(),
+                    is_primary: false,
+                });
+            }
+            if self.diskann_indexes.contains_key(&col_name) {
+                indexes.push(tapisaurus_catalog::IndexCatalogMeta {
+                    name: format!("{col_name}_vector_diskann_idx"),
+                    fields: vec![columns
+                        .iter()
+                        .find(|c| c.udt_name == "vector")
+                        .map_or_else(|| "vector".to_string(), |c| c.name.clone())],
+                    unique: false,
+                    method: "diskann".to_string(),
+                    is_primary: false,
+                });
+            }
+
+            collections_meta.push(tapisaurus_catalog::CollectionCatalogMeta {
+                name: col_name,
+                row_count: col.count(&[]),
+                columns,
+                primary_key,
+                foreign_keys,
+                indexes,
+                comment,
+            });
+        }
+
+        tapisaurus_catalog::CatalogSnapshot {
+            database_name: database_name.to_string(),
+            server_version: tapisaurus_core::VERSION.to_string(),
+            collections: collections_meta,
+        }
+    }
+
+    /// Execute a SQL query against the virtual `pg_catalog` / `information_schema` layer if applicable.
+    /// Returns `Ok(None)` when the SQL references normal user collections rather than system catalogs.
+    pub fn query_virtual_catalog(
+        &self,
+        sql: &str,
+        dialect: tapisaurus_catalog::CatalogDialect,
+    ) -> Result<Option<tapisaurus_catalog::CatalogResult>, String> {
+        let db_name = match &dialect {
+            tapisaurus_catalog::CatalogDialect::Postgres => "tapisaurus",
+            tapisaurus_catalog::CatalogDialect::MySql { database } => database.as_str(),
+        };
+        let snapshot = self.catalog_snapshot(db_name);
+        let catalog = tapisaurus_catalog::materialize_catalog(&snapshot, dialect);
+        tapisaurus_catalog::try_execute_catalog_query(&catalog, sql)
+    }
+
+    /// Infer PostgreSQL/MySQL output column descriptors for a virtual catalog query (`Describe`).
+    pub fn describe_virtual_catalog(
+        &self,
+        sql: &str,
+        dialect: tapisaurus_catalog::CatalogDialect,
+    ) -> Result<Option<Vec<tapisaurus_catalog::CatalogColumn>>, String> {
+        let db_name = match &dialect {
+            tapisaurus_catalog::CatalogDialect::Postgres => "tapisaurus",
+            tapisaurus_catalog::CatalogDialect::MySql { database } => database.as_str(),
+        };
+        let snapshot = self.catalog_snapshot(db_name);
+        let catalog = tapisaurus_catalog::materialize_catalog(&snapshot, dialect);
+        tapisaurus_catalog::try_describe_catalog_query(&catalog, sql)
     }
 
     /// Trigger LSM-Tree compaction on persistent storage engine if open
@@ -788,8 +952,10 @@ impl DatabaseContext {
                     edge.properties = prop_doc;
                     if let Some(storage) = &self.storage {
                         if let Ok(bytes) = serde_json::to_vec(&edge) {
-                            let _ = storage
-                                .put(format!("graph:e:{from_id}:{relation}:{to_id}").as_bytes(), &bytes);
+                            let _ = storage.put(
+                                format!("graph:e:{from_id}:{relation}:{to_id}").as_bytes(),
+                                &bytes,
+                            );
                         }
                     }
                     self.graph_store.write().add_edge(edge);
@@ -859,15 +1025,18 @@ impl DatabaseContext {
                 if col.find_by_id(&doc_id).is_ok() {
                     let _ = col.delete_by_id(&doc_id);
                 }
-                self.bus.publish(ChangeEvent::insert(&col_name, doc.clone()));
+                self.bus
+                    .publish(ChangeEvent::insert(&col_name, doc.clone()));
                 to_insert.push(doc);
             }
             col.insert_many(to_insert).map_err(|e| e.to_string())?;
         }
 
-        Ok(self
-            .tapirsync_registry
-            .finalize_bundle_push(bundle, records_applied, conflicts_resolved))
+        Ok(self.tapirsync_registry.finalize_bundle_push(
+            bundle,
+            records_applied,
+            conflicts_resolved,
+        ))
     }
 
     /// Export a `TapirSyncBundle` (`TPSYNC01`) from this `TapisaurusDB` cluster so an edge
@@ -894,11 +1063,10 @@ impl DatabaseContext {
             if col_name == "_agent_memories" {
                 for doc in docs {
                     let hlc = self.tapirsync_registry.tick_hlc();
-                    let memory_id = doc
-                        .id
-                        .as_str()
-                        .parse::<u64>()
-                        .unwrap_or_else(|_| u64::from(crc32fast::hash(doc.id.as_str().as_bytes())));
+                    let memory_id =
+                        doc.id.as_str().parse::<u64>().unwrap_or_else(|_| {
+                            u64::from(crc32fast::hash(doc.id.as_str().as_bytes()))
+                        });
                     let content = doc
                         .get("content")
                         .and_then(|v| v.as_str())
@@ -1746,10 +1914,10 @@ impl DatabaseContext {
                         self.diskann_indexes
                             .get(custom_idx)
                             .map(|entry| entry.value().clone())
-                    } else if let Some(idx_lock) = self.diskann_indexes.get(&collection) {
-                        Some(idx_lock.clone())
                     } else {
-                        None
+                        self.diskann_indexes
+                            .get(&collection)
+                            .map(|idx_lock| idx_lock.clone())
                     };
 
                     let resolved_idx_opt = if resolved_diskann_opt.is_some() {
@@ -2223,8 +2391,16 @@ impl DatabaseContext {
                 }
                 Ok(QueryResult::Updated(count))
             }
-            Statement::CreateCollection { name } => {
-                self.get_or_create_collection(&name);
+            Statement::CreateCollection { name, schema } => {
+                let col = self.get_or_create_collection(&name);
+                if let Some(rel_schema) = schema {
+                    for col_def in &rel_schema.columns {
+                        if col_def.is_unique && !col_def.is_primary_key {
+                            let _ = col.create_secondary_index(&col_def.name, true);
+                        }
+                    }
+                    col.set_relational_schema(rel_schema);
+                }
                 Ok(QueryResult::Success(format!("Collection '{name}' created")))
             }
             Statement::DropCollection { name } => {
@@ -2318,7 +2494,11 @@ impl DatabaseContext {
             Statement::AlterTable { collection, action } => {
                 let col = self.get_or_create_collection(&collection);
                 match action {
-                    crate::ast::AlterAction::AddColumn { name, default } => {
+                    crate::ast::AlterAction::AddColumn {
+                        name,
+                        default,
+                        data_type,
+                    } => {
                         let ids: Vec<String> = col
                             .find_all(None)
                             .iter()
@@ -2333,6 +2513,17 @@ impl DatabaseContext {
                                 }
                             });
                         }
+                        let mut rel = col.relational_schema().unwrap_or_default();
+                        let def_str = default.as_ref().map(|v| format!("{v}"));
+                        rel.add_column(tapisaurus_core::ColumnSchema::from_sql_type(
+                            &name,
+                            data_type.as_deref().unwrap_or("text"),
+                            true,
+                            def_str,
+                            false,
+                            false,
+                        ));
+                        col.set_relational_schema(rel);
                         Ok(QueryResult::Success(format!(
                             "Column '{name}' added to collection '{collection}'"
                         )))
@@ -2349,6 +2540,10 @@ impl DatabaseContext {
                                 doc.fields.remove(&col_name);
                             });
                         }
+                        if let Some(mut rel) = col.relational_schema() {
+                            rel.drop_column(&name);
+                            col.set_relational_schema(rel);
+                        }
                         Ok(QueryResult::Success(format!(
                             "Column '{name}' dropped from collection '{collection}'"
                         )))
@@ -2356,6 +2551,9 @@ impl DatabaseContext {
                     crate::ast::AlterAction::RenameTable { new_name } => {
                         if let Some((_, old_col)) = self.collections.remove(&collection) {
                             let new_col = self.get_or_create_collection(&new_name);
+                            if let Some(rel) = old_col.relational_schema() {
+                                new_col.set_relational_schema(rel);
+                            }
                             for doc in old_col.find_all(None) {
                                 let _ = new_col.insert(doc);
                             }
@@ -2363,6 +2561,15 @@ impl DatabaseContext {
                         }
                         Ok(QueryResult::Success(format!(
                             "Collection '{collection}' renamed to '{new_name}'"
+                        )))
+                    }
+                    crate::ast::AlterAction::AddForeignKey(fk) => {
+                        let mut rel = col.relational_schema().unwrap_or_default();
+                        let cname = fk.constraint_name.clone();
+                        rel.add_foreign_key(fk);
+                        col.set_relational_schema(rel);
+                        Ok(QueryResult::Success(format!(
+                            "Foreign key constraint '{cname}' added to '{collection}'"
                         )))
                     }
                 }
@@ -3009,14 +3216,8 @@ mod tests {
             },
         ];
 
-        let bundle = tapisaurus_core::TapirSyncBundle::new(
-            "edge-kl-01",
-            0,
-            1,
-            hlc_1,
-            records,
-            None,
-        );
+        let bundle =
+            tapisaurus_core::TapirSyncBundle::new("edge-kl-01", 0, 1, hlc_1, records, None);
         let wire_bytes = bundle.to_bytes().expect("encode TPSYNC01 wire bytes");
         assert!(wire_bytes.starts_with(tapisaurus_core::TAPIRSYNC_WIRE_MAGIC));
 
@@ -3064,7 +3265,9 @@ mod tests {
         assert_eq!(path, vec!["10".to_string(), "20".to_string()]);
 
         // Verify Cloud -> Edge export bundle roundtrip
-        let exported = ctx.tapirsync_export_bundle(None).expect("export cloud bundle");
+        let exported = ctx
+            .tapirsync_export_bundle(None)
+            .expect("export cloud bundle");
         assert_eq!(exported.records.len(), 5);
         let exported_bytes = exported.to_bytes().unwrap();
         let redecoded = tapisaurus_core::TapirSyncBundle::from_bytes(&exported_bytes).unwrap();

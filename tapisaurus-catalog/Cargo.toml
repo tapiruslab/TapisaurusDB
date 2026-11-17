@@ -1,0 +1,14 @@
+[package]
+name = "tapisaurus-catalog"
+description = "Dynamic Virtual System Catalog Materializer & SQL Engine (pg_catalog / information_schema) for ORM compatibility"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tapisaurus-core = { path = "../tapisaurus-core" }
+crc32fast = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+

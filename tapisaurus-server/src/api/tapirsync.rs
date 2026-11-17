@@ -63,20 +63,14 @@ pub async fn tapirsync_push(
 ///
 /// Exports a `TapirSyncBundle` from `TapisaurusDB` for edge `.tapir` synchronization.
 /// When `{"format": "binary"}` is requested, responds with raw `TPSYNC01` wire bytes.
-pub async fn tapirsync_pull(
-    State(state): State<Arc<AppState>>,
-    body: Bytes,
-) -> Response {
+pub async fn tapirsync_pull(State(state): State<Arc<AppState>>, body: Bytes) -> Response {
     let req: TapirSyncPullRequest = if body.is_empty() {
         TapirSyncPullRequest::default()
     } else {
         serde_json::from_slice(&body).unwrap_or_default()
     };
 
-    let bundle = match state
-        .db
-        .tapirsync_export_bundle(req.collections.as_deref())
-    {
+    let bundle = match state.db.tapirsync_export_bundle(req.collections.as_deref()) {
         Ok(b) => b,
         Err(e) => {
             return (
@@ -113,4 +107,3 @@ pub async fn tapirsync_pull(
         (StatusCode::OK, Json(ApiResponse::ok(bundle))).into_response()
     }
 }
-

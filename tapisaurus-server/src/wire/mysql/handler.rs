@@ -46,59 +46,37 @@ pub fn handle_mysql_query(
         return vec![build_ok_packet(seq, 0, 0, "")];
     }
 
-    // 3. MySQL Driver Bootstrap Queries (Laravel / PHP PDO / MySQL CLI probe)
-    if upper.contains("@@VERSION_COMMENT") {
-        return make_single_value_result(
-            &mut seq,
-            current_db,
-            "@@version_comment",
-            "TapisaurusDB Universal Multi-Model Engine (Safe Rust)",
-        );
-    }
-    if upper.contains("@@VERSION") {
-        return make_single_value_result(&mut seq, current_db, "@@version", "8.0.35-TapisaurusDB");
-    }
-    if upper.contains("@@COLLATION_CONNECTION") {
-        return make_single_value_result(
-            &mut seq,
-            current_db,
-            "@@collation_connection",
-            "utf8mb4_general_ci",
-        );
-    }
-    if upper.contains("@@CHARACTER_SET_CLIENT") {
-        return make_single_value_result(&mut seq, current_db, "@@character_set_client", "utf8mb4");
-    }
-    if upper.contains("@@MAX_ALLOWED_PACKET") {
-        return make_single_value_result(&mut seq, current_db, "@@max_allowed_packet", "67108864");
-    }
-    if upper.contains("@@SQL_MODE") {
-        return make_single_value_result(
-            &mut seq,
-            current_db,
-            "@@sql_mode",
-            "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
-        );
-    }
-    if upper.contains("@@TIME_ZONE") || upper.contains("@@SYSTEM_TIME_ZONE") {
-        return make_single_value_result(&mut seq, current_db, "@@time_zone", "SYSTEM");
-    }
-    if upper.contains("@@TX_ISOLATION") || upper.contains("@@TRANSACTION_ISOLATION") {
-        return make_single_value_result(
-            &mut seq,
-            current_db,
-            "@@transaction_isolation",
-            "READ-COMMITTED",
-        );
-    }
-    if upper == "SELECT DATABASE()" || upper == "SELECT DATABASE();" {
-        return make_single_value_result(&mut seq, current_db, "DATABASE()", current_db);
-    }
-    if upper == "SELECT USER()" || upper == "SELECT CURRENT_USER()" {
-        return make_single_value_result(&mut seq, current_db, "USER()", "root@localhost");
-    }
+    // 3. MySQL Driver Bootstrap & Virtual System Catalog Queries (Laravel / SQLAlchemy / Prisma / TypeORM)
     if upper == "SELECT 1" || upper == "SELECT 1;" || upper.starts_with("SELECT 1 AS") {
         return make_single_value_result(&mut seq, current_db, "1", "1");
+    }
+    if upper.starts_with("SELECT") || upper.starts_with("WITH") || upper.starts_with("(SELECT") {
+        let dialect = tapisaurus_catalog::CatalogDialect::MySql {
+            database: current_db.to_string(),
+        };
+        match db.query_virtual_catalog(trimmed, dialect) {
+            Ok(Some(cat_res)) => {
+                let cols: Vec<String> = cat_res.columns.iter().map(|c| c.name.clone()).collect();
+                let col_oids: Vec<i32> = cat_res.columns.iter().map(|c| c.pg_type_oid).collect();
+                let rows: Vec<Vec<Option<String>>> = cat_res
+                    .rows
+                    .iter()
+                    .map(|row| {
+                        row.iter()
+                            .map(|cell| {
+                                cell.as_ref()
+                                    .and_then(tapisaurus_catalog::CatalogValue::to_mysql_text)
+                            })
+                            .collect()
+                    })
+                    .collect();
+                return format_typed_result_set(&mut seq, current_db, "", &cols, &col_oids, &rows);
+            }
+            Ok(None) => {}
+            Err(cat_err) => {
+                return vec![build_err_packet(seq, 1064, "42000", &cat_err)];
+            }
+        }
     }
 
     // 4. SHOW DATABASES
@@ -112,10 +90,19 @@ pub fn handle_mysql_query(
         return format_result_set(&mut seq, current_db, "", &cols, &rows);
     }
 
-    // 5. SHOW TABLES
+    // 5. SHOW TABLES / SHOW FULL TABLES
     if upper.starts_with("SHOW TABLES") || upper.starts_with("SHOW FULL TABLES") {
         let collections = db.list_collections();
+        let is_full = upper.starts_with("SHOW FULL TABLES");
         let col_name = format!("Tables_in_{current_db}");
+        if is_full {
+            let cols = vec![col_name, "Table_type".to_string()];
+            let rows: Vec<Vec<Option<String>>> = collections
+                .into_iter()
+                .map(|c| vec![Some(c), Some("BASE TABLE".to_string())])
+                .collect();
+            return format_result_set(&mut seq, current_db, "", &cols, &rows);
+        }
         let cols = vec![col_name];
         let rows: Vec<Vec<Option<String>>> =
             collections.into_iter().map(|c| vec![Some(c)]).collect();
@@ -228,15 +215,47 @@ pub fn handle_mysql_query(
 
     // 5c. SHOW CREATE TABLE
     if upper.starts_with("SHOW CREATE TABLE ") {
-        let raw_name = trimmed[18..]
-            .trim()
-            .trim_matches(|c| c == '`' || c == '"' || c == '\'');
-        let table_name = raw_name.split_whitespace().next().unwrap_or(raw_name);
-        let cols = vec!["Table".to_string(), "Create Table".to_string()];
+        let raw_name = trimmed[18..].trim();
+        let raw_tbl = raw_name.split_whitespace().next().unwrap_or(raw_name);
+        let table_name = tapisaurus_query::ddl::normalize_table_ident(raw_tbl);
+        let col = db.get_or_create_collection(&table_name);
+        let eff_cols = col.effective_columns();
+        let rel_schema = col.relational_schema();
+
+        let mut ddl_lines: Vec<String> = eff_cols
+            .iter()
+            .map(|c| {
+                let null_str = if c.nullable { "NULL" } else { "NOT NULL" };
+                let def_str = c
+                    .default_expr
+                    .as_ref()
+                    .map_or(String::new(), |d| format!(" DEFAULT {d}"));
+                format!("  `{}` {} {}{}", c.name, c.mysql_type, null_str, def_str)
+            })
+            .collect();
+
+        let pks: Vec<String> = eff_cols
+            .iter()
+            .filter(|c| c.is_primary_key)
+            .map(|c| format!("`{}`", c.name))
+            .collect();
+        if !pks.is_empty() {
+            ddl_lines.push(format!("  PRIMARY KEY ({})", pks.join(", ")));
+        }
+        if let Some(ref rel) = rel_schema {
+            for fk in &rel.foreign_keys {
+                ddl_lines.push(format!(
+                    "  CONSTRAINT `{}` FOREIGN KEY (`{}`) REFERENCES `{}` (`{}`) ON DELETE {} ON UPDATE {}",
+                    fk.constraint_name, fk.column, fk.referenced_table, fk.referenced_column, fk.on_delete, fk.on_update
+                ));
+            }
+        }
         let create_sql = format!(
-            "CREATE TABLE `{table_name}` (\n  `_id` varchar(64) NOT NULL PRIMARY KEY\n) ENGINE=TapisaurusDB DEFAULT CHARSET=utf8mb4"
+            "CREATE TABLE `{table_name}` (\n{}\n) ENGINE=TapisaurusDB DEFAULT CHARSET=utf8mb4",
+            ddl_lines.join(",\n")
         );
-        let rows = vec![vec![Some(table_name.to_string()), Some(create_sql)]];
+        let cols = vec!["Table".to_string(), "Create Table".to_string()];
+        let rows = vec![vec![Some(table_name), Some(create_sql)]];
         return format_result_set(&mut seq, current_db, "", &cols, &rows);
     }
 
@@ -252,10 +271,9 @@ pub fn handle_mysql_query(
         } else {
             15
         };
-        let raw_name = trimmed[prefix_len..]
-            .trim()
-            .trim_matches(|c| c == '`' || c == '"' || c == '\'');
-        let table_name = raw_name.split_whitespace().next().unwrap_or(raw_name);
+        let raw_name = trimmed[prefix_len..].trim();
+        let raw_tbl = raw_name.split_whitespace().next().unwrap_or(raw_name);
+        let table_name = tapisaurus_query::ddl::normalize_table_ident(raw_tbl);
         let cols = vec![
             "Table".to_string(),
             "Non_unique".to_string(),
@@ -271,23 +289,52 @@ pub fn handle_mysql_query(
             "Comment".to_string(),
             "Index_comment".to_string(),
         ];
-        let col = db.get_or_create_collection(table_name);
-        let count = col.count(&[]);
-        let rows = vec![vec![
-            Some(table_name.to_string()),
-            Some("0".to_string()),
-            Some("PRIMARY".to_string()),
-            Some("1".to_string()),
-            Some("_id".to_string()),
-            Some("A".to_string()),
-            Some(count.to_string()),
-            None,
-            None,
-            Some("".to_string()),
-            Some("BTREE".to_string()),
-            Some("".to_string()),
-            Some("".to_string()),
-        ]];
+        let snapshot = db.catalog_snapshot(current_db);
+        let count = db.get_or_create_collection(&table_name).count(&[]);
+        let mut rows = Vec::new();
+        if let Some(meta) = snapshot.collections.iter().find(|c| c.name == table_name) {
+            let pk_cols = if meta.primary_key.is_empty() {
+                vec!["_id".to_string()]
+            } else {
+                meta.primary_key.clone()
+            };
+            for (seq, pk_col) in pk_cols.iter().enumerate() {
+                rows.push(vec![
+                    Some(table_name.clone()),
+                    Some("0".to_string()),
+                    Some("PRIMARY".to_string()),
+                    Some((seq + 1).to_string()),
+                    Some(pk_col.clone()),
+                    Some("A".to_string()),
+                    Some(count.to_string()),
+                    None,
+                    None,
+                    Some("".to_string()),
+                    Some("BTREE".to_string()),
+                    Some("".to_string()),
+                    Some("".to_string()),
+                ]);
+            }
+            for idx in &meta.indexes {
+                for (seq, field) in idx.fields.iter().enumerate() {
+                    rows.push(vec![
+                        Some(table_name.clone()),
+                        Some(if idx.unique { "0" } else { "1" }.to_string()),
+                        Some(idx.name.clone()),
+                        Some((seq + 1).to_string()),
+                        Some(field.clone()),
+                        Some("A".to_string()),
+                        Some(count.to_string()),
+                        None,
+                        None,
+                        Some("YES".to_string()),
+                        Some(idx.method.to_ascii_uppercase()),
+                        Some("".to_string()),
+                        Some("".to_string()),
+                    ]);
+                }
+            }
+        }
         return format_result_set(&mut seq, current_db, "", &cols, &rows);
     }
 
@@ -296,8 +343,11 @@ pub fn handle_mysql_query(
         || upper.starts_with("DESC ")
         || upper.starts_with("SHOW COLUMNS FROM ")
         || upper.starts_with("SHOW FIELDS FROM ")
+        || upper.starts_with("SHOW FULL COLUMNS FROM ")
     {
-        let prefix_len = if upper.starts_with("SHOW COLUMNS FROM ") {
+        let prefix_len = if upper.starts_with("SHOW FULL COLUMNS FROM ") {
+            23
+        } else if upper.starts_with("SHOW COLUMNS FROM ") {
             18
         } else if upper.starts_with("SHOW FIELDS FROM ") {
             17
@@ -306,10 +356,9 @@ pub fn handle_mysql_query(
         } else {
             5
         };
-        let raw_name = trimmed[prefix_len..]
-            .trim()
-            .trim_matches(|c| c == '`' || c == '"' || c == '\'');
-        let table_name = raw_name.split_whitespace().next().unwrap_or(raw_name);
+        let raw_name = trimmed[prefix_len..].trim();
+        let raw_tbl = raw_name.split_whitespace().next().unwrap_or(raw_name);
+        let table_name = tapisaurus_query::ddl::normalize_table_ident(raw_tbl);
 
         let cols = vec![
             "Field".to_string(),
@@ -319,41 +368,35 @@ pub fn handle_mysql_query(
             "Default".to_string(),
             "Extra".to_string(),
         ];
-        let mut rows = Vec::new();
-        rows.push(vec![
-            Some("_id".to_string()),
-            Some("varchar(64)".to_string()),
-            Some("NO".to_string()),
-            Some("PRI".to_string()),
-            None,
-            Some("".to_string()),
-        ]);
-
-        let col = db.get_or_create_collection(table_name);
-        let samples = col.find_paginated(0, 10);
-        let mut seen = std::collections::HashSet::new();
-        for doc in samples {
-            for (k, v) in doc.fields {
-                if k != "_id" && k != "id" && seen.insert(k.clone()) {
-                    let type_str = match v {
-                        Value::Boolean(_) => "tinyint(1)",
-                        Value::Integer(_) => "bigint",
-                        Value::Float(_) => "double",
-                        Value::String(_) => "text",
-                        Value::Array(_) | Value::Object(_) => "json",
-                        _ => "text",
-                    };
-                    rows.push(vec![
-                        Some(k),
-                        Some(type_str.to_string()),
-                        Some("YES".to_string()),
-                        Some("".to_string()),
-                        None,
-                        Some("".to_string()),
-                    ]);
-                }
-            }
-        }
+        let col = db.get_or_create_collection(&table_name);
+        let eff_cols = col.effective_columns();
+        let sec_idx_fields: std::collections::HashSet<String> = col
+            .list_secondary_indexes()
+            .into_iter()
+            .map(|i| i.field)
+            .collect();
+        let rows: Vec<Vec<Option<String>>> = eff_cols
+            .into_iter()
+            .map(|c| {
+                let key = if c.is_primary_key {
+                    "PRI"
+                } else if c.is_unique {
+                    "UNI"
+                } else if sec_idx_fields.contains(&c.name) {
+                    "MUL"
+                } else {
+                    ""
+                };
+                vec![
+                    Some(c.name),
+                    Some(c.mysql_type),
+                    Some(if c.nullable { "YES" } else { "NO" }.to_string()),
+                    Some(key.to_string()),
+                    c.default_expr,
+                    Some("".to_string()),
+                ]
+            })
+            .collect();
         return format_result_set(&mut seq, current_db, "", &cols, &rows);
     }
 
@@ -462,6 +505,27 @@ pub fn format_result_set(
     columns: &[String],
     rows: &[Vec<Option<String>>],
 ) -> Vec<Bytes> {
+    let oids: Vec<i32> = columns
+        .iter()
+        .map(|col| {
+            if col.to_uppercase().contains("COUNT") || col == "1" {
+                20
+            } else {
+                25
+            }
+        })
+        .collect();
+    format_typed_result_set(seq, db, table, columns, &oids, rows)
+}
+
+fn format_typed_result_set(
+    seq: &mut u8,
+    db: &str,
+    table: &str,
+    columns: &[String],
+    pg_oids: &[i32],
+    rows: &[Vec<Option<String>>],
+) -> Vec<Bytes> {
     let mut packets = Vec::with_capacity(3 + columns.len() + rows.len());
 
     // 1. Column Count packet
@@ -471,11 +535,10 @@ pub fn format_result_set(
     *seq = seq.wrapping_add(1);
 
     // 2. Column Definitions
-    for col in columns {
-        let col_type = if col.to_uppercase().contains("COUNT") || col == "1" {
-            MYSQL_TYPE_LONGLONG
-        } else {
-            MYSQL_TYPE_VAR_STRING
+    for (col, oid) in columns.iter().zip(pg_oids.iter().copied()) {
+        let col_type = match oid {
+            16 | 20 | 21 | 23 => MYSQL_TYPE_LONGLONG,
+            _ => MYSQL_TYPE_VAR_STRING,
         };
         packets.push(build_column_def(*seq, db, table, col, col_type, 255));
         *seq = seq.wrapping_add(1);

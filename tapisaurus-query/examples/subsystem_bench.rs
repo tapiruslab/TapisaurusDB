@@ -309,7 +309,10 @@ fn main() {
             row_id: i.to_string(),
             columns: std::collections::BTreeMap::from([
                 ("id".into(), serde_json::json!(i)),
-                ("voltage".into(), serde_json::json!(3.7 + (i as f64) * 0.001)),
+                (
+                    "voltage".into(),
+                    serde_json::json!(3.7 + (i as f64) * 0.001),
+                ),
             ]),
             hlc: stamp,
         });

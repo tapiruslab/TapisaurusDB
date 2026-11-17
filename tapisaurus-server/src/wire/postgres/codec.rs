@@ -9,15 +9,25 @@ use bytes::{BufMut, BytesMut};
 
 /// Well-known PostgreSQL DataType Object Identifiers (OIDs)
 pub const PG_TYPE_BOOL: i32 = 16;
+pub const PG_TYPE_BYTEA: i32 = 17;
+pub const PG_TYPE_NAME: i32 = 19;
 pub const PG_TYPE_INT8: i32 = 20;
 pub const PG_TYPE_INT2: i32 = 21;
 pub const PG_TYPE_INT4: i32 = 23;
 pub const PG_TYPE_TEXT: i32 = 25;
+pub const PG_TYPE_OID: i32 = 26;
 pub const PG_TYPE_FLOAT4: i32 = 700;
 pub const PG_TYPE_FLOAT8: i32 = 701;
+pub const PG_TYPE_TEXT_ARRAY: i32 = 1009;
+pub const PG_TYPE_INT8_ARRAY: i32 = 1016;
 pub const PG_TYPE_VARCHAR: i32 = 1043;
+pub const PG_TYPE_TIMESTAMP: i32 = 1114;
+pub const PG_TYPE_TIMESTAMPTZ: i32 = 1184;
+pub const PG_TYPE_NUMERIC: i32 = 1700;
+pub const PG_TYPE_UUID: i32 = 2950;
 pub const PG_TYPE_JSON: i32 = 114;
 pub const PG_TYPE_JSONB: i32 = 3802;
+pub const PG_TYPE_VECTOR: i32 = 16390;
 
 /// Field description in a `RowDescription` ('T') message
 #[derive(Debug, Clone)]
@@ -294,6 +304,21 @@ pub fn decode_pg_param(format_code: i16, param_bytes: &[u8], type_oid: Option<i3
     if format_code == 0 {
         // Text format
         return String::from_utf8_lossy(param_bytes).to_string();
+    }
+
+    // If the wire metadata explicitly specifies a string/JSON type, never reinterpret short payloads as integers.
+    if let Some(oid) = type_oid {
+        if matches!(
+            oid,
+            PG_TYPE_TEXT | PG_TYPE_VARCHAR | PG_TYPE_NAME | PG_TYPE_JSON | PG_TYPE_JSONB
+        ) {
+            return String::from_utf8_lossy(param_bytes).to_string();
+        }
+        if oid == PG_TYPE_UUID && param_bytes.len() == 16 {
+            if let Ok(u) = uuid::Uuid::from_slice(param_bytes) {
+                return u.to_string();
+            }
+        }
     }
 
     // Binary format (format_code == 1)
