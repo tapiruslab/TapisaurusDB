@@ -351,6 +351,16 @@ pub enum Statement {
         field: String,
         unique: bool,
     },
+    CreateVectorIndex {
+        index_name: String,
+        collection: String,
+        field: String,
+        method: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        dimensions: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        clusters: Option<usize>,
+    },
     DropIndex {
         collection: String,
         field: String,

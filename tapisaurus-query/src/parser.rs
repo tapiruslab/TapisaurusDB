@@ -1618,13 +1618,34 @@ fn parse_alter_table(input: &str) -> Result<Statement, String> {
     Err(format!("Unsupported ALTER TABLE clause: '{after_name}'"))
 }
 
-/// Parse CREATE [UNIQUE] INDEX [idx_name] ON <collection>(<field>) [UNIQUE]
+/// Parse CREATE [UNIQUE | VECTOR] INDEX [idx_name] ON <collection>(<field>) [UNIQUE] [USING <method>] [WITH (...)]
 fn parse_create_index_query(input: &str) -> Result<Statement, String> {
     let clean = input.trim_end_matches(';').trim();
     let unique = find_keyword_top_level(clean, "UNIQUE").is_some();
 
     let on_pos = find_keyword_top_level(clean, "ON")
         .ok_or("Expected 'ON <collection>(<field>)' in CREATE INDEX")?;
+    let before_on = clean[..on_pos].trim();
+    let is_create_vector = find_keyword_top_level(before_on, "VECTOR").is_some();
+
+    // Extract optional explicit index name between INDEX and ON
+    let index_name_opt = find_keyword_top_level(before_on, "INDEX").and_then(|idx_pos| {
+        let after_idx = before_on[idx_pos + 5..].trim();
+        let after_if_not = if after_idx.to_uppercase().starts_with("IF NOT EXISTS ") {
+            after_idx[14..].trim()
+        } else {
+            after_idx
+        };
+        let cleaned = after_if_not
+            .trim_matches(|c| c == '`' || c == '"' || c == '\'')
+            .trim();
+        if cleaned.is_empty() {
+            None
+        } else {
+            Some(cleaned.to_string())
+        }
+    });
+
     let target = clean[on_pos + 2..].trim();
 
     let paren_open = target
@@ -1642,6 +1663,61 @@ fn parse_create_index_query(input: &str) -> Result<Statement, String> {
 
     if collection.is_empty() || field.is_empty() {
         return Err("Invalid collection or field in CREATE INDEX".to_string());
+    }
+
+    let after_field = target[paren_close + 1..].trim();
+    let using_method_opt = find_keyword_top_level(after_field, "USING").and_then(|u_pos| {
+        let after_using = after_field[u_pos + 5..].trim();
+        after_using
+            .split(|c: char| c.is_whitespace() || c == '(')
+            .find(|s| !s.is_empty())
+            .map(|m| {
+                m.trim_matches(|c| c == '`' || c == '"' || c == '\'')
+                    .to_lowercase()
+            })
+    });
+
+    let is_vector_method = matches!(
+        using_method_opt.as_deref(),
+        Some("ivf_emeans" | "ivf-emeans" | "ivfemeans" | "diskann" | "vamana" | "hnsw")
+    );
+
+    if is_create_vector || is_vector_method {
+        let method = using_method_opt.unwrap_or_else(|| "ivf_emeans".to_string());
+        let index_name =
+            index_name_opt.unwrap_or_else(|| format!("idx_{collection}_{field}_{method}"));
+
+        // Parse optional WITH (dimensions = N, clusters = K)
+        let mut dimensions = None;
+        let mut clusters = None;
+        if let Some(with_pos) = find_keyword_top_level(after_field, "WITH") {
+            let after_with = after_field[with_pos + 4..].trim();
+            if let (Some(w_open), Some(w_close)) = (after_with.find('('), after_with.rfind(')')) {
+                if w_close > w_open {
+                    let kvs = &after_with[w_open + 1..w_close];
+                    for pair in kvs.split(',') {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            let key = k.trim().to_lowercase();
+                            let val = v.trim().parse::<usize>().ok();
+                            match key.as_str() {
+                                "dimensions" | "dim" | "dims" => dimensions = val,
+                                "clusters" | "num_clusters" | "k" | "lists" => clusters = val,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return Ok(Statement::CreateVectorIndex {
+            index_name,
+            collection,
+            field,
+            method,
+            dimensions,
+            clusters,
+        });
     }
 
     Ok(Statement::CreateIndex {

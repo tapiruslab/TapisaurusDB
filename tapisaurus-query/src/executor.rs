@@ -37,6 +37,8 @@ pub struct DatabaseContext {
         DashMap<String, Arc<parking_lot::Mutex<tapisaurus_core::transaction::mvcc::Transaction>>>,
     vector_indexes: DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::HnswIndex>>>,
     diskann_indexes: DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::DiskAnnIndex>>>,
+    ivf_emeans_indexes:
+        DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::IvfEmeansIndex>>>,
     htap_tables: DashMap<String, Arc<parking_lot::RwLock<tapisaurus_core::HtapColumnarTable>>>,
     deterministic_sequencer: Arc<tapisaurus_core::DeterministicSequencer>,
     graph_store: Arc<parking_lot::RwLock<tapisaurus_graph::GraphStore>>,
@@ -69,6 +71,7 @@ impl Default for DatabaseContext {
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
             diskann_indexes: DashMap::new(),
+            ivf_emeans_indexes: DashMap::new(),
             htap_tables: DashMap::new(),
             deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
@@ -109,6 +112,7 @@ impl DatabaseContext {
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
             diskann_indexes: DashMap::new(),
+            ivf_emeans_indexes: DashMap::new(),
             htap_tables: DashMap::new(),
             deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
@@ -146,6 +150,7 @@ impl DatabaseContext {
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
             diskann_indexes: DashMap::new(),
+            ivf_emeans_indexes: DashMap::new(),
             htap_tables: DashMap::new(),
             deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
@@ -182,6 +187,7 @@ impl DatabaseContext {
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
             diskann_indexes: DashMap::new(),
+            ivf_emeans_indexes: DashMap::new(),
             htap_tables: DashMap::new(),
             deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
@@ -219,6 +225,7 @@ impl DatabaseContext {
             active_txns: DashMap::new(),
             vector_indexes: DashMap::new(),
             diskann_indexes: DashMap::new(),
+            ivf_emeans_indexes: DashMap::new(),
             htap_tables: DashMap::new(),
             deterministic_sequencer,
             graph_store: Arc::new(parking_lot::RwLock::new(tapisaurus_graph::GraphStore::new())),
@@ -561,6 +568,18 @@ impl DatabaseContext {
                     is_primary: false,
                 });
             }
+            if self.ivf_emeans_indexes.contains_key(&col_name) {
+                indexes.push(tapisaurus_catalog::IndexCatalogMeta {
+                    name: format!("{col_name}_vector_ivf_emeans_idx"),
+                    fields: vec![columns
+                        .iter()
+                        .find(|c| c.udt_name == "vector")
+                        .map_or_else(|| "vector".to_string(), |c| c.name.clone())],
+                    unique: false,
+                    method: "ivf_emeans".to_string(),
+                    is_primary: false,
+                });
+            }
 
             collections_meta.push(tapisaurus_catalog::CollectionCatalogMeta {
                 name: col_name,
@@ -684,6 +703,13 @@ impl DatabaseContext {
         &self,
     ) -> &DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::DiskAnnIndex>>> {
         &self.diskann_indexes
+    }
+
+    /// Access Disk-Backed `IVF-EMEANS` (`TPIVFE01`) vector indexes
+    pub fn ivf_emeans_indexes(
+        &self,
+    ) -> &DashMap<String, Arc<parking_lot::RwLock<tapisaurus_vector::IvfEmeansIndex>>> {
+        &self.ivf_emeans_indexes
     }
 
     /// Access HTAP (`TPHTAP01`) columnar stripe tables
@@ -1941,26 +1967,59 @@ impl DatabaseContext {
                             .map(|idx_lock| idx_lock.clone())
                     };
 
-                    let resolved_idx_opt = if resolved_diskann_opt.is_some() {
+                    let resolved_ivf_emeans_opt = if resolved_diskann_opt.is_some() {
                         None
                     } else if let Some(ref custom_idx) = v_clause.index_name {
-                        if let Some(idx_lock) = self.vector_indexes.get(custom_idx) {
-                            Some(idx_lock.clone())
-                        } else {
-                            return Err(format!("Vector index '{custom_idx}' not found"));
-                        }
-                    } else if let Some(idx_lock) = self.vector_indexes.get(&collection) {
-                        Some(idx_lock.clone())
-                    } else if self.vector_indexes.len() == 1 {
-                        self.vector_indexes
-                            .iter()
-                            .next()
+                        self.ivf_emeans_indexes
+                            .get(custom_idx)
                             .map(|entry| entry.value().clone())
                     } else {
-                        None
+                        self.ivf_emeans_indexes
+                            .get(&collection)
+                            .map(|idx_lock| idx_lock.clone())
                     };
 
-                    if let Some(diskann_lock) = resolved_diskann_opt {
+                    let resolved_idx_opt =
+                        if resolved_diskann_opt.is_some() || resolved_ivf_emeans_opt.is_some() {
+                            None
+                        } else if let Some(ref custom_idx) = v_clause.index_name {
+                            if let Some(idx_lock) = self.vector_indexes.get(custom_idx) {
+                                Some(idx_lock.clone())
+                            } else {
+                                return Err(format!("Vector index '{custom_idx}' not found"));
+                            }
+                        } else if let Some(idx_lock) = self.vector_indexes.get(&collection) {
+                            Some(idx_lock.clone())
+                        } else if self.vector_indexes.len() == 1 {
+                            self.vector_indexes
+                                .iter()
+                                .next()
+                                .map(|entry| entry.value().clone())
+                        } else {
+                            None
+                        };
+
+                    if let Some(ivf_lock) = resolved_ivf_emeans_opt {
+                        let idx = ivf_lock.read();
+                        let candidate_k = if filter.is_some() || traverse.is_some() {
+                            std::cmp::max(v_clause.top_k * 10, 100)
+                                .min(idx.len().max(v_clause.top_k))
+                        } else {
+                            v_clause.top_k
+                        };
+                        let (hits, _probed) = idx.search(&v_clause.vector, candidate_k, None)?;
+                        let id_rank: std::collections::HashMap<String, usize> = hits
+                            .into_iter()
+                            .enumerate()
+                            .map(|(rank, hit)| (hit.id, rank))
+                            .collect();
+
+                        filtered.retain(|d| id_rank.contains_key(d.id.as_str()));
+                        filtered.sort_by_key(|d| {
+                            id_rank.get(d.id.as_str()).copied().unwrap_or(usize::MAX)
+                        });
+                        filtered.truncate(v_clause.top_k);
+                    } else if let Some(diskann_lock) = resolved_diskann_opt {
                         let idx = diskann_lock.read();
                         if v_clause.vector.len() != idx.config.dimensions {
                             return Err(format!(
@@ -2481,6 +2540,121 @@ impl DatabaseContext {
                 Ok(QueryResult::Success(format!(
                     "Index '{idx_name}' created on '{collection}.{field}'{unique_tag}"
                 )))
+            }
+            Statement::CreateVectorIndex {
+                index_name,
+                collection,
+                field,
+                method,
+                dimensions,
+                clusters,
+            } => {
+                let col = self.get_or_create_collection(&collection);
+                let docs = col.find_all(None);
+                let mut extracted: Vec<(String, Vec<f32>)> = Vec::new();
+                for doc in &docs {
+                    let val_opt = doc
+                        .get(&field)
+                        .or_else(|| doc.get("vector"))
+                        .or_else(|| doc.get("embedding"));
+                    let vec_f32: Option<Vec<f32>> = match val_opt {
+                        Some(Value::Vector(v)) => Some(v.clone()),
+                        Some(Value::Array(arr)) => {
+                            let parsed: Vec<f32> = arr
+                                .iter()
+                                .filter_map(|x| match x {
+                                    Value::Float(f) => Some(*f as f32),
+                                    Value::Integer(i) => Some(*i as f32),
+                                    _ => None,
+                                })
+                                .collect();
+                            if parsed.is_empty() {
+                                None
+                            } else {
+                                Some(parsed)
+                            }
+                        }
+                        _ => None,
+                    };
+                    if let Some(v) = vec_f32 {
+                        extracted.push((doc.id.as_str().to_string(), v));
+                    }
+                }
+
+                let dims = dimensions
+                    .or_else(|| extracted.first().map(|(_, v)| v.len()))
+                    .unwrap_or(128)
+                    .max(1);
+                let method_norm = method.to_ascii_lowercase().replace('-', "_");
+
+                match method_norm.as_str() {
+                    "ivf_emeans" | "ivf" | "emeans" => {
+                        let disk_path = std::env::temp_dir().join(format!(
+                            "tapisaurus_{}_{}_{}.ivfe",
+                            std::process::id(),
+                            collection,
+                            index_name
+                        ));
+                        let mut cfg = tapisaurus_vector::IvfEmeansConfig::new(dims, disk_path);
+                        cfg.num_clusters = clusters.unwrap_or(8).max(1);
+                        cfg.default_n_probe = (cfg.num_clusters / 2).clamp(1, 4);
+                        let mut idx = tapisaurus_vector::IvfEmeansIndex::new(cfg);
+                        for (id, vec) in extracted {
+                            if vec.len() == dims {
+                                idx.insert(id, vec)?;
+                            }
+                        }
+                        let flushed = idx.flush_to_disk()?;
+                        let arc = Arc::new(parking_lot::RwLock::new(idx));
+                        self.ivf_emeans_indexes
+                            .insert(index_name.clone(), arc.clone());
+                        self.ivf_emeans_indexes.insert(collection.clone(), arc);
+                        Ok(QueryResult::Success(format!(
+                            "Vector index '{index_name}' (IVF_EMEANS TPIVFE01, {dims}D, {flushed} vectors) created on '{collection}.{field}'"
+                        )))
+                    }
+                    "diskann" | "vamana" => {
+                        let disk_path = std::env::temp_dir().join(format!(
+                            "tapisaurus_{}_{}_{}.dann",
+                            std::process::id(),
+                            collection,
+                            index_name
+                        ));
+                        let cfg = tapisaurus_vector::DiskAnnConfig::new(dims, disk_path);
+                        let mut idx = tapisaurus_vector::DiskAnnIndex::new(cfg);
+                        for (id, vec) in extracted {
+                            if vec.len() == dims {
+                                idx.insert(id, vec)?;
+                            }
+                        }
+                        let flushed = idx.flush_to_disk()?;
+                        let arc = Arc::new(parking_lot::RwLock::new(idx));
+                        self.diskann_indexes.insert(index_name.clone(), arc.clone());
+                        self.diskann_indexes.insert(collection.clone(), arc);
+                        Ok(QueryResult::Success(format!(
+                            "Vector index '{index_name}' (DISKANN TPDANN01, {dims}D, {flushed} vectors) created on '{collection}.{field}'"
+                        )))
+                    }
+                    _ => {
+                        let cfg = tapisaurus_vector::HnswConfig {
+                            dimensions: dims,
+                            ..Default::default()
+                        };
+                        let mut idx = tapisaurus_vector::HnswIndex::new(cfg);
+                        for (id, vec) in extracted {
+                            if vec.len() == dims {
+                                let _ = idx.insert(id, vec);
+                            }
+                        }
+                        let total = idx.len();
+                        let arc = Arc::new(parking_lot::RwLock::new(idx));
+                        self.vector_indexes.insert(index_name.clone(), arc.clone());
+                        self.vector_indexes.insert(collection.clone(), arc);
+                        Ok(QueryResult::Success(format!(
+                            "Vector index '{index_name}' (HNSW TPSHNSW1, {dims}D, {total} vectors) created on '{collection}.{field}'"
+                        )))
+                    }
+                }
             }
             Statement::DropIndex { collection, field } => {
                 let col = self.get_or_create_collection(&collection);
@@ -3416,5 +3590,50 @@ mod tests {
         assert_eq!(grp_pruned, 1);
         assert_eq!(groups.get("APAC").unwrap().1, 124);
         assert_eq!(groups.get("EMEA").unwrap().1, 124);
+    }
+
+    #[test]
+    fn test_sql_create_vector_index_using_ivf_emeans_and_search() {
+        let ctx = DatabaseContext::new();
+        let col = ctx.get_or_create_collection("docs");
+
+        let vectors = [
+            ("doc_1", vec![1.0, 0.0, 0.0, 0.0], "Alpha"),
+            ("doc_2", vec![0.95, 0.05, 0.0, 0.0], "Alpha Near"),
+            ("doc_3", vec![0.0, 1.0, 0.0, 0.0], "Beta"),
+            ("doc_4", vec![0.0, 0.0, 1.0, 0.0], "Gamma"),
+        ];
+        for (id, vec_vals, title) in vectors {
+            let mut d = Document::with_id(id);
+            d.set("title", Value::String(title.to_string()));
+            d.set(
+                "embedding",
+                Value::Array(vec_vals.into_iter().map(Value::Float).collect()),
+            );
+            col.insert(d).unwrap();
+        }
+
+        // 1. Execute CREATE VECTOR INDEX ... USING IVF_EMEANS
+        let ddl_stmt = crate::parse_query(
+            "CREATE VECTOR INDEX idx_docs_ivfe ON docs(embedding) USING IVF_EMEANS WITH (dimensions = 4, clusters = 2)",
+        )
+        .unwrap();
+        let ddl_res = ctx.execute(ddl_stmt).unwrap();
+        assert!(matches!(ddl_res, QueryResult::Success(ref s) if s.contains("TPIVFE01")));
+        assert!(ctx.ivf_emeans_indexes().contains_key("idx_docs_ivfe"));
+
+        // 2. Query via FIND ... VECTOR NEAR ... USING INDEX 'idx_docs_ivfe'
+        let search_stmt = crate::parse_query(
+            "FIND docs VECTOR NEAR [1.0, 0.0, 0.0, 0.0] TOP 2 USING INDEX 'idx_docs_ivfe'",
+        )
+        .unwrap();
+        let search_res = ctx.execute(search_stmt).unwrap();
+        match search_res {
+            QueryResult::Documents(docs) => {
+                assert_eq!(docs.len(), 2);
+                assert_eq!(docs[0].id.as_str(), "doc_1");
+            }
+            other => panic!("Expected Documents, got {other:?}"),
+        }
     }
 }

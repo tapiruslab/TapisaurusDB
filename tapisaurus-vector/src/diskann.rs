@@ -119,6 +119,8 @@ pub struct DiskAnnIndex {
     id_to_disk_idx: HashMap<String, u32>,
     /// Entry-point medoid vertex index in `disk_nodes`
     medoid_idx: Option<u32>,
+    /// Persistent OS file handle to avoid repeated `CreateFileW` / `open` syscalls per node read
+    reader_handle: std::sync::Mutex<Option<File>>,
 }
 
 impl DiskAnnIndex {
@@ -131,6 +133,7 @@ impl DiskAnnIndex {
             disk_nodes: Vec::new(),
             id_to_disk_idx: HashMap::new(),
             medoid_idx: None,
+            reader_handle: std::sync::Mutex::new(None),
         }
     }
 
@@ -293,6 +296,9 @@ impl DiskAnnIndex {
         }
 
         // 4. Write framed `TPDANN01` page file to disk and build compact BQ directory in RAM
+        if let Ok(mut guard) = self.reader_handle.lock() {
+            *guard = None;
+        }
         if let Some(parent) = self.config.disk_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -354,6 +360,9 @@ impl DiskAnnIndex {
         self.disk_nodes = new_disk_nodes;
         self.id_to_disk_idx = new_id_map;
         self.medoid_idx = Some(best_medoid);
+        if let Ok(mut guard) = self.reader_handle.lock() {
+            *guard = File::open(&self.config.disk_path).ok();
+        }
         Ok(n)
     }
 
@@ -362,14 +371,28 @@ impl DiskAnnIndex {
         offset: u64,
         record_len: u32,
     ) -> Result<DiskNodeRecord, String> {
-        let mut file = File::open(&self.config.disk_path)
-            .map_err(|e| format!("Failed to open DiskANN file: {e}"))?;
-        file.seek(SeekFrom::Start(offset))
-            .map_err(|e| format!("Failed to seek DiskANN file: {e}"))?;
-
         let mut buf = vec![0u8; record_len as usize];
-        file.read_exact(&mut buf)
-            .map_err(|e| format!("Failed to read DiskANN node record: {e}"))?;
+        if let Ok(mut guard) = self.reader_handle.lock() {
+            if guard.is_none() {
+                *guard = Some(
+                    File::open(&self.config.disk_path)
+                        .map_err(|e| format!("Failed to open DiskANN file: {e}"))?,
+                );
+            }
+            if let Some(file) = guard.as_mut() {
+                file.seek(SeekFrom::Start(offset))
+                    .map_err(|e| format!("Failed to seek DiskANN file: {e}"))?;
+                file.read_exact(&mut buf)
+                    .map_err(|e| format!("Failed to read DiskANN node record: {e}"))?;
+            }
+        } else {
+            let mut file = File::open(&self.config.disk_path)
+                .map_err(|e| format!("Failed to open DiskANN file: {e}"))?;
+            file.seek(SeekFrom::Start(offset))
+                .map_err(|e| format!("Failed to seek DiskANN file: {e}"))?;
+            file.read_exact(&mut buf)
+                .map_err(|e| format!("Failed to read DiskANN node record: {e}"))?;
+        }
 
         if buf.len() < 8 {
             return Err("Corrupted DiskANN node record (too short)".into());
@@ -450,6 +473,26 @@ impl DiskAnnIndex {
                     node_idx: medoid,
                     dist: approx_d0,
                 });
+
+                // Seed beam frontier with top-8 in-memory 1-bit Binary Quantized entry points
+                let mut bq_seeds: Vec<(u32, f32)> = self
+                    .disk_nodes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, n)| {
+                        (
+                            i as u32,
+                            BinaryQuantizer::normalized_hamming_distance(&query_bq, &n.bq_code),
+                        )
+                    })
+                    .collect();
+                bq_seeds.sort_by(|a, b| a.1.total_cmp(&b.1));
+                for &(seed_idx, seed_dist) in bq_seeds.iter().take(8) {
+                    frontier.push(BeamCandidate {
+                        node_idx: seed_idx,
+                        dist: seed_dist,
+                    });
+                }
 
                 while let Some(cand) = frontier.pop() {
                     if visited.len() >= beam_l {

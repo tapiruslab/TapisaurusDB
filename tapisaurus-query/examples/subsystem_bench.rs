@@ -26,16 +26,23 @@ fn percentile_us(sorted_ns: &[u128], pct: f64) -> f64 {
 }
 
 fn deterministic_vec(seed: usize, dims: usize) -> Vec<f32> {
+    let cluster = seed % 16;
     let mut v = Vec::with_capacity(dims);
     let mut s = (seed as u64)
         .wrapping_mul(6364136223846793005)
         .wrapping_add(1);
+    let mut c_state = ((cluster + 1) as u64).wrapping_mul(2862933555777941757);
     let mut norm = 0.0f32;
     for _ in 0..dims {
+        c_state = c_state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        let center = ((c_state >> 32) as u32 as f32) / (u32::MAX as f32) - 0.5;
         s = s
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
-        let val = ((s >> 33) as f32) / (u32::MAX as f32) - 0.5;
+        let noise = (((s >> 32) as u32 as f32) / (u32::MAX as f32) - 0.5) * 0.45;
+        let val = center + noise;
         norm += val * val;
         v.push(val);
     }
@@ -365,5 +372,108 @@ fn main() {
         tpbin_p50,
         json_p50,
         json_p50 / tpbin_p50.max(0.01)
+    );
+
+    // 9. 3-Way Vector Engine Comparison: In-Memory HNSW vs SSD DiskANN (TPDANN01) vs Disk-Backed IVF-EMEANS (TPIVFE01)
+    let vec_dir = tempfile::tempdir().unwrap();
+    let dann_path = vec_dir.path().join("bench_vectors.dann");
+    let ivfe_path = vec_dir.path().join("bench_vectors.ivfe");
+
+    // Precompute exact brute-force Top-10 ground truth for 100 queries over the 2,000 x 128D corpus
+    let eval_queries = &queries[..100];
+    let mut ground_truth: Vec<std::collections::HashSet<String>> =
+        Vec::with_capacity(eval_queries.len());
+    for q in eval_queries {
+        let mut dists: Vec<(usize, f32)> = vectors
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i, tapisaurus_vector::cosine_distance(q, v)))
+            .collect();
+        dists.sort_by(|a, b| a.1.total_cmp(&b.1));
+        ground_truth.push(
+            dists
+                .into_iter()
+                .take(10)
+                .map(|(i, _)| format!("v_{i}"))
+                .collect(),
+        );
+    }
+
+    let mut hnsw_hits = 0usize;
+    for (qi, q) in eval_queries.iter().enumerate() {
+        let res = hnsw.search(q, 10);
+        for r in res {
+            if ground_truth[qi].contains(&r.id) {
+                hnsw_hits += 1;
+            }
+        }
+    }
+    let hnsw_recall = (hnsw_hits as f64) / ((eval_queries.len() * 10) as f64) * 100.0;
+
+    // Build SSD DiskANN (TPDANN01)
+    let t_dann_build = Instant::now();
+    let mut dann_cfg = tapisaurus_vector::DiskAnnConfig::new(dims, &dann_path);
+    dann_cfg.beam_width = 64;
+    let mut dann = tapisaurus_vector::DiskAnnIndex::new(dann_cfg);
+    for (i, v) in vectors.iter().enumerate() {
+        dann.insert(format!("v_{i}"), v.clone()).unwrap();
+    }
+    dann.flush_to_disk().unwrap();
+    let dann_build_ms = t_dann_build.elapsed().as_secs_f64() * 1000.0;
+    let mut dann_lat = Vec::with_capacity(eval_queries.len());
+    let mut dann_hits = 0usize;
+    for (qi, q) in eval_queries.iter().enumerate() {
+        let t = Instant::now();
+        let res = dann.search(q, 10).unwrap();
+        dann_lat.push(t.elapsed().as_nanos());
+        for r in res {
+            if ground_truth[qi].contains(&r.id) {
+                dann_hits += 1;
+            }
+        }
+    }
+    dann_lat.sort_unstable();
+    let dann_recall = (dann_hits as f64) / ((eval_queries.len() * 10) as f64) * 100.0;
+
+    // Build Disk-Backed IVF-EMEANS (TPIVFE01, 2.5-epoch EMA mini-batch)
+    let t_ivfe_build = Instant::now();
+    let mut ivfe_cfg = tapisaurus_vector::IvfEmeansConfig::new(dims, &ivfe_path);
+    ivfe_cfg.num_clusters = 16;
+    ivfe_cfg.default_n_probe = 3;
+    let mut ivfe = tapisaurus_vector::IvfEmeansIndex::new(ivfe_cfg);
+    for (i, v) in vectors.iter().enumerate() {
+        ivfe.insert(format!("v_{i}"), v.clone()).unwrap();
+    }
+    ivfe.flush_to_disk().unwrap();
+    let ivfe_build_ms = t_ivfe_build.elapsed().as_secs_f64() * 1000.0;
+    let mut ivfe_lat = Vec::with_capacity(eval_queries.len());
+    let mut ivfe_hits = 0usize;
+    for (qi, q) in eval_queries.iter().enumerate() {
+        let t = Instant::now();
+        let (res, _) = ivfe.search(q, 10, Some(3)).unwrap();
+        ivfe_lat.push(t.elapsed().as_nanos());
+        for r in res {
+            if ground_truth[qi].contains(&r.id) {
+                ivfe_hits += 1;
+            }
+        }
+    }
+    ivfe_lat.sort_unstable();
+    let ivfe_recall = (ivfe_hits as f64) / ((eval_queries.len() * 10) as f64) * 100.0;
+
+    println!(
+        "[9] 3-Way Vector Compare (2,000 x 128D)  :\n    - HNSW (TPSHNSW1, RAM)       : {:>7.2} ms build | p50: {:>7.2} µs | p99: {:>7.2} µs | Recall@10: {:>5.1}%\n    - DiskANN (TPDANN01, SSD)    : {:>7.2} ms build | p50: {:>7.2} µs | p99: {:>7.2} µs | Recall@10: {:>5.1}%\n    - IVF-EMEANS (TPIVFE01, SSD) : {:>7.2} ms build | p50: {:>7.2} µs | p99: {:>7.2} µs | Recall@10: {:>5.1}%",
+        hb_dur.as_secs_f64() * 1000.0,
+        percentile_us(&h_lat, 0.50),
+        percentile_us(&h_lat, 0.99),
+        hnsw_recall,
+        dann_build_ms,
+        percentile_us(&dann_lat, 0.50),
+        percentile_us(&dann_lat, 0.99),
+        dann_recall,
+        ivfe_build_ms,
+        percentile_us(&ivfe_lat, 0.50),
+        percentile_us(&ivfe_lat, 0.99),
+        ivfe_recall
     );
 }

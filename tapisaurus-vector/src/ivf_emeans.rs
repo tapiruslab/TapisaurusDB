@@ -90,6 +90,7 @@ pub struct IvfEmeansIndex {
     hot_buffer: HashMap<String, Vec<f32>>,
     deleted_ids: HashSet<String>,
     disk_vector_ids: HashSet<String>,
+    reader_handle: std::sync::Mutex<Option<File>>,
     pub epochs_run: f32,
     pub revived_clusters: usize,
 }
@@ -104,6 +105,7 @@ impl IvfEmeansIndex {
             hot_buffer: HashMap::new(),
             deleted_ids: HashSet::new(),
             disk_vector_ids: HashSet::new(),
+            reader_handle: std::sync::Mutex::new(None),
             epochs_run: 0.0,
             revived_clusters: 0,
         }
@@ -224,6 +226,9 @@ impl IvfEmeansIndex {
         // 4. Write TPIVFE01 file:
         //    [Magic: 8B][dims: u32][metric: u8][k: u32][centroids: k * dims * f32]
         //    [dir_offset: u64][Cluster 0 page ... Cluster K-1 page][Cluster Directory + Footer CRC32]
+        if let Ok(mut guard) = self.reader_handle.lock() {
+            *guard = None;
+        }
         if let Some(parent) = self.config.disk_path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -305,6 +310,7 @@ impl IvfEmeansIndex {
         file.write_all(&dir_offset.to_le_bytes())
             .map_err(|e| e.to_string())?;
         file.flush().map_err(|e| e.to_string())?;
+        drop(file);
 
         let total_persisted = disk_ids.len();
         self.centroids = centroids;
@@ -312,6 +318,9 @@ impl IvfEmeansIndex {
         self.disk_vector_ids = disk_ids;
         self.epochs_run = epochs_run;
         self.revived_clusters = revived;
+        if let Ok(mut guard) = self.reader_handle.lock() {
+            *guard = File::open(&self.config.disk_path).ok();
+        }
 
         Ok(total_persisted)
     }
@@ -396,6 +405,7 @@ impl IvfEmeansIndex {
             hot_buffer: HashMap::new(),
             deleted_ids: HashSet::new(),
             disk_vector_ids: HashSet::new(),
+            reader_handle: std::sync::Mutex::new(None),
             epochs_run: 2.5,
             revived_clusters: 0,
         };
@@ -499,12 +509,22 @@ impl IvfEmeansIndex {
         if meta.byte_len == 0 || meta.record_count == 0 {
             return Ok(Vec::new());
         }
-        let mut file = File::open(&self.config.disk_path).map_err(|e| e.to_string())?;
-        file.seek(SeekFrom::Start(meta.file_offset))
-            .map_err(|e| e.to_string())?;
-
         let mut buf = vec![0u8; meta.byte_len as usize];
-        file.read_exact(&mut buf).map_err(|e| e.to_string())?;
+        if let Ok(mut guard) = self.reader_handle.lock() {
+            if guard.is_none() {
+                *guard = Some(File::open(&self.config.disk_path).map_err(|e| e.to_string())?);
+            }
+            if let Some(file) = guard.as_mut() {
+                file.seek(SeekFrom::Start(meta.file_offset))
+                    .map_err(|e| e.to_string())?;
+                file.read_exact(&mut buf).map_err(|e| e.to_string())?;
+            }
+        } else {
+            let mut file = File::open(&self.config.disk_path).map_err(|e| e.to_string())?;
+            file.seek(SeekFrom::Start(meta.file_offset))
+                .map_err(|e| e.to_string())?;
+            file.read_exact(&mut buf).map_err(|e| e.to_string())?;
+        }
 
         let actual_crc = compute_crc32(&buf);
         if actual_crc != meta.crc32 {
