@@ -521,15 +521,45 @@ impl ColumnarStripe {
 }
 
 /// HTAP (Hybrid Transactional/Analytical Processing) Columnar Table segmented into morsel stripes
-/// with Zone-Map predicate pushdown, vectorized aggregations, and LZ4 + CRC32 disk persistence.
+/// with Zone-Map predicate pushdown, real-time `delta_row_buffer` merger, autonomous background
+/// morsel compaction (`delta_row_buffer.len() >= stripe_rows`), and LZ4 + CRC32 disk persistence.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HtapColumnarTable {
     pub stripe_rows: usize,
     pub stripes: Vec<ColumnarStripe>,
     pub total_rows: usize,
+    /// Real-time hot mutation buffer holding rows inserted/updated after the last frozen `ColumnarStripe`.
+    #[serde(default)]
+    pub delta_row_buffer: Vec<serde_json::Value>,
+    /// Next monotonically increasing `stripe_id` assigned when `delta_row_buffer` auto-freezes.
+    #[serde(default)]
+    pub next_stripe_id: u32,
+    /// Number of `ColumnarStripe`s automatically compacted from `delta_row_buffer` upon reaching `stripe_rows`.
+    #[serde(default)]
+    pub auto_compacted_stripes: usize,
+    /// Maps `_id` / `id` -> owning location (`>= 0` = `stripe_id`, `-1` = `delta_row_buffer`, `-2` = deleted).
+    #[serde(default)]
+    pub row_owner_stripe: HashMap<String, i64>,
+    /// Fast-path flag: `true` only when a row inside an already-frozen `ColumnarStripe` was updated or deleted.
+    #[serde(default)]
+    pub has_shadowed_stripe_rows: bool,
 }
 
 impl HtapColumnarTable {
+    /// Initialize an empty HTAP table with the given morsel stripe threshold (e.g., `2048` rows).
+    pub fn new(stripe_rows: usize) -> Self {
+        Self {
+            stripe_rows: stripe_rows.max(1),
+            stripes: Vec::new(),
+            total_rows: 0,
+            delta_row_buffer: Vec::new(),
+            next_stripe_id: 0,
+            auto_compacted_stripes: 0,
+            row_owner_stripe: HashMap::new(),
+            has_shadowed_stripe_rows: false,
+        }
+    }
+
     /// Build a striped HTAP table from JSON documents using the specified morsel stripe size
     pub fn from_json_documents(
         docs: &[serde_json::Value],
@@ -537,18 +567,182 @@ impl HtapColumnarTable {
     ) -> Result<Self, String> {
         let morsel = stripe_rows.max(1);
         let mut stripes = Vec::new();
+        let mut row_owner_stripe = HashMap::with_capacity(docs.len());
         for (idx, chunk) in docs.chunks(morsel).enumerate() {
+            let stripe_id = idx as u32;
+            for doc in chunk {
+                if let Some(id) = Self::extract_row_id(doc) {
+                    row_owner_stripe.insert(id, stripe_id as i64);
+                }
+            }
             let batch = ColumnarBatch::from_json_documents(chunk)?;
-            stripes.push(ColumnarStripe::from_batch(idx as u32, batch));
+            stripes.push(ColumnarStripe::from_batch(stripe_id, batch));
         }
+        let next_stripe_id = stripes.len() as u32;
         Ok(Self {
             stripe_rows: morsel,
             stripes,
             total_rows: docs.len(),
+            delta_row_buffer: Vec::new(),
+            next_stripe_id,
+            auto_compacted_stripes: 0,
+            row_owner_stripe,
+            has_shadowed_stripe_rows: false,
         })
     }
 
-    /// Execute a Zone-Map pruned vectorized `SUM` over `target_col` filtered by `pred_col op threshold`.
+    /// Clear all stripes and delta buffers.
+    pub fn clear(&mut self) {
+        self.stripes.clear();
+        self.total_rows = 0;
+        self.delta_row_buffer.clear();
+        self.next_stripe_id = 0;
+        self.auto_compacted_stripes = 0;
+        self.row_owner_stripe.clear();
+        self.has_shadowed_stripe_rows = false;
+    }
+
+    /// Append a live inserted or updated JSON row into `delta_row_buffer`.
+    /// Whenever `delta_row_buffer.len() >= self.stripe_rows` (e.g., `2048` rows), automatically
+    /// freezes the full morsel batch into a new `ColumnarStripe` with `ColumnZoneMap`s.
+    /// Returns `Ok(true)` if a new `ColumnarStripe` was autonomously compacted on this call.
+    pub fn append_delta_row(&mut self, row: serde_json::Value) -> Result<bool, String> {
+        if let Some(id) = Self::extract_row_id(&row) {
+            match self.row_owner_stripe.insert(id.clone(), -1) {
+                Some(-1) => {
+                    // Replace existing uncommitted row in delta_row_buffer
+                    self.delta_row_buffer
+                        .retain(|r| Self::extract_row_id(r).as_deref() != Some(id.as_str()));
+                }
+                Some(prev_stripe) if prev_stripe >= 0 => {
+                    // Row previously lived in a frozen ColumnarStripe and is now shadowed by delta
+                    self.has_shadowed_stripe_rows = true;
+                }
+                _ => {
+                    self.total_rows += 1;
+                }
+            }
+        } else {
+            self.total_rows += 1;
+        }
+
+        self.delta_row_buffer.push(row);
+
+        if self.delta_row_buffer.len() >= self.stripe_rows {
+            self.compact_full_delta_morsels()?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Append a batch of JSON rows into `delta_row_buffer`, auto-sealing every `stripe_rows` morsel.
+    /// Returns the number of newly compacted `ColumnarStripe`s.
+    pub fn append_delta_rows(&mut self, rows: &[serde_json::Value]) -> Result<usize, String> {
+        let before = self.auto_compacted_stripes;
+        for row in rows {
+            self.append_delta_row(row.clone())?;
+        }
+        Ok(self.auto_compacted_stripes - before)
+    }
+
+    /// Record a row deletion by primary ID (`_id` or `id`) across `delta_row_buffer` and frozen stripes.
+    pub fn delete_delta_row(&mut self, row_id: &str) -> bool {
+        match self.row_owner_stripe.get(row_id).copied() {
+            Some(-1) => {
+                self.delta_row_buffer
+                    .retain(|r| Self::extract_row_id(r).as_deref() != Some(row_id));
+                self.row_owner_stripe.insert(row_id.to_string(), -2);
+                self.total_rows = self.total_rows.saturating_sub(1);
+                true
+            }
+            Some(s) if s >= 0 => {
+                self.row_owner_stripe.insert(row_id.to_string(), -2);
+                self.has_shadowed_stripe_rows = true;
+                self.total_rows = self.total_rows.saturating_sub(1);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Force-freeze any remaining `< stripe_rows` rows in `delta_row_buffer` into a `ColumnarStripe`.
+    pub fn flush_delta_to_stripe(&mut self) -> Result<bool, String> {
+        if self.delta_row_buffer.is_empty() {
+            return Ok(false);
+        }
+        let chunk: Vec<serde_json::Value> = std::mem::take(&mut self.delta_row_buffer);
+        self.freeze_chunk_into_stripe(&chunk)?;
+        Ok(true)
+    }
+
+    fn compact_full_delta_morsels(&mut self) -> Result<(), String> {
+        let morsel = self.stripe_rows.max(1);
+        while self.delta_row_buffer.len() >= morsel {
+            let chunk: Vec<serde_json::Value> = self.delta_row_buffer.drain(0..morsel).collect();
+            self.freeze_chunk_into_stripe(&chunk)?;
+        }
+        Ok(())
+    }
+
+    fn freeze_chunk_into_stripe(&mut self, chunk: &[serde_json::Value]) -> Result<(), String> {
+        let stripe_id = self.next_stripe_id;
+        self.next_stripe_id += 1;
+        for doc in chunk {
+            if let Some(id) = Self::extract_row_id(doc) {
+                self.row_owner_stripe.insert(id, stripe_id as i64);
+            }
+        }
+        let batch = ColumnarBatch::from_json_documents(chunk)?;
+        self.stripes
+            .push(ColumnarStripe::from_batch(stripe_id, batch));
+        self.auto_compacted_stripes += 1;
+        Ok(())
+    }
+
+    fn extract_row_id(doc: &serde_json::Value) -> Option<String> {
+        doc.get("_id")
+            .or_else(|| doc.get("id"))
+            .and_then(|v| match v {
+                serde_json::Value::String(s) => Some(s.clone()),
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            })
+    }
+
+    fn extract_json_numeric(doc: &serde_json::Value, col_name: &str) -> Option<f64> {
+        doc.get(col_name).and_then(|v| v.as_f64())
+    }
+
+    fn extract_json_string(doc: &serde_json::Value, col_name: &str) -> Option<String> {
+        doc.get(col_name).and_then(|v| match v {
+            serde_json::Value::String(s) => Some(s.clone()),
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        })
+    }
+
+    fn is_stripe_row_active(&self, stripe: &ColumnarStripe, row_idx: usize) -> bool {
+        if !self.has_shadowed_stripe_rows {
+            return true;
+        }
+        let id_opt = match stripe.batch.columns.get("_id") {
+            Some(ColumnData::String(v)) => v.get(row_idx).and_then(|x| x.clone()),
+            Some(ColumnData::Int64(v)) => v.get(row_idx).and_then(|x| x.map(|i| i.to_string())),
+            _ => match stripe.batch.columns.get("id") {
+                Some(ColumnData::String(v)) => v.get(row_idx).and_then(|x| x.clone()),
+                Some(ColumnData::Int64(v)) => v.get(row_idx).and_then(|x| x.map(|i| i.to_string())),
+                _ => None,
+            },
+        };
+        if let Some(id) = id_opt {
+            self.row_owner_stripe.get(&id).copied() == Some(stripe.stripe_id as i64)
+        } else {
+            true
+        }
+    }
+
+    /// Execute a Zone-Map pruned vectorized `SUM` over `target_col` filtered by `pred_col op threshold`,
+    /// transparently merging frozen `ColumnarStripe`s and uncompacted hot rows in `delta_row_buffer`.
     /// Returns `(sum, stripes_scanned, stripes_pruned)`.
     pub fn sum_filtered(
         &self,
@@ -571,6 +765,9 @@ impl HtapColumnarTable {
             scanned += 1;
             let row_count = stripe.batch.row_count;
             for r in 0..row_count {
+                if !self.is_stripe_row_active(stripe, r) {
+                    continue;
+                }
                 let pred_val = Self::extract_numeric(&stripe.batch, pred_col, r);
                 if let Some(pv) = pred_val {
                     if ColumnZoneMap::matches_row(op, pv, threshold) {
@@ -582,10 +779,22 @@ impl HtapColumnarTable {
             }
         }
 
+        // Transparently merge any residual < stripe_rows rows in delta_row_buffer
+        for row in &self.delta_row_buffer {
+            if let Some(pv) = Self::extract_json_numeric(row, pred_col) {
+                if ColumnZoneMap::matches_row(op, pv, threshold) {
+                    if let Some(tv) = Self::extract_json_numeric(row, target_col) {
+                        sum += tv;
+                    }
+                }
+            }
+        }
+
         (sum, scanned, pruned)
     }
 
-    /// Execute a Zone-Map pruned vectorized `GROUP BY` computing `(SUM, COUNT)` per group key.
+    /// Execute a Zone-Map pruned vectorized `GROUP BY` computing `(SUM, COUNT)` per group key,
+    /// transparently merging frozen `ColumnarStripe`s and hot rows in `delta_row_buffer`.
     /// Returns `(group_map, stripes_pruned)`.
     pub fn group_by_sum_count(
         &self,
@@ -611,6 +820,9 @@ impl HtapColumnarTable {
             };
 
             for (r, g_opt) in group_vals.iter().enumerate() {
+                if !self.is_stripe_row_active(stripe, r) {
+                    continue;
+                }
                 let Some(ref g_key) = g_opt else {
                     continue;
                 };
@@ -627,6 +839,26 @@ impl HtapColumnarTable {
                     entry.0 += av;
                     entry.1 += 1;
                 }
+            }
+        }
+
+        // Transparently merge residual hot rows from delta_row_buffer
+        for row in &self.delta_row_buffer {
+            let Some(g_key) = Self::extract_json_string(row, group_col) else {
+                continue;
+            };
+            if let Some((p_col, op, thresh)) = predicate {
+                let Some(pv) = Self::extract_json_numeric(row, p_col) else {
+                    continue;
+                };
+                if !ColumnZoneMap::matches_row(op, pv, thresh) {
+                    continue;
+                }
+            }
+            if let Some(av) = Self::extract_json_numeric(row, agg_col) {
+                let entry = groups.entry(g_key).or_insert((0.0, 0));
+                entry.0 += av;
+                entry.1 += 1;
             }
         }
 
@@ -779,5 +1011,72 @@ mod tests {
         let loaded = HtapColumnarTable::load_from_path(&path).unwrap();
         assert_eq!(loaded.total_rows, 300);
         assert_eq!(loaded.stripes.len(), 3);
+    }
+
+    #[test]
+    fn test_htap_autonomous_delta_to_columnar_compactor_and_live_merger() {
+        // Start with 100 initial rows (stripe 0: order_id 0..100) with stripe_rows = 100
+        let mut initial = Vec::with_capacity(100);
+        for i in 0..100 {
+            initial.push(serde_json::json!({
+                "_id": format!("ord_{i}"),
+                "order_id": i,
+                "region": if i % 2 == 0 { "APAC" } else { "EMEA" },
+                "amount": 10.0,
+            }));
+        }
+        let mut table = HtapColumnarTable::from_json_documents(&initial, 100).unwrap();
+        assert_eq!(table.stripes.len(), 1);
+        assert_eq!(table.delta_row_buffer.len(), 0);
+
+        // Stream 140 new delta rows after ANALYZE (order_id 100..240, amount = 20.0):
+        // - First 100 delta rows (100..200) MUST auto-compact into Stripe 1 with ColumnZoneMap!
+        // - Remaining 40 delta rows (200..240) remain in delta_row_buffer and merge transparently!
+        for i in 100..240 {
+            let _ = table
+                .append_delta_row(serde_json::json!({
+                    "_id": format!("ord_{i}"),
+                    "order_id": i,
+                    "region": if i % 2 == 0 { "APAC" } else { "EMEA" },
+                    "amount": 20.0,
+                }))
+                .unwrap();
+        }
+
+        assert_eq!(
+            table.stripes.len(),
+            2,
+            "100 delta rows must auto-freeze into Stripe 1"
+        );
+        assert_eq!(table.auto_compacted_stripes, 1);
+        assert_eq!(table.delta_row_buffer.len(), 40);
+        assert_eq!(table.total_rows, 240);
+
+        // Query order_id >= 150:
+        // - Stripe 0 (0..99) is pruned by Zone Map (pruned = 1)
+        // - Stripe 1 (100..199) is scanned (50 rows * 20.0 = 1000.0)
+        // - delta_row_buffer (200..239) is merged transparently (40 rows * 20.0 = 800.0)
+        let (sum, scanned, pruned) =
+            table.sum_filtered("amount", "order_id", ZonePredicateOp::Gte, 150.0);
+        assert_eq!(pruned, 1, "Stripe 0 must be pruned by Zone Map");
+        assert_eq!(scanned, 1, "Auto-compacted Stripe 1 must be scanned");
+        assert!((sum - 1800.0).abs() < 1e-4);
+
+        // Update an existing row in frozen Stripe 1 (ord_150: amount 20.0 -> 120.0) and delete ord_210 from delta
+        table
+            .append_delta_row(serde_json::json!({
+                "_id": "ord_150",
+                "order_id": 150,
+                "region": "APAC",
+                "amount": 120.0,
+            }))
+            .unwrap();
+        assert!(table.delete_delta_row("ord_210"));
+        assert_eq!(table.total_rows, 239);
+
+        let (sum_after, _, _) =
+            table.sum_filtered("amount", "order_id", ZonePredicateOp::Gte, 150.0);
+        // 1800.0 + (120.0 - 20.0) - 20.0 = 1880.0
+        assert!((sum_after - 1880.0).abs() < 1e-4);
     }
 }

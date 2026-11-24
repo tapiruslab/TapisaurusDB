@@ -14,6 +14,7 @@
 pub mod diskann;
 pub mod distance;
 pub mod hnsw;
+pub mod ivf_emeans;
 pub mod quantization;
 
 pub use diskann::{DiskAnnConfig, DiskAnnIndex, DISKANN_MAGIC};
@@ -22,6 +23,9 @@ pub use distance::{
     normalize_in_place, squared_euclidean_distance, DistanceMetric,
 };
 pub use hnsw::{ConcurrentHnswIndex, HnswConfig, HnswIndex, IdBitset, VectorSearchResult};
+pub use ivf_emeans::{
+    fit_emeans_centroids, IvfClusterDiskMeta, IvfEmeansConfig, IvfEmeansIndex, IVF_EMEANS_MAGIC,
+};
 pub use quantization::{
     BinaryQuantizedVector, BinaryQuantizer, QuantizationType, QuantizedVector, ScalarQuantizer,
 };

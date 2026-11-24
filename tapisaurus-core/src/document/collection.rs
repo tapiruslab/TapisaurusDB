@@ -144,6 +144,9 @@ pub struct Collection {
     /// Optional relational schema metadata (from CREATE TABLE / ALTER TABLE / JSON Schema)
     relational_schema: RwLock<Option<super::schema::RelationalSchema>>,
 
+    /// Optional live HTAP columnar table receiving autonomous delta-to-columnar mutations
+    htap_table: RwLock<Option<Arc<RwLock<crate::storage::columnar::HtapColumnarTable>>>>,
+
     /// Optional underlying LSM-Tree storage engine for durability
     storage: Option<Arc<crate::storage::engine::StorageEngine>>,
 }
@@ -166,6 +169,7 @@ impl Collection {
             ttl: crate::ttl::TtlManager::new(),
             cache_tracker: super::binary::HotColdCacheTracker::new(),
             relational_schema: RwLock::new(None),
+            htap_table: RwLock::new(None),
             storage: None,
         }
     }
@@ -208,8 +212,36 @@ impl Collection {
             ttl: crate::ttl::TtlManager::new(),
             cache_tracker: super::binary::HotColdCacheTracker::new(),
             relational_schema: RwLock::new(initial_rel),
+            htap_table: RwLock::new(None),
             storage: None,
         }
+    }
+
+    /// Attach a live `HtapColumnarTable` to receive real-time delta mutations and auto-compact morsel stripes.
+    pub fn attach_htap_table(
+        &self,
+        htap: Arc<RwLock<crate::storage::columnar::HtapColumnarTable>>,
+    ) {
+        *self.htap_table.write() = Some(htap);
+    }
+
+    /// Return the attached live `HtapColumnarTable`, if any.
+    pub fn htap_table(&self) -> Option<Arc<RwLock<crate::storage::columnar::HtapColumnarTable>>> {
+        self.htap_table.read().clone()
+    }
+
+    fn doc_to_htap_json(doc: &Document) -> serde_json::Value {
+        let mut map = serde_json::Map::with_capacity(doc.fields.len() + 1);
+        map.insert(
+            "_id".to_string(),
+            serde_json::Value::String(doc.id.as_str().to_string()),
+        );
+        for (k, v) in &doc.fields {
+            if let Ok(jv) = serde_json::to_value(v) {
+                map.insert(k.clone(), jv);
+            }
+        }
+        serde_json::Value::Object(map)
     }
 
     /// Create a collection with custom configuration and persistent storage
@@ -424,6 +456,10 @@ impl Collection {
             self.enforce_memory_cap(Some(&id_str));
         }
 
+        if let Some(ref htap) = *self.htap_table.read() {
+            let _ = htap.write().append_delta_row(Self::doc_to_htap_json(&doc));
+        }
+
         Ok(id)
     }
 
@@ -510,6 +546,9 @@ impl Collection {
             }
 
             self.cache_tracker.touch(&id_str);
+            if let Some(ref htap) = *self.htap_table.read() {
+                let _ = htap.write().append_delta_row(Self::doc_to_htap_json(&doc));
+            }
             self.documents.insert(id_str, doc);
             self.doc_count.fetch_add(1, Ordering::Relaxed);
             self.total_size.fetch_add(size as u64, Ordering::Relaxed);
@@ -591,6 +630,9 @@ impl Collection {
             idx.value().clear();
         }
         self.index_data.clear();
+        if let Some(ref htap) = *self.htap_table.read() {
+            htap.write().clear();
+        }
 
         // If backed by persistent storage, purge all keys under prefix doc:{name}:
         if let Some(storage) = &self.storage {
@@ -897,6 +939,12 @@ impl Collection {
                 storage.put(&key, &val)?;
             }
 
+            if let Some(ref htap) = *self.htap_table.read() {
+                let _ = htap
+                    .write()
+                    .append_delta_row(Self::doc_to_htap_json(&updated));
+            }
+
             return Ok(updated);
         }
 
@@ -927,6 +975,10 @@ impl Collection {
                     self.cache_tracker.touch(id);
                     self.documents.insert(id.to_string(), doc.clone());
                     self.enforce_memory_cap(Some(id));
+
+                    if let Some(ref htap) = *self.htap_table.read() {
+                        let _ = htap.write().append_delta_row(Self::doc_to_htap_json(&doc));
+                    }
 
                     return Ok(doc);
                 }
@@ -1047,6 +1099,10 @@ impl Collection {
         if let Some(storage) = &self.storage {
             let key = format!("doc:{}:{}", self.config.name, id).into_bytes();
             storage.delete(&key)?;
+        }
+
+        if let Some(ref htap) = *self.htap_table.read() {
+            htap.write().delete_delta_row(id);
         }
 
         Ok(doc)

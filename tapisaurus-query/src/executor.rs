@@ -723,15 +723,15 @@ impl DatabaseContext {
         let htap =
             tapisaurus_core::HtapColumnarTable::from_json_documents(&json_docs, stripe_rows)?;
         let stripe_count = htap.stripes.len();
-        self.htap_tables.insert(
-            collection.to_string(),
-            Arc::new(parking_lot::RwLock::new(htap)),
-        );
+        let htap_arc = Arc::new(parking_lot::RwLock::new(htap));
+        col.attach_htap_table(htap_arc.clone());
+        self.htap_tables.insert(collection.to_string(), htap_arc);
         Ok(stripe_count)
     }
 
     /// Execute a Zone-Map pruned vectorized `SUM` over a collection's HTAP columnar table
-    /// (building it on demand with 2,048-row stripes if not yet materialized).
+    /// (building it on demand with 2,048-row stripes if not yet materialized, and transparently
+    /// merging any live post-ANALYZE `delta_row_buffer` rows and auto-compacted stripes).
     pub fn query_htap_sum(
         &self,
         collection: &str,
@@ -749,6 +749,27 @@ impl DatabaseContext {
             .ok_or_else(|| format!("HTAP table for '{collection}' not found"))?;
         let table = table_lock.read();
         Ok(table.sum_filtered(target_col, pred_col, op, threshold))
+    }
+
+    /// Execute a Zone-Map pruned vectorized `GROUP BY (SUM, COUNT)` over a collection's HTAP
+    /// columnar table + real-time `delta_row_buffer`.
+    #[allow(clippy::type_complexity)]
+    pub fn query_htap_group_by(
+        &self,
+        collection: &str,
+        group_col: &str,
+        agg_col: &str,
+        predicate: Option<(&str, tapisaurus_core::ZonePredicateOp, f64)>,
+    ) -> Result<(std::collections::HashMap<String, (f64, usize)>, usize), String> {
+        if !self.htap_tables.contains_key(collection) {
+            self.build_htap_columnar(collection, 2048)?;
+        }
+        let table_lock = self
+            .htap_tables
+            .get(collection)
+            .ok_or_else(|| format!("HTAP table for '{collection}' not found"))?;
+        let table = table_lock.read();
+        Ok(table.group_by_sum_count(group_col, agg_col, predicate))
     }
 
     /// Sequence pending deterministic multi-shard transactions through Raft, execute them in
@@ -3278,5 +3299,88 @@ mod tests {
         assert_eq!(summary.connected_edge_peers.len(), 1);
         assert_eq!(summary.connected_edge_peers[0].edge_node_id, "edge-kl-01");
         assert_eq!(summary.total_records_applied, 5);
+    }
+
+    #[test]
+    fn test_htap_autonomous_delta_morsel_compaction_in_database_context() {
+        let ctx = DatabaseContext::new();
+        let col = ctx.get_or_create_collection("live_orders");
+
+        // 1. Insert 2,048 initial rows (Stripe 0: order_id 0..2048, amount = 10.0)
+        let mut init_docs = Vec::with_capacity(2048);
+        for i in 0..2048 {
+            let mut d = Document::with_id(format!("ord_{i}"));
+            d.set("order_id", Value::Integer(i as i64));
+            d.set(
+                "region",
+                Value::String(if i % 2 == 0 { "APAC" } else { "EMEA" }.to_string()),
+            );
+            d.set("amount", Value::Float(10.0));
+            init_docs.push(d);
+        }
+        col.insert_many(init_docs).unwrap();
+
+        // Build initial HTAP table (as triggered by ANALYZE live_orders)
+        let stripes = ctx.build_htap_columnar("live_orders", 2048).unwrap();
+        assert_eq!(stripes, 1);
+
+        // 2. Stream 2,200 NEW rows AFTER ANALYZE without re-running ANALYZE:
+        //    - First 2,048 rows (2048..4096) MUST auto-compact into Stripe 1 with ColumnZoneMap!
+        //    - Remaining 152 rows (4096..4248) stay in delta_row_buffer!
+        let mut delta_docs = Vec::with_capacity(2200);
+        for i in 2048..4248 {
+            let mut d = Document::with_id(format!("ord_{i}"));
+            d.set("order_id", Value::Integer(i as i64));
+            d.set(
+                "region",
+                Value::String(if i % 2 == 0 { "APAC" } else { "EMEA" }.to_string()),
+            );
+            d.set("amount", Value::Float(25.0));
+            delta_docs.push(d);
+        }
+        col.insert_many(delta_docs).unwrap();
+
+        {
+            let htap_lock = ctx.htap_tables().get("live_orders").unwrap();
+            let htap = htap_lock.read();
+            assert_eq!(
+                htap.stripes.len(),
+                2,
+                "Second 2,048-row stripe must auto-compact"
+            );
+            assert_eq!(htap.auto_compacted_stripes, 1);
+            assert_eq!(htap.delta_row_buffer.len(), 152);
+            assert_eq!(htap.total_rows, 4248);
+        }
+
+        // 3. Query order_id >= 4000:
+        //    - Stripe 0 (0..2047) pruned by Zone Map (pruned = 1)
+        //    - Stripe 1 (2048..4095) scanned: 96 rows (4000..4095) * 25.0 = 2400.0
+        //    - delta_row_buffer (4096..4247) merged transparently: 152 rows * 25.0 = 3800.0
+        let (sum, scanned, pruned) = ctx
+            .query_htap_sum(
+                "live_orders",
+                "amount",
+                "order_id",
+                tapisaurus_core::ZonePredicateOp::Gte,
+                4000.0,
+            )
+            .unwrap();
+        assert_eq!(pruned, 1);
+        assert_eq!(scanned, 1);
+        assert!((sum - 6200.0).abs() < 1e-4);
+
+        // 4. Verify GROUP BY over frozen stripes + live delta_row_buffer
+        let (groups, grp_pruned) = ctx
+            .query_htap_group_by(
+                "live_orders",
+                "region",
+                "amount",
+                Some(("order_id", tapisaurus_core::ZonePredicateOp::Gte, 4000.0)),
+            )
+            .unwrap();
+        assert_eq!(grp_pruned, 1);
+        assert_eq!(groups.get("APAC").unwrap().1, 124);
+        assert_eq!(groups.get("EMEA").unwrap().1, 124);
     }
 }
