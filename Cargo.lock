@@ -2113,6 +2113,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tapisaurus-sim"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tapisaurus-core",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tapisaurus-vector"
 version = "0.1.0"
 dependencies = [

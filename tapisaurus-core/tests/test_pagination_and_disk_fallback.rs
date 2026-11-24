@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use tempfile::tempdir;
 
+use tapisaurus_core::document::binary::SlottedBinaryCodec;
 use tapisaurus_core::document::collection::Collection;
 use tapisaurus_core::document::model::Document;
 use tapisaurus_core::storage::engine::{StorageConfig, StorageEngine};
@@ -184,7 +185,7 @@ fn test_find_all_and_disk_fallback_operations() {
     // Verify update persisted to disk
     let disk_key = format!("doc:fallback_products:{evicted_id}").into_bytes();
     let disk_bytes = storage.get(&disk_key).unwrap().unwrap();
-    let from_disk: Document = serde_json::from_slice(&disk_bytes).unwrap();
+    let from_disk = SlottedBinaryCodec::decode_any(&disk_bytes).unwrap();
     assert_eq!(from_disk.get("stock").unwrap().as_i64(), Some(9999));
 
     // 5. Verify delete_by_id on disk-resident record

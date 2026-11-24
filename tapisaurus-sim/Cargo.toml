@@ -1,0 +1,17 @@
+[package]
+name = "tapisaurus-sim"
+description = "Deterministic Simulation Testing (DST) fault-injection harness for TapisaurusDB consensus and Calvin transactions"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tapisaurus-core = { path = "../tapisaurus-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+tempfile = { workspace = true }
+crc32fast = { workspace = true }
+tracing = { workspace = true }

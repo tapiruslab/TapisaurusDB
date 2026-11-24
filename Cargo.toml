@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "tapisaurus-core",
     "tapisaurus-catalog",
+    "tapisaurus-sim",
     "tapisaurus-query",
     "tapisaurus-vector",
     "tapisaurus-graph",

@@ -258,12 +258,31 @@ impl RaftDiskStore {
         let mut crc_buf = [0u8; 4];
 
         while reader.read_exact(&mut len_buf).is_ok() {
-            reader.read_exact(&mut crc_buf)?;
+            if reader.read_exact(&mut crc_buf).is_err() {
+                warn!(
+                    "Truncated Raft WAL tail header detected; stopping replay at index {}",
+                    entries.len()
+                );
+                break;
+            }
             let len = u32::from_le_bytes(len_buf) as usize;
+            if len > 64 * 1024 * 1024 {
+                warn!(
+                    "Oversized Raft WAL frame ({len} bytes); stopping replay at index {}",
+                    entries.len()
+                );
+                break;
+            }
             let expected_crc = u32::from_le_bytes(crc_buf);
 
             let mut data = vec![0u8; len];
-            reader.read_exact(&mut data)?;
+            if reader.read_exact(&mut data).is_err() {
+                warn!(
+                    "Truncated Raft WAL tail payload detected; stopping replay at index {}",
+                    entries.len()
+                );
+                break;
+            }
 
             let mut hasher = Hasher::new();
             hasher.update(&data);
@@ -278,10 +297,18 @@ impl RaftDiskStore {
             }
 
             // Support BSON binary format with transparent JSON fallback for backwards compatibility
-            let entry: LogEntry = bson::from_slice(&data)
-                .or_else(|_| serde_json::from_slice(&data))
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            entries.push(entry);
+            match bson::from_slice::<LogEntry>(&data)
+                .or_else(|_| serde_json::from_slice::<LogEntry>(&data))
+            {
+                Ok(entry) => entries.push(entry),
+                Err(_) => {
+                    warn!(
+                        "Malformed Raft WAL entry detected; stopping replay at index {}",
+                        entries.len()
+                    );
+                    break;
+                }
+            }
         }
 
         Ok(entries)
@@ -918,14 +945,18 @@ impl RaftNode {
         // 4. Append new log entries if provided & persist to disk
         let mut needs_rewrite = false;
         for entry in args.entries {
-            if entry.index < state.log.len() as u64 {
+            if entry.index < state.last_snapshot_index {
+                continue;
+            }
+            let offset = (entry.index - state.last_snapshot_index) as usize;
+            if offset < state.log.len() {
                 // Conflict resolution: truncate differing entries
-                if state.log[entry.index as usize].term != entry.term {
-                    state.log.truncate(entry.index as usize);
+                if state.log[offset].term != entry.term {
+                    state.log.truncate(offset);
                     state.log.push(entry);
                     needs_rewrite = true;
                 }
-            } else if entry.index == state.log.len() as u64 {
+            } else if offset == state.log.len() {
                 if let Some(ref store) = self.disk_store {
                     let _ = store.append_entry(&entry);
                 }
@@ -939,17 +970,30 @@ impl RaftNode {
             }
         }
 
+        let last_log_idx = state
+            .log
+            .last()
+            .map(|e| e.index)
+            .unwrap_or(state.last_snapshot_index);
+
         // 5. Update commit index
         if args.leader_commit > state.commit_index {
-            state.commit_index = args.leader_commit.min(state.log.len() as u64 - 1);
+            state.commit_index = args.leader_commit.min(last_log_idx);
         }
 
-        let match_idx = state.log.len() as u64 - 1;
+        let match_idx = last_log_idx;
         AppendEntriesReply {
             term: state.current_term,
             success: true,
             match_index: match_idx,
         }
+    }
+
+    /// Demote node to Follower without advancing `current_term` (used on cluster boot & crash restart).
+    pub fn demote_to_follower(&self) {
+        let mut state = self.state.write();
+        state.role = NodeRole::Follower;
+        state.leader_id = None;
     }
 
     /// Step down to Follower if a higher term is discovered
@@ -1015,7 +1059,8 @@ impl RaftNode {
             return Ok(index);
         }
 
-        let batches = self.prepare_heartbeats();
+        let mut batches: Vec<_> = self.prepare_heartbeats().into_iter().collect();
+        batches.sort_by(|a, b| a.0.cmp(&b.0));
         for (peer_id, (peer_addr, args)) in batches {
             if let Ok(reply) = transport.append_entries(&peer_addr, args).await {
                 self.record_append_reply(&peer_id, &reply);
@@ -1024,8 +1069,9 @@ impl RaftNode {
 
         let committed = self.get_info().commit_index;
         if committed >= index {
-            // Broadcast updated leader_commit to followers
-            let commit_batches = self.prepare_heartbeats();
+            // Broadcast updated leader_commit to followers in deterministic peer order
+            let mut commit_batches: Vec<_> = self.prepare_heartbeats().into_iter().collect();
+            commit_batches.sort_by(|a, b| a.0.cmp(&b.0));
             for (_peer_id, (peer_addr, args)) in commit_batches {
                 let _ = transport.append_entries(&peer_addr, args).await;
             }
