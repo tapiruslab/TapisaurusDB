@@ -2074,8 +2074,28 @@ impl DatabaseContext {
                     }
                 }
 
-                // Relational JOIN execution (Hash Join)
-                for join in &joins {
+                // Relational JOIN execution (Cost-Based Multi-Join Reordering + SIMD Bloom Filter Hash Join)
+                let ordered_joins = if joins.len() > 1
+                    && joins
+                        .iter()
+                        .all(|j| j.join_type == crate::ast::JoinType::Inner)
+                {
+                    let mut right_cards = std::collections::HashMap::with_capacity(joins.len());
+                    for j in &joins {
+                        let c = self.get_or_create_collection(&j.collection);
+                        right_cards.insert(j.collection.clone(), c.stats().document_count as usize);
+                    }
+                    crate::optimizer::QueryOptimizer::reorder_inner_joins(
+                        &collection,
+                        filtered.len(),
+                        &joins,
+                        &right_cards,
+                    )
+                } else {
+                    joins.clone()
+                };
+
+                for join in &ordered_joins {
                     let joined_col = self.get_or_create_collection(&join.collection);
                     let right_docs = joined_col.find_all(None);
 
@@ -2100,15 +2120,23 @@ impl DatabaseContext {
                     };
 
                     let mut right_hash: std::collections::HashMap<String, Vec<Document>> =
-                        std::collections::HashMap::new();
+                        std::collections::HashMap::with_capacity(right_docs.len());
+                    let mut simd_bloom =
+                        crate::optimizer::SimdBloomFilter::with_capacity(right_docs.len());
                     for rdoc in right_docs {
                         let key_val_opt = match right_key {
                             "id" | "_id" => Some(rdoc.id.as_str().to_string()),
                             other => rdoc.get_nested(other).and_then(val_to_str),
                         };
                         if let Some(key_val_str) = key_val_opt {
+                            simd_bloom.insert_str(&key_val_str);
                             right_hash.entry(key_val_str).or_default().push(rdoc);
                         }
+                    }
+
+                    if join.join_type == crate::ast::JoinType::Inner && right_hash.is_empty() {
+                        filtered.clear();
+                        break;
                     }
 
                     let mut joined_results = Vec::new();
@@ -2119,6 +2147,12 @@ impl DatabaseContext {
                         };
 
                         if let Some(ref left_val_str) = left_val_opt {
+                            // Push down 512-bit SIMD Block Bloom Filter before probing hash table on INNER JOIN
+                            if join.join_type == crate::ast::JoinType::Inner
+                                && !simd_bloom.might_contain_str(left_val_str)
+                            {
+                                continue;
+                            }
                             if let Some(matching_rights) = right_hash.get(left_val_str) {
                                 for right_doc in matching_rights {
                                     let mut combined = left_doc.clone();

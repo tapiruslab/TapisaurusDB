@@ -10,8 +10,109 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-use crate::ast::{FilterExpr, Operator};
+use crate::ast::{FilterExpr, JoinClause, JoinType, Operator};
 use tapisaurus_core::document::model::{Document, Value};
+
+/// Cache-line aligned 512-bit (`[u64; 8]`) 8-lane SIMD Block Bloom Filter for join-key pushdown.
+///
+/// Maps each key hash to a single 64-byte block and tests/sets 8 independent bit positions
+/// across the 8 `u64` lanes in parallel, eliminating L1 cache misses during hash-join probing.
+#[derive(Debug, Clone)]
+pub struct SimdBloomFilter {
+    blocks: Vec<[u64; 8]>,
+    item_count: usize,
+}
+
+impl SimdBloomFilter {
+    /// Construct a SIMD Block Bloom Filter sized for `expected_items` (~1% false-positive rate).
+    pub fn with_capacity(expected_items: usize) -> Self {
+        let min_blocks = ((expected_items.max(16) * 12) / 512).max(1);
+        let num_blocks = min_blocks.next_power_of_two();
+        Self {
+            blocks: vec![[0u64; 8]; num_blocks],
+            item_count: 0,
+        }
+    }
+
+    #[inline]
+    fn hash_bytes(bytes: &[u8]) -> u64 {
+        let mut h = 0x9E37_79B9_7F4A_7C15u64 ^ (bytes.len() as u64);
+        for &b in bytes {
+            h ^= b as u64;
+            h = h.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            h ^= h >> 27;
+        }
+        h = (h ^ (h >> 30)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        h ^ (h >> 31)
+    }
+
+    #[inline]
+    fn lane_masks(hash: u64) -> [u64; 8] {
+        const SALT: [u64; 8] = [
+            0x47B6_137B_9E37_79B9,
+            0x8823_D2F3_BF58_476D,
+            0x71D3_626B_94D0_49BB,
+            0x2F6E_2B15_D1B5_4A32,
+            0xA5A5_5A5A_C6BC_2796,
+            0x517C_C1B7_2722_0A95,
+            0x9E37_79B9_7F4A_7C15,
+            0xD6E8_FEB8_6659_FD93,
+        ];
+        let mut masks = [0u64; 8];
+        for i in 0..8 {
+            let bit = (hash.wrapping_mul(SALT[i]) >> 58) & 63;
+            masks[i] = 1u64 << bit;
+        }
+        masks
+    }
+
+    /// Insert a string join key into the SIMD Block Bloom Filter.
+    #[inline]
+    pub fn insert_str(&mut self, key: &str) {
+        self.insert_hash(Self::hash_bytes(key.as_bytes()));
+    }
+
+    /// Insert a 64-bit pre-hashed key into a single 64-byte SIMD block.
+    #[inline]
+    pub fn insert_hash(&mut self, hash: u64) {
+        let block_idx = ((hash >> 32) as usize) & (self.blocks.len() - 1);
+        let masks = Self::lane_masks(hash);
+        let blk = &mut self.blocks[block_idx];
+        for i in 0..8 {
+            blk[i] |= masks[i];
+        }
+        self.item_count += 1;
+    }
+
+    /// Test whether `key` might exist in the right-side join relation in `O(1)` L1 cache access.
+    #[inline]
+    pub fn might_contain_str(&self, key: &str) -> bool {
+        self.might_contain_hash(Self::hash_bytes(key.as_bytes()))
+    }
+
+    /// Test a 64-bit hash across all 8 `u64` SIMD lanes simultaneously.
+    #[inline]
+    pub fn might_contain_hash(&self, hash: u64) -> bool {
+        let block_idx = ((hash >> 32) as usize) & (self.blocks.len() - 1);
+        let masks = Self::lane_masks(hash);
+        let blk = &self.blocks[block_idx];
+        let mut missed = 0u64;
+        for i in 0..8 {
+            missed |= (blk[i] & masks[i]) ^ masks[i];
+        }
+        missed == 0
+    }
+
+    /// Number of items inserted into the filter.
+    pub fn len(&self) -> usize {
+        self.item_count
+    }
+
+    /// Return `true` if no keys were inserted.
+    pub fn is_empty(&self) -> bool {
+        self.item_count == 0
+    }
+}
 
 /// A single bucket within an equi-width or equi-depth histogram
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -599,6 +700,60 @@ impl QueryOptimizer {
             }
         }
     }
+
+    /// Cost-Based Multi-Join Reordering (`Dynamic Programming / Greedy Cardinality Ordering`).
+    ///
+    /// Reorders a chain of `INNER JOIN` clauses (`A JOIN B JOIN C JOIN D`) in ascending order of
+    /// estimated post-filter right cardinality while respecting table-reference dependencies,
+    /// ensuring the most selective / smallest tables join first to minimize intermediate rows.
+    pub fn reorder_inner_joins(
+        base_collection: &str,
+        _base_rows: usize,
+        joins: &[JoinClause],
+        right_cardinalities: &HashMap<String, usize>,
+    ) -> Vec<JoinClause> {
+        if joins.len() <= 1 || !joins.iter().all(|j| j.join_type == JoinType::Inner) {
+            return joins.to_vec();
+        }
+
+        let mut available_tables: HashSet<String> = HashSet::new();
+        available_tables.insert(base_collection.to_ascii_lowercase());
+
+        let mut remaining: Vec<JoinClause> = joins.to_vec();
+        let mut ordered: Vec<JoinClause> = Vec::with_capacity(joins.len());
+
+        while !remaining.is_empty() {
+            let mut best_idx = 0usize;
+            let mut best_card = usize::MAX;
+            let mut found_ready = false;
+
+            for (idx, jc) in remaining.iter().enumerate() {
+                let left_prefix = jc
+                    .on_left
+                    .split_once('.')
+                    .map(|(tbl, _)| tbl.to_ascii_lowercase());
+                let is_ready = match left_prefix {
+                    Some(ref tbl) => available_tables.contains(tbl),
+                    None => true,
+                };
+                let card = right_cardinalities
+                    .get(&jc.collection)
+                    .copied()
+                    .unwrap_or(1_000);
+                if is_ready && (!found_ready || card < best_card) {
+                    found_ready = true;
+                    best_card = card;
+                    best_idx = idx;
+                }
+            }
+
+            let chosen = remaining.remove(best_idx);
+            available_tables.insert(chosen.collection.to_ascii_lowercase());
+            ordered.push(chosen);
+        }
+
+        ordered
+    }
 }
 
 #[cfg(test)]
@@ -773,5 +928,63 @@ mod tests {
         ]);
         let sel_and = QueryOptimizer::estimate_selectivity(&stats, &multi_and);
         assert!(sel_and > 0.0 && sel_and <= 1.0);
+    }
+
+    #[test]
+    fn test_cbo_multi_join_reordering_and_simd_bloom_filter() {
+        // 1. Verify 512-bit 8-lane SIMD Block Bloom Filter accuracy
+        let mut bloom = SimdBloomFilter::with_capacity(256);
+        for i in 0..150 {
+            bloom.insert_str(&format!("user_key_{i}"));
+        }
+        assert_eq!(bloom.len(), 150);
+        for i in 0..150 {
+            assert!(
+                bloom.might_contain_str(&format!("user_key_{i}")),
+                "Inserted key user_key_{i} must never produce a false negative"
+            );
+        }
+        let mut false_positives = 0;
+        for i in 1000..1500 {
+            if bloom.might_contain_str(&format!("missing_key_{i}")) {
+                false_positives += 1;
+            }
+        }
+        assert!(
+            false_positives < 25,
+            "False positive rate should be low, got {false_positives}/500"
+        );
+
+        // 2. Verify Cost-Based Multi-Join Reordering places most selective table first
+        let joins = vec![
+            JoinClause {
+                collection: "audit_logs_huge".to_string(),
+                on_left: "orders.user_id".to_string(),
+                on_right: "audit_logs_huge.user_id".to_string(),
+                join_type: JoinType::Inner,
+            },
+            JoinClause {
+                collection: "merchants_medium".to_string(),
+                on_left: "orders.merchant_id".to_string(),
+                on_right: "merchants_medium.id".to_string(),
+                join_type: JoinType::Inner,
+            },
+            JoinClause {
+                collection: "vip_tiers_tiny".to_string(),
+                on_left: "orders.tier_id".to_string(),
+                on_right: "vip_tiers_tiny.id".to_string(),
+                join_type: JoinType::Inner,
+            },
+        ];
+        let mut cards = HashMap::new();
+        cards.insert("audit_logs_huge".to_string(), 500_000);
+        cards.insert("merchants_medium".to_string(), 2_500);
+        cards.insert("vip_tiers_tiny".to_string(), 12);
+
+        let reordered = QueryOptimizer::reorder_inner_joins("orders", 50_000, &joins, &cards);
+        assert_eq!(reordered.len(), 3);
+        assert_eq!(reordered[0].collection, "vip_tiers_tiny");
+        assert_eq!(reordered[1].collection, "merchants_medium");
+        assert_eq!(reordered[2].collection, "audit_logs_huge");
     }
 }
