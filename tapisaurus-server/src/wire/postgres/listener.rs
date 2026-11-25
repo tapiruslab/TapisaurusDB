@@ -17,7 +17,7 @@ use super::codec::{
     encode_ready_for_query, encode_row_description,
 };
 use super::handler::{
-    handle_postgres_execute_query_state_with_txn, handle_postgres_query_state_with_txn,
+    handle_postgres_execute_query_state_with_txn_and_formats, handle_postgres_query_state_with_txn,
     infer_query_row_description,
 };
 use tapisaurus_query::DatabaseContext;
@@ -287,6 +287,7 @@ async fn handle_postgres_connection(
     struct Portal {
         query: String,
         params: Vec<String>,
+        result_format_codes: Vec<i16>,
     }
 
     let mut prepared_statements: HashMap<String, PreparedStatement> = HashMap::new();
@@ -381,11 +382,13 @@ async fn handle_postgres_connection(
                     }
                 }
 
+                let inferred_oids = infer_postgres_param_oids(&query_str, &param_oids);
+
                 prepared_statements.insert(
                     stmt_name,
                     PreparedStatement {
                         query: query_str,
-                        param_oids,
+                        param_oids: inferred_oids,
                     },
                 );
 
@@ -480,11 +483,29 @@ async fn handle_postgres_connection(
                     }
                 }
 
+                // Read result-column format codes (0 = text, 1 = binary)
+                let mut result_format_codes = Vec::new();
+                if cursor + 2 <= body.len() {
+                    let raw_num_res = i16::from_be_bytes([body[cursor], body[cursor + 1]]);
+                    cursor += 2;
+                    if raw_num_res > 0 {
+                        let num_res = (raw_num_res as usize).min(10_000);
+                        for _ in 0..num_res {
+                            if cursor + 2 <= body.len() {
+                                let fmt = i16::from_be_bytes([body[cursor], body[cursor + 1]]);
+                                result_format_codes.push(fmt);
+                                cursor += 2;
+                            }
+                        }
+                    }
+                }
+
                 portals.insert(
                     portal_name,
                     Portal {
                         query: stmt_query,
                         params,
+                        result_format_codes,
                     },
                 );
 
@@ -514,8 +535,18 @@ async fn handle_postgres_connection(
                         }
                     } else if desc_type == b'P' {
                         if let Some(portal) = portals.get(&name) {
-                            if let Some(row_desc) = infer_query_row_description(&db, &portal.query)
+                            if let Some(mut row_desc) =
+                                infer_query_row_description(&db, &portal.query)
                             {
+                                for (idx, field) in row_desc.iter_mut().enumerate() {
+                                    field.format_code = if portal.result_format_codes.is_empty() {
+                                        0
+                                    } else if portal.result_format_codes.len() == 1 {
+                                        portal.result_format_codes[0]
+                                    } else {
+                                        portal.result_format_codes.get(idx).copied().unwrap_or(0)
+                                    };
+                                }
                                 stream.write_all(&encode_row_description(&row_desc)).await?;
                             } else {
                                 stream.write_all(&encode_no_data()).await?;
@@ -537,11 +568,12 @@ async fn handle_postgres_connection(
                     // Safe parameter substitution: matches $N whole tokens outside quotes
                     let resolved_query = substitute_postgres_params(&portal.query, &portal.params);
 
-                    let response_bytes = handle_postgres_execute_query_state_with_txn(
+                    let response_bytes = handle_postgres_execute_query_state_with_txn_and_formats(
                         &db,
                         &resolved_query,
                         &mut txn_state,
                         &mut current_txn,
+                        &portal.result_format_codes,
                     );
                     stream.write_all(&response_bytes).await?;
                     stream.flush().await?;
@@ -606,6 +638,86 @@ async fn handle_postgres_connection(
     }
 
     Ok(())
+}
+
+/// Infer PostgreSQL parameter type OIDs for `$1..$N` placeholders when the client
+/// leaves them unspecified (count 0 or OID 0) in Extended Query `Parse` ('P').
+fn infer_postgres_param_oids(query: &str, client_oids: &[i32]) -> Vec<i32> {
+    let bytes = query.as_bytes();
+    let mut i = 0usize;
+    let mut in_sq = false;
+    let mut max_idx = client_oids.len();
+    let mut inferred: HashMap<usize, i32> = HashMap::new();
+
+    while i < bytes.len() {
+        if bytes[i] == b'\'' {
+            if in_sq && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                i += 2;
+                continue;
+            }
+            in_sq = !in_sq;
+            i += 1;
+            continue;
+        }
+        if !in_sq && bytes[i] == b'$' {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j > start {
+                if let Ok(idx) = query[start..j].parse::<usize>() {
+                    if idx >= 1 {
+                        max_idx = max_idx.max(idx);
+                        // Look behind for `ANY(` and ahead for explicit `::type` casts
+                        let before = query[..i].trim_end().to_ascii_uppercase();
+                        let after = query[j..].trim_start();
+                        let oid = if let Some(cast_rest) = after.strip_prefix("::") {
+                            let ty: String = cast_rest
+                                .chars()
+                                .take_while(|c| {
+                                    c.is_ascii_alphanumeric() || *c == '_' || *c == '[' || *c == ']'
+                                })
+                                .collect::<String>()
+                                .to_ascii_lowercase();
+                            match ty.as_str() {
+                                "text[]" | "varchar[]" | "name[]" => 1009,
+                                "int8[]" | "bigint[]" => 1016,
+                                "int4[]" | "int[]" | "integer[]" => 1007,
+                                "int2[]" | "smallint[]" => 1005,
+                                "oid[]" => 1028,
+                                "int8" | "bigint" => 20,
+                                "int4" | "int" | "integer" => 23,
+                                "int2" | "smallint" => 21,
+                                "oid" => 26,
+                                "bool" | "boolean" => 16,
+                                _ => 25,
+                            }
+                        } else if before.ends_with("ANY(") || before.ends_with("ANY (") {
+                            1009 // _text (used by Prisma: nspname = ANY($1))
+                        } else {
+                            25 // text
+                        };
+                        inferred.entry(idx).or_insert(oid);
+                    }
+                }
+                i = j;
+                continue;
+            }
+        }
+        i += 1;
+    }
+
+    let mut result = Vec::with_capacity(max_idx);
+    for idx in 1..=max_idx {
+        let client_oid = client_oids.get(idx - 1).copied().unwrap_or(0);
+        if client_oid != 0 {
+            result.push(client_oid);
+        } else {
+            result.push(inferred.get(&idx).copied().unwrap_or(25));
+        }
+    }
+    result
 }
 
 /// Safely substitute PostgreSQL extended query parameters ($1, $2, etc.) into the SQL string.

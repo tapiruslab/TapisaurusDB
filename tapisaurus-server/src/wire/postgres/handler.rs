@@ -10,8 +10,8 @@ use tapisaurus_query::{parse_query, DatabaseContext, QueryResult};
 
 use super::codec::{
     encode_command_complete, encode_data_row, encode_empty_query_response, encode_error_response,
-    encode_ready_for_query, encode_row_description, PgField, PG_TYPE_BOOL, PG_TYPE_FLOAT8,
-    PG_TYPE_INT8, PG_TYPE_JSONB, PG_TYPE_TEXT,
+    encode_pg_binary_cell, encode_ready_for_query, encode_row_description, PgField, PG_TYPE_BOOL,
+    PG_TYPE_FLOAT8, PG_TYPE_INT8, PG_TYPE_JSONB, PG_TYPE_TEXT,
 };
 
 fn rollback_txn_undo_log(
@@ -655,11 +655,136 @@ pub fn handle_postgres_execute_query_state_with_txn(
         Arc<parking_lot::Mutex<tapisaurus_core::transaction::mvcc::Transaction>>,
     >,
 ) -> Vec<u8> {
+    handle_postgres_execute_query_state_with_txn_and_formats(
+        db,
+        query_str,
+        txn_state,
+        current_txn,
+        &[],
+    )
+}
+
+/// Executes a query for PostgreSQL Extended Query Protocol ('E' message):
+/// - Strips trailing `ReadyForQuery` ('Z') (sent only on `Sync` 'S')
+/// - Strips leading `RowDescription` ('T') (sent only on `Describe` 'D')
+/// - Re-encodes any `DataRow` ('D') columns requested in binary format (`result_format_codes == 1`)
+pub fn handle_postgres_execute_query_state_with_txn_and_formats(
+    db: &Arc<DatabaseContext>,
+    query_str: &str,
+    txn_state: &mut u8,
+    current_txn: &mut Option<
+        Arc<parking_lot::Mutex<tapisaurus_core::transaction::mvcc::Transaction>>,
+    >,
+    result_format_codes: &[i16],
+) -> Vec<u8> {
     let mut out = handle_postgres_query_state_with_txn(db, query_str, txn_state, current_txn);
     if out.len() >= 6 && out[out.len() - 6] == b'Z' {
         out.truncate(out.len() - 6);
     }
-    out
+
+    // Extract column type OIDs from leading RowDescription ('T') and remove it from Execute output
+    let mut col_oids: Vec<i32> = Vec::new();
+    if out.len() >= 5 && out[0] == b'T' {
+        let len = i32::from_be_bytes([out[1], out[2], out[3], out[4]]) as usize;
+        let total = 1 + len;
+        if total <= out.len() {
+            if total >= 7 {
+                let field_count = i16::from_be_bytes([out[5], out[6]]) as usize;
+                let mut cur = 7usize;
+                for _ in 0..field_count {
+                    if let Some(nul) = out[cur..total].iter().position(|&b| b == 0) {
+                        cur += nul + 1;
+                        if cur + 18 <= total {
+                            // table_oid(4) + attr_num(2) + type_oid(4)
+                            let oid = i32::from_be_bytes([
+                                out[cur + 6],
+                                out[cur + 7],
+                                out[cur + 8],
+                                out[cur + 9],
+                            ]);
+                            col_oids.push(oid);
+                            cur += 18;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+            out.drain(..total);
+        }
+    }
+
+    let wants_binary = result_format_codes.contains(&1);
+    if !wants_binary || col_oids.is_empty() {
+        return out;
+    }
+
+    // Rewrite DataRow ('D') messages so columns with format_code == 1 use PostgreSQL binary wire encoding
+    let mut rewritten = Vec::with_capacity(out.len());
+    let mut pos = 0usize;
+    while pos + 5 <= out.len() {
+        let mtype = out[pos];
+        let mlen =
+            i32::from_be_bytes([out[pos + 1], out[pos + 2], out[pos + 3], out[pos + 4]]) as usize;
+        let end = (pos + 1 + mlen).min(out.len());
+        if mtype == b'D' && pos + 7 <= end {
+            let ncols = i16::from_be_bytes([out[pos + 5], out[pos + 6]]) as usize;
+            let mut rcur = pos + 7;
+            let mut cells: Vec<Option<Vec<u8>>> = Vec::with_capacity(ncols);
+            for col_idx in 0..ncols {
+                if rcur + 4 > end {
+                    break;
+                }
+                let clen =
+                    i32::from_be_bytes([out[rcur], out[rcur + 1], out[rcur + 2], out[rcur + 3]]);
+                rcur += 4;
+                if clen == -1 {
+                    cells.push(None);
+                } else if clen >= 0 && rcur + (clen as usize) <= end {
+                    let raw = &out[rcur..rcur + (clen as usize)];
+                    rcur += clen as usize;
+                    let fmt = if result_format_codes.len() == 1 {
+                        result_format_codes[0]
+                    } else {
+                        result_format_codes.get(col_idx).copied().unwrap_or(0)
+                    };
+                    if fmt == 1 {
+                        let oid = col_oids.get(col_idx).copied().unwrap_or(PG_TYPE_TEXT);
+                        let text = String::from_utf8_lossy(raw);
+                        cells.push(Some(encode_pg_binary_cell(&text, oid)));
+                    } else {
+                        cells.push(Some(raw.to_vec()));
+                    }
+                } else {
+                    cells.push(None);
+                }
+            }
+            let payload_len: usize = 4
+                + 2
+                + cells
+                    .iter()
+                    .map(|c| 4 + c.as_ref().map_or(0, Vec::len))
+                    .sum::<usize>();
+            rewritten.push(b'D');
+            rewritten.extend_from_slice(&(payload_len as i32).to_be_bytes());
+            rewritten.extend_from_slice(&(cells.len() as i16).to_be_bytes());
+            for cell in cells {
+                match cell {
+                    Some(bytes) => {
+                        rewritten.extend_from_slice(&(bytes.len() as i32).to_be_bytes());
+                        rewritten.extend_from_slice(&bytes);
+                    }
+                    None => rewritten.extend_from_slice(&(-1i32).to_be_bytes()),
+                }
+            }
+        } else {
+            rewritten.extend_from_slice(&out[pos..end]);
+        }
+        pos = end;
+    }
+    rewritten
 }
 
 /// Backward-compatible adapter for handle_postgres_execute_query taking &mut bool

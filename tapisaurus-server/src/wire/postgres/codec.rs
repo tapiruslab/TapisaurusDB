@@ -319,6 +319,12 @@ pub fn decode_pg_param(format_code: i16, param_bytes: &[u8], type_oid: Option<i3
                 return u.to_string();
             }
         }
+        // Binary PostgreSQL array decoding (_text=1009, _varchar=1015, _name=1003, _int8=1016, _int4=1007, _int2=1005, _oid=1028)
+        if matches!(oid, 1003 | 1005 | 1007 | 1009 | 1015 | 1016 | 1028) {
+            if let Some(arr_text) = decode_pg_binary_array(param_bytes) {
+                return arr_text;
+            }
+        }
     }
 
     // Binary format (format_code == 1)
@@ -388,5 +394,174 @@ pub fn decode_pg_param(format_code: i16, param_bytes: &[u8], type_oid: Option<i3
             // Fallback to UTF-8
             String::from_utf8_lossy(param_bytes).to_string()
         }
+    }
+}
+
+/// Decode PostgreSQL binary array wire payload into PG text array syntax (e.g. `"{public}"` or `"{1,2}"`).
+fn decode_pg_binary_array(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < 12 {
+        return None;
+    }
+    let ndim = i32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let _has_null = i32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+    let elem_oid = i32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+    if ndim == 0 {
+        return Some("{}".to_string());
+    }
+    if !(1..=8).contains(&ndim) {
+        return None;
+    }
+    let mut cursor = 12usize;
+    let mut total_elems: usize = 1;
+    for _ in 0..ndim {
+        if cursor + 8 > bytes.len() {
+            return None;
+        }
+        let dim_len = i32::from_be_bytes([
+            bytes[cursor],
+            bytes[cursor + 1],
+            bytes[cursor + 2],
+            bytes[cursor + 3],
+        ]);
+        cursor += 8; // dim_len + lower_bound
+        if dim_len < 0 {
+            return None;
+        }
+        total_elems = total_elems.saturating_mul(dim_len as usize);
+    }
+    let mut items = Vec::with_capacity(total_elems.min(4096));
+    for _ in 0..total_elems {
+        if cursor + 4 > bytes.len() {
+            break;
+        }
+        let elem_len = i32::from_be_bytes([
+            bytes[cursor],
+            bytes[cursor + 1],
+            bytes[cursor + 2],
+            bytes[cursor + 3],
+        ]);
+        cursor += 4;
+        if elem_len == -1 {
+            items.push("NULL".to_string());
+        } else if elem_len >= 0 && cursor + (elem_len as usize) <= bytes.len() {
+            let eb = &bytes[cursor..cursor + (elem_len as usize)];
+            cursor += elem_len as usize;
+            let val = decode_pg_param(1, eb, Some(elem_oid));
+            if matches!(elem_oid, PG_TYPE_TEXT | PG_TYPE_VARCHAR | PG_TYPE_NAME) {
+                items.push(format!("\"{}\"", val.replace('"', "\\\"")));
+            } else {
+                items.push(val);
+            }
+        } else {
+            break;
+        }
+    }
+    Some(format!("{{{}}}", items.join(",")))
+}
+
+/// Parse a PostgreSQL text array literal (`{"a","b"}` or `{1,2}`) into unescaped element strings.
+fn parse_pg_text_array(s: &str) -> Vec<String> {
+    let trimmed = s.trim();
+    let inner = trimmed
+        .strip_prefix('{')
+        .and_then(|x| x.strip_suffix('}'))
+        .unwrap_or(trimmed);
+    if inner.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    let mut escape = false;
+    for ch in inner.chars() {
+        if escape {
+            cur.push(ch);
+            escape = false;
+        } else if ch == '\\' && in_quotes {
+            escape = true;
+        } else if ch == '"' {
+            in_quotes = !in_quotes;
+        } else if ch == ',' && !in_quotes {
+            out.push(std::mem::take(&mut cur));
+        } else {
+            cur.push(ch);
+        }
+    }
+    out.push(cur);
+    out
+}
+
+/// Convert a PostgreSQL text-encoded cell value into PostgreSQL binary wire bytes for `type_oid`.
+pub fn encode_pg_binary_cell(text_val: &str, type_oid: i32) -> Vec<u8> {
+    match type_oid {
+        PG_TYPE_BOOL => {
+            let b = matches!(
+                text_val.trim().to_ascii_lowercase().as_str(),
+                "t" | "true" | "1" | "yes" | "on"
+            );
+            vec![u8::from(b)]
+        }
+        PG_TYPE_INT2 => text_val
+            .trim()
+            .parse::<i16>()
+            .unwrap_or(0)
+            .to_be_bytes()
+            .to_vec(),
+        PG_TYPE_INT4 | PG_TYPE_OID => text_val
+            .trim()
+            .parse::<i32>()
+            .unwrap_or(0)
+            .to_be_bytes()
+            .to_vec(),
+        PG_TYPE_INT8 => text_val
+            .trim()
+            .parse::<i64>()
+            .unwrap_or(0)
+            .to_be_bytes()
+            .to_vec(),
+        PG_TYPE_FLOAT4 => text_val
+            .trim()
+            .parse::<f32>()
+            .unwrap_or(0.0)
+            .to_be_bytes()
+            .to_vec(),
+        PG_TYPE_FLOAT8 => text_val
+            .trim()
+            .parse::<f64>()
+            .unwrap_or(0.0)
+            .to_be_bytes()
+            .to_vec(),
+        1000 | 1003 | 1005 | 1007 | 1009 | 1015 | 1016 | 1028 => {
+            let elem_oid = match type_oid {
+                1000 => PG_TYPE_BOOL,
+                1003 => PG_TYPE_NAME,
+                1005 => PG_TYPE_INT2,
+                1007 => PG_TYPE_INT4,
+                1015 => PG_TYPE_VARCHAR,
+                1016 => PG_TYPE_INT8,
+                1028 => PG_TYPE_OID,
+                _ => PG_TYPE_TEXT,
+            };
+            let elems = parse_pg_text_array(text_val);
+            let mut buf = BytesMut::new();
+            if elems.is_empty() {
+                buf.put_i32(0); // ndim = 0
+                buf.put_i32(0); // has_null = 0
+                buf.put_i32(elem_oid);
+            } else {
+                buf.put_i32(1); // ndim = 1
+                buf.put_i32(0); // has_null = 0
+                buf.put_i32(elem_oid);
+                buf.put_i32(elems.len() as i32); // dim_len
+                buf.put_i32(1); // lower_bound = 1
+                for el in elems {
+                    let eb = encode_pg_binary_cell(&el, elem_oid);
+                    buf.put_i32(eb.len() as i32);
+                    buf.put_slice(&eb);
+                }
+            }
+            buf.to_vec()
+        }
+        _ => text_val.as_bytes().to_vec(),
     }
 }
