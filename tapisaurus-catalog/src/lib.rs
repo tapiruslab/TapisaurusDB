@@ -379,5 +379,49 @@ mod tests {
         assert_eq!(idx_res.columns[11].pg_type_oid, 1000);
         assert_eq!(idx_res.rows[0][12], Some(CatalogValue::IntArray(vec![0])));
         assert_eq!(idx_res.columns[12].pg_type_oid, 1016);
+
+        // Prisma 6 PostgreSQL get_columns query (requires reltype > 0)
+        let q_prisma_pg_cols = "
+            SELECT oid.namespace, info.table_name, info.column_name,
+                   format_type(att.atttypid, att.atttypmod) AS formatted_type,
+                   info.numeric_precision, info.numeric_scale, info.numeric_precision_radix,
+                   info.datetime_precision, info.is_nullable, info.is_identity
+            FROM information_schema.columns info
+            JOIN pg_attribute att ON att.attname = info.column_name
+            JOIN (
+                SELECT pg_class.oid, relname, pg_namespace.nspname AS namespace
+                FROM pg_class
+                JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+                  AND pg_namespace.nspname = ANY(ARRAY['public'])
+                WHERE reltype > 0
+            ) AS oid ON oid.oid = att.attrelid
+              AND relname = info.table_name
+              AND namespace = info.table_schema
+            WHERE table_schema = ANY(ARRAY['public'])
+            ORDER BY namespace, table_name, ordinal_position
+        ";
+        let pcols = try_execute_catalog_query(&cat, q_prisma_pg_cols)
+            .unwrap()
+            .unwrap();
+        assert_eq!(pcols.rows.len(), 7); // 3 cols in users + 4 cols in orders
+
+        // Prisma 6 MySQL get_all_columns (IF() + BINARY)
+        let my_cat = materialize_catalog(
+            &sample_snapshot(),
+            CatalogDialect::MySql {
+                database: "tapisaurus".into(),
+            },
+        );
+        let q_prisma_my_cols = "
+            SELECT column_name, table_name, IF(column_comment = '', NULL, column_comment) AS column_comment
+            FROM information_schema.columns
+            WHERE BINARY table_schema = 'tapisaurus'
+            ORDER BY ordinal_position
+        ";
+        let my_cols = try_execute_catalog_query(&my_cat, q_prisma_my_cols)
+            .unwrap()
+            .unwrap();
+        assert_eq!(my_cols.rows.len(), 7);
+        assert_eq!(my_cols.rows[0][2], Some(CatalogValue::Null));
     }
 }

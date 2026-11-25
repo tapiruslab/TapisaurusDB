@@ -560,8 +560,8 @@ fn build_pg_class(items: &[MaterializedCollection]) -> CatalogTable {
         rows.push(vec![
             CatalogValue::Int(item.oid),
             CatalogValue::Text(item.meta.name.clone()),
-            CatalogValue::Int(2200), // public namespace
-            CatalogValue::Int(0),
+            CatalogValue::Int(2200),     // public namespace
+            CatalogValue::Int(item.oid), // composite reltype OID (> 0, required by Prisma get_columns)
             CatalogValue::Int(0),
             CatalogValue::Int(10),
             CatalogValue::Int(2), // heap AM
@@ -1476,8 +1476,11 @@ fn build_info_columns(
                     .map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
                 col.numeric_precision
                     .map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
+                col.numeric_precision
+                    .map_or(CatalogValue::Null, |_| CatalogValue::Int(10)),
                 col.numeric_scale
                     .map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
+                CatalogValue::Null,
                 CatalogValue::Text("NO".into()),
                 CatalogValue::Text("NEVER".into()),
                 CatalogValue::Text(col.mysql_type.clone()),
@@ -1505,7 +1508,9 @@ fn build_info_columns(
             CatalogColumn::text("udt_schema"),
             CatalogColumn::int4("character_maximum_length"),
             CatalogColumn::int4("numeric_precision"),
+            CatalogColumn::int4("numeric_precision_radix"),
             CatalogColumn::int4("numeric_scale"),
+            CatalogColumn::int4("datetime_precision"),
             CatalogColumn::text("is_identity"),
             CatalogColumn::text("is_generated"),
             CatalogColumn::text("column_type"),

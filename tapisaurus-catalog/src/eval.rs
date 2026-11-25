@@ -1584,6 +1584,13 @@ fn eval_scalar_fn(
             .into_iter()
             .find(|v| !v.is_null())
             .unwrap_or(CatalogValue::Null),
+        "if" | "iif" => {
+            if vals.first().and_then(CatalogValue::as_bool) == Some(true) {
+                vals.get(1).cloned().unwrap_or(CatalogValue::Null)
+            } else {
+                vals.get(2).cloned().unwrap_or(CatalogValue::Null)
+            }
+        }
         "nullif" => {
             if let (Some(a), Some(b)) = (vals.first(), vals.get(1)) {
                 if a.cmp_sql(b) == Some(std::cmp::Ordering::Equal) {
