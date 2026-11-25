@@ -824,7 +824,13 @@ fn default_col_name(expr: &Expr) -> String {
     match expr {
         Expr::Ident { column, .. } => column.clone(),
         Expr::SysVar(sv) => format!("@@{sv}"),
-        Expr::Function { name, .. } => name.clone(),
+        Expr::Function { name, .. } => {
+            if name.eq_ignore_ascii_case("user") {
+                "current_user".to_string()
+            } else {
+                name.clone()
+            }
+        }
         Expr::Cast { expr, .. } => default_col_name(expr),
         _ => "?column?".to_string(),
     }

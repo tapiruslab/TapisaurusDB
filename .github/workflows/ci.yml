@@ -61,5 +61,5 @@ jobs:
           node-version: "22"
       - run: cargo build --release -p tapisaurus-cli
       - run: python -m pip install sqlalchemy psycopg2-binary pymysql
-      - run: npm install -g prisma
-      - run: python scripts/ci/verify_orm_introspection.py --binary target/release/tapisaurus --pg-port 5432 --mysql-port 3306
+      - run: npm install -g prisma@6
+      - run: python scripts/ci/verify_orm_introspection.py --binary target/release/tapisaurus --pg-port 15432 --mysql-port 13306
