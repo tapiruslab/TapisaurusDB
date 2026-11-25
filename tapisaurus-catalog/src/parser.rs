@@ -375,6 +375,7 @@ pub enum Expr {
         name: String,
         args: Vec<Expr>,
         distinct: bool,
+        order_by: Vec<OrderItem>,
     },
     Case {
         operand: Option<Box<Expr>>,
@@ -1275,6 +1276,7 @@ impl Parser {
                         .to_ascii_lowercase();
                     let distinct = self.eat_keyword("DISTINCT");
                     let mut args = Vec::new();
+                    let mut order_by = Vec::new();
                     if !self.eat_token(&Token::RParen) {
                         if self.eat_token(&Token::Star) {
                             let _ = self.eat_token(&Token::RParen);
@@ -1290,14 +1292,14 @@ impl Parser {
                                 if !self.eat_keyword("BY") {
                                     return Err("Expected BY after ORDER inside aggregate".into());
                                 }
-                                let _ = self.parse_order_by()?;
+                                order_by = self.parse_order_by()?;
                             }
                             if !self.eat_token(&Token::RParen) {
                                 return Err(format!("Expected ')' closing {fn_name}(...)"));
                             }
                         }
                     }
-                    // Ignore optional `ORDER BY` / `FILTER (...)` / `OVER (...)` inside aggregate calls
+                    // Ignore optional `FILTER (...)` / `OVER (...)` clauses after aggregate calls
                     if self.eat_keyword("FILTER") && self.eat_token(&Token::LParen) {
                         skip_balanced_parens(self);
                     }
@@ -1308,6 +1310,7 @@ impl Parser {
                         name: fn_name,
                         args,
                         distinct,
+                        order_by,
                     });
                 }
 

@@ -268,12 +268,41 @@ fn infer_expr_pg_oid(expr: &Expr, schemas: &[SchemaEntry]) -> i32 {
             "jsonb" => 3802,
             _ => 25,
         },
-        Expr::Function { name, .. } => match name.as_str() {
-            "count" | "pg_backend_pid" | "array_length" | "array_position" | "length"
-            | "char_length" => 20,
-            "pg_table_is_visible" => 16,
+        Expr::Function { name, args, .. } => match name.as_str() {
+            "count"
+            | "pg_backend_pid"
+            | "array_length"
+            | "array_position"
+            | "length"
+            | "char_length"
+            | "generate_subscripts" => 20,
+            "pg_table_is_visible" | "bool_and" | "every" | "bool_or" => 16,
             "current_schemas" => 1009,
-            "array_agg" => 1009,
+            "array_agg" => {
+                if let Some(arg) = args.first() {
+                    match infer_expr_pg_oid(arg, schemas) {
+                        16 => 1000,
+                        20 | 21 | 23 => 1016,
+                        _ => 1009,
+                    }
+                } else {
+                    1009
+                }
+            }
+            "unnest" => {
+                if let Some(arg) = args.first() {
+                    match infer_expr_pg_oid(arg, schemas) {
+                        1016 | 1005 | 1007 => 20,
+                        1000 => 16,
+                        _ => 25,
+                    }
+                } else {
+                    25
+                }
+            }
+            "min" | "max" => args
+                .first()
+                .map_or(25, |arg| infer_expr_pg_oid(arg, schemas)),
             _ => 25,
         },
         Expr::Binary { op, .. } if is_bool_op(op) => 16,
@@ -583,6 +612,61 @@ fn eval_join_cond(
     }
 }
 
+fn try_eval_srf_expr(
+    catalog: &VirtualCatalog,
+    ctes: &BTreeMap<String, CatalogTable>,
+    expr: &Expr,
+    scope: &BoundRow,
+) -> Result<Option<Vec<CatalogValue>>, String> {
+    match expr {
+        Expr::Function { name, args, .. } if name == "unnest" => {
+            let val = if let Some(arg) = args.first() {
+                eval_expr(catalog, ctes, arg, scope)?
+            } else {
+                CatalogValue::Null
+            };
+            let elems = match val {
+                CatalogValue::IntArray(arr) => arr.into_iter().map(CatalogValue::Int).collect(),
+                CatalogValue::TextArray(arr) => arr.into_iter().map(CatalogValue::Text).collect(),
+                CatalogValue::BoolArray(arr) => arr.into_iter().map(CatalogValue::Bool).collect(),
+                CatalogValue::Null => Vec::new(),
+                other => vec![other],
+            };
+            Ok(Some(elems))
+        }
+        Expr::Function { name, args, .. } if name == "generate_subscripts" => {
+            let val = if let Some(arg) = args.first() {
+                eval_expr(catalog, ctes, arg, scope)?
+            } else {
+                CatalogValue::Null
+            };
+            let len = match val {
+                CatalogValue::IntArray(arr) => arr.len(),
+                CatalogValue::TextArray(arr) => arr.len(),
+                CatalogValue::BoolArray(arr) => arr.len(),
+                _ => 0,
+            };
+            let elems = (0..len as i64).map(CatalogValue::Int).collect();
+            Ok(Some(elems))
+        }
+        Expr::Cast {
+            expr: inner,
+            target_type,
+        } => {
+            if let Some(elems) = try_eval_srf_expr(catalog, ctes, inner, scope)? {
+                let cast_elems = elems
+                    .into_iter()
+                    .map(|v| eval_cast(catalog, v, target_type))
+                    .collect();
+                Ok(Some(cast_elems))
+            } else {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 fn eval_flat_projection(
     catalog: &VirtualCatalog,
     ctes: &BTreeMap<String, CatalogTable>,
@@ -594,38 +678,87 @@ fn eval_flat_projection(
     let cols = describe_items(&branch.items, schemas, rows.first());
     let mut out_rows = Vec::with_capacity(rows.len());
 
+    enum ProjectedSlot {
+        Scalar(CatalogValue),
+        Set(Vec<CatalogValue>),
+    }
+
     for row in rows {
         let scope = merge_outer_row(outer_row, row).unwrap_or_else(BoundRow::empty);
-        let mut out_vals = Vec::with_capacity(cols.len());
+        let mut slots: Vec<ProjectedSlot> = Vec::with_capacity(cols.len());
+        let mut has_srf = false;
+        let mut max_srf_len = 0usize;
+
         for item in &branch.items {
             match item {
                 SelectItem::Wildcard => {
                     for (_, pairs) in &row.sources {
                         for (_, v) in pairs {
-                            out_vals.push(v.clone());
+                            slots.push(ProjectedSlot::Scalar(v.clone()));
                         }
                     }
                 }
                 SelectItem::QualifiedWildcard(alias) => {
                     if let Some((_, pairs)) = row.sources.iter().find(|(a, _)| a == alias) {
                         for (_, v) in pairs {
-                            out_vals.push(v.clone());
+                            slots.push(ProjectedSlot::Scalar(v.clone()));
                         }
                     }
                 }
                 SelectItem::Expr { expr, .. } => {
-                    out_vals.push(eval_expr(catalog, ctes, expr, &scope)?);
+                    if let Some(set_vals) = try_eval_srf_expr(catalog, ctes, expr, &scope)? {
+                        has_srf = true;
+                        max_srf_len = max_srf_len.max(set_vals.len());
+                        slots.push(ProjectedSlot::Set(set_vals));
+                    } else {
+                        slots.push(ProjectedSlot::Scalar(eval_expr(
+                            catalog, ctes, expr, &scope,
+                        )?));
+                    }
                 }
             }
         }
-        out_rows.push(out_vals);
+
+        if has_srf {
+            for idx in 0..max_srf_len {
+                let mut out_vals = Vec::with_capacity(slots.len());
+                for slot in &slots {
+                    match slot {
+                        ProjectedSlot::Scalar(v) => out_vals.push(v.clone()),
+                        ProjectedSlot::Set(vs) => {
+                            out_vals.push(vs.get(idx).cloned().unwrap_or(CatalogValue::Null));
+                        }
+                    }
+                }
+                out_rows.push(out_vals);
+            }
+        } else {
+            let out_vals = slots
+                .into_iter()
+                .map(|slot| match slot {
+                    ProjectedSlot::Scalar(v) => v,
+                    ProjectedSlot::Set(mut vs) => {
+                        if vs.is_empty() {
+                            CatalogValue::Null
+                        } else {
+                            vs.remove(0)
+                        }
+                    }
+                })
+                .collect();
+            out_rows.push(out_vals);
+        }
     }
 
     // Refine inferred column OIDs from actual first non-null row values if needed
     let mut refined_cols = cols;
-    if let Some(first_row) = out_rows.first() {
-        for (col, val) in refined_cols.iter_mut().zip(first_row.iter()) {
-            if !val.is_null() && col.pg_type_oid == 25 {
+    for (col_idx, col) in refined_cols.iter_mut().enumerate() {
+        if col.pg_type_oid == 25 || col.pg_type_oid == 1009 {
+            if let Some(val) = out_rows
+                .iter()
+                .filter_map(|r| r.get(col_idx))
+                .find(|v| !v.is_null())
+            {
                 col.pg_type_oid = val.pg_type_oid();
             }
         }
@@ -642,7 +775,7 @@ fn eval_grouped_projection(
     schemas: &[SchemaEntry],
     outer_row: Option<&BoundRow>,
 ) -> Result<(Vec<CatalogColumn>, Vec<Vec<CatalogValue>>), String> {
-    let cols = describe_items(&branch.items, schemas, rows.first());
+    let mut cols = describe_items(&branch.items, schemas, rows.first());
     let mut groups: BTreeMap<Vec<Option<String>>, Vec<&BoundRow>> = BTreeMap::new();
 
     if branch.group_by.is_empty() {
@@ -669,7 +802,57 @@ fn eval_grouped_projection(
         out_rows.push(vals);
     }
 
+    for (col_idx, col) in cols.iter_mut().enumerate() {
+        if col.pg_type_oid == 25 || col.pg_type_oid == 1009 {
+            if let Some(val) = out_rows
+                .iter()
+                .filter_map(|r| r.get(col_idx))
+                .find(|v| !v.is_null())
+            {
+                col.pg_type_oid = val.pg_type_oid();
+            }
+        }
+    }
+
     Ok((cols, out_rows))
+}
+
+fn sort_group_rows<'a>(
+    catalog: &VirtualCatalog,
+    ctes: &BTreeMap<String, CatalogTable>,
+    group: &[&'a BoundRow],
+    order_by: &[crate::parser::OrderItem],
+    outer_row: Option<&BoundRow>,
+) -> Result<Vec<&'a BoundRow>, String> {
+    if order_by.is_empty() || group.len() <= 1 {
+        return Ok(group.to_vec());
+    }
+    let mut keyed: Vec<(Vec<CatalogValue>, &'a BoundRow)> = Vec::with_capacity(group.len());
+    for &r in group {
+        let scope = merge_outer_row(outer_row, r).unwrap_or_else(BoundRow::empty);
+        let mut keys = Vec::with_capacity(order_by.len());
+        for item in order_by {
+            keys.push(eval_expr(catalog, ctes, &item.expr, &scope)?);
+        }
+        keyed.push((keys, r));
+    }
+    keyed.sort_by(|(ka, _), (kb, _)| {
+        for (idx, item) in order_by.iter().enumerate() {
+            let va = &ka[idx];
+            let vb = &kb[idx];
+            let ord = match (va.is_null(), vb.is_null()) {
+                (true, true) => std::cmp::Ordering::Equal,
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+                (false, false) => va.cmp_sql(vb).unwrap_or(std::cmp::Ordering::Equal),
+            };
+            if ord != std::cmp::Ordering::Equal {
+                return if item.asc { ord } else { ord.reverse() };
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+    Ok(keyed.into_iter().map(|(_, r)| r).collect())
 }
 
 fn eval_agg_expr(
@@ -683,6 +866,7 @@ fn eval_agg_expr(
         name,
         args,
         distinct,
+        order_by,
     } = expr
     {
         match name.as_str() {
@@ -702,9 +886,10 @@ fn eval_agg_expr(
                 return Ok(CatalogValue::Int(cnt));
             }
             "array_agg" => {
+                let ordered = sort_group_rows(catalog, ctes, group, order_by, outer_row)?;
                 let mut items = Vec::new();
                 let mut seen = HashSet::new();
-                for r in group {
+                for r in ordered {
                     let scope = merge_outer_row(outer_row, r).unwrap_or_else(BoundRow::empty);
                     if let Some(arg) = args.first() {
                         let v = eval_expr(catalog, ctes, arg, &scope)?;
@@ -713,10 +898,11 @@ fn eval_agg_expr(
                         }
                     }
                 }
-                if items
-                    .iter()
-                    .all(|v| matches!(v, CatalogValue::Int(_) | CatalogValue::Bool(_)))
-                {
+                if !items.is_empty() && items.iter().all(|v| matches!(v, CatalogValue::Bool(_))) {
+                    let bools = items.iter().filter_map(CatalogValue::as_bool).collect();
+                    return Ok(CatalogValue::BoolArray(bools));
+                }
+                if !items.is_empty() && items.iter().all(|v| matches!(v, CatalogValue::Int(_))) {
                     let ints = items.iter().filter_map(CatalogValue::as_i64).collect();
                     return Ok(CatalogValue::IntArray(ints));
                 }
@@ -724,8 +910,9 @@ fn eval_agg_expr(
                 return Ok(CatalogValue::TextArray(texts));
             }
             "string_agg" => {
+                let ordered = sort_group_rows(catalog, ctes, group, order_by, outer_row)?;
                 let sep = if let Some(s_expr) = args.get(1) {
-                    let scope = group
+                    let scope = ordered
                         .first()
                         .and_then(|r| merge_outer_row(outer_row, r))
                         .unwrap_or_else(BoundRow::empty);
@@ -734,7 +921,7 @@ fn eval_agg_expr(
                     ",".to_string()
                 };
                 let mut parts = Vec::new();
-                for r in group {
+                for r in ordered {
                     let scope = merge_outer_row(outer_row, r).unwrap_or_else(BoundRow::empty);
                     if let Some(arg) = args.first() {
                         let v = eval_expr(catalog, ctes, arg, &scope)?;
@@ -766,6 +953,30 @@ fn eval_agg_expr(
                 }
                 return Ok(best.unwrap_or(CatalogValue::Null));
             }
+            "bool_and" | "every" => {
+                let mut acc: Option<bool> = None;
+                for r in group {
+                    let scope = merge_outer_row(outer_row, r).unwrap_or_else(BoundRow::empty);
+                    if let Some(arg) = args.first() {
+                        if let Some(b) = eval_expr(catalog, ctes, arg, &scope)?.as_bool() {
+                            acc = Some(acc.map_or(b, |prev| prev && b));
+                        }
+                    }
+                }
+                return Ok(acc.map_or(CatalogValue::Null, CatalogValue::Bool));
+            }
+            "bool_or" => {
+                let mut acc: Option<bool> = None;
+                for r in group {
+                    let scope = merge_outer_row(outer_row, r).unwrap_or_else(BoundRow::empty);
+                    if let Some(arg) = args.first() {
+                        if let Some(b) = eval_expr(catalog, ctes, arg, &scope)?.as_bool() {
+                            acc = Some(acc.map_or(b, |prev| prev || b));
+                        }
+                    }
+                }
+                return Ok(acc.map_or(CatalogValue::Null, CatalogValue::Bool));
+            }
             _ => {}
         }
     }
@@ -783,7 +994,15 @@ fn expr_contains_agg(expr: &Expr) -> bool {
         Expr::Function { name, args, .. } => {
             matches!(
                 name.as_str(),
-                "count" | "array_agg" | "string_agg" | "max" | "min" | "json_agg"
+                "count"
+                    | "array_agg"
+                    | "string_agg"
+                    | "max"
+                    | "min"
+                    | "json_agg"
+                    | "bool_and"
+                    | "every"
+                    | "bool_or"
             ) || args.iter().any(expr_contains_agg)
         }
         Expr::Binary { left, right, .. } => expr_contains_agg(left) || expr_contains_agg(right),
@@ -1431,6 +1650,10 @@ fn eval_scalar_fn(
                     CatalogValue::Text(s.join(&sep))
                 }
                 Some(CatalogValue::TextArray(arr)) => CatalogValue::Text(arr.join(&sep)),
+                Some(CatalogValue::BoolArray(arr)) => {
+                    let s: Vec<&str> = arr.iter().map(|b| if *b { "t" } else { "f" }).collect();
+                    CatalogValue::Text(s.join(&sep))
+                }
                 Some(other) if !other.is_null() => CatalogValue::Text(other.to_string_lossy()),
                 _ => CatalogValue::Null,
             }
@@ -1438,6 +1661,7 @@ fn eval_scalar_fn(
         "array_length" => match vals.first() {
             Some(CatalogValue::IntArray(arr)) => CatalogValue::Int(arr.len() as i64),
             Some(CatalogValue::TextArray(arr)) => CatalogValue::Int(arr.len() as i64),
+            Some(CatalogValue::BoolArray(arr)) => CatalogValue::Int(arr.len() as i64),
             _ => CatalogValue::Null,
         },
         "array_position" => {

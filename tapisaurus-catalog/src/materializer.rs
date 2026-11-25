@@ -286,6 +286,7 @@ pub fn materialize_catalog(snapshot: &CatalogSnapshot, dialect: CatalogDialect) 
     insert_table(&mut tables, build_pg_tablespace());
     insert_table(&mut tables, build_pg_roles());
     insert_table(&mut tables, build_empty_pg_matviews());
+    insert_table(&mut tables, build_empty_pg_opclass());
     insert_table(&mut tables, build_pg_extension());
 
     // 2. pg_catalog dynamic tables derived from collection metadata
@@ -768,6 +769,7 @@ fn build_pg_index(items: &[MaterializedCollection]) -> CatalogTable {
                 CatalogValue::Int(natts),
                 CatalogValue::Int(natts),
                 CatalogValue::Bool(idx.unique),
+                CatalogValue::Bool(false),
                 CatalogValue::Bool(idx.is_primary),
                 CatalogValue::Bool(false),
                 CatalogValue::Bool(true),
@@ -795,6 +797,7 @@ fn build_pg_index(items: &[MaterializedCollection]) -> CatalogTable {
             CatalogColumn::int2("indnatts"),
             CatalogColumn::int2("indnkeyatts"),
             CatalogColumn::bool_col("indisunique"),
+            CatalogColumn::bool_col("indnullsnotdistinct"),
             CatalogColumn::bool_col("indisprimary"),
             CatalogColumn::bool_col("indisexclusion"),
             CatalogColumn::bool_col("indimmediate"),
@@ -1148,6 +1151,22 @@ empty_catalog_table!(
     "pg_catalog",
     "pg_inherits",
     [("inhrelid", 20), ("inhparent", 20), ("inhseqno", 23)]
+);
+empty_catalog_table!(
+    build_empty_pg_opclass,
+    "pg_catalog",
+    "pg_opclass",
+    [
+        ("oid", 20),
+        ("opcmethod", 20),
+        ("opcname", 25),
+        ("opcnamespace", 20),
+        ("opcowner", 20),
+        ("opcfamily", 20),
+        ("opcintype", 20),
+        ("opcdefault", 16),
+        ("opckeytype", 20),
+    ]
 );
 empty_catalog_table!(
     build_empty_pg_proc,

@@ -21,6 +21,7 @@ pub enum CatalogValue {
     Text(String),
     IntArray(Vec<i64>),
     TextArray(Vec<String>),
+    BoolArray(Vec<bool>),
 }
 
 impl CatalogValue {
@@ -33,6 +34,7 @@ impl CatalogValue {
             CatalogValue::Float(_) => 701,                    // float8
             CatalogValue::IntArray(_) => 1016,                // _int8
             CatalogValue::TextArray(_) => 1009,               // _text
+            CatalogValue::BoolArray(_) => 1000,               // _bool
         }
     }
 
@@ -55,6 +57,10 @@ impl CatalogValue {
                     .collect();
                 Some(format!("{{{}}}", items.join(",")))
             }
+            CatalogValue::BoolArray(arr) => {
+                let items: Vec<&str> = arr.iter().map(|b| if *b { "t" } else { "f" }).collect();
+                Some(format!("{{{}}}", items.join(",")))
+            }
         }
     }
 
@@ -71,6 +77,10 @@ impl CatalogValue {
                 Some(items.join(","))
             }
             CatalogValue::TextArray(arr) => Some(arr.join(",")),
+            CatalogValue::BoolArray(arr) => {
+                let items: Vec<&str> = arr.iter().map(|b| if *b { "1" } else { "0" }).collect();
+                Some(items.join(","))
+            }
         }
     }
 
@@ -129,6 +139,13 @@ impl CatalogValue {
                 format!("{{{}}}", items.join(","))
             }
             CatalogValue::TextArray(arr) => format!("{{{}}}", arr.join(",")),
+            CatalogValue::BoolArray(arr) => {
+                let items: Vec<&str> = arr
+                    .iter()
+                    .map(|b| if *b { "true" } else { "false" })
+                    .collect();
+                format!("{{{}}}", items.join(","))
+            }
         }
     }
 
@@ -143,6 +160,7 @@ impl CatalogValue {
                 let target = needle.to_string_lossy();
                 arr.iter().any(|s| s == &target)
             }
+            CatalogValue::BoolArray(arr) => needle.as_bool().is_some_and(|b| arr.contains(&b)),
             CatalogValue::Text(s) => {
                 let trimmed = s.trim();
                 if trimmed.starts_with('{') && trimmed.ends_with('}') {
@@ -171,6 +189,9 @@ impl CatalogValue {
             CatalogValue::TextArray(items) => items
                 .iter()
                 .all(|s| self.contains_element(&CatalogValue::Text(s.clone()))),
+            CatalogValue::BoolArray(items) => items
+                .iter()
+                .all(|b| self.contains_element(&CatalogValue::Bool(*b))),
             CatalogValue::Text(s) => {
                 let trimmed = s.trim();
                 if trimmed.starts_with('{') && trimmed.ends_with('}') {

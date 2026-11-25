@@ -234,4 +234,148 @@ mod tests {
             try_execute_catalog_query(&cat, "SELECT * FROM orders WHERE user_id = 1").unwrap();
         assert!(user_q.is_none());
     }
+
+    #[test]
+    fn test_sqlalchemy2_pk_and_index_srf_queries() {
+        let cat = materialize_catalog(&sample_snapshot(), CatalogDialect::Postgres);
+        let orders_oid = *cat.relation_oids.get("orders").unwrap();
+
+        // Exact SQLAlchemy 2.0 PGInspector._constraint_query (unnest + generate_subscripts + array_agg ORDER BY + bool_and)
+        let q_pk = format!(
+            "
+            SELECT attr.conrelid,
+                   array_agg(CAST(attr.attname AS TEXT) ORDER BY attr.ord) AS cols,
+                   attr.conname,
+                   min(attr.description) AS description,
+                   min(attr.indnkeyatts) AS indnkeyatts,
+                   bool_and(attr.indnullsnotdistinct) AS indnullsnotdistinct
+            FROM (
+                SELECT con.conrelid, con.conname, con.description, con.ord,
+                       con.indnkeyatts, con.indnullsnotdistinct, pg_catalog.pg_attribute.attname
+                FROM pg_catalog.pg_attribute
+                JOIN (
+                    SELECT pg_catalog.pg_constraint.conrelid,
+                           pg_catalog.pg_constraint.conname,
+                           unnest(pg_catalog.pg_index.indkey) AS attnum,
+                           generate_subscripts(pg_catalog.pg_index.indkey, 1) AS ord,
+                           pg_catalog.pg_index.indnkeyatts,
+                           pg_catalog.pg_index.indnullsnotdistinct,
+                           pg_catalog.pg_description.description
+                    FROM pg_catalog.pg_constraint
+                    JOIN pg_catalog.pg_index
+                      ON pg_catalog.pg_constraint.conindid = pg_catalog.pg_index.indexrelid
+                    LEFT OUTER JOIN pg_catalog.pg_description
+                      ON pg_catalog.pg_description.objoid = pg_catalog.pg_constraint.oid
+                     AND pg_catalog.pg_description.classoid = CAST('pg_catalog.pg_constraint' AS REGCLASS)
+                    WHERE pg_catalog.pg_constraint.contype = 'p'
+                      AND pg_catalog.pg_constraint.conrelid IN ({orders_oid})
+                ) AS con
+                  ON pg_catalog.pg_attribute.attnum = con.attnum
+                 AND pg_catalog.pg_attribute.attrelid = con.conrelid
+                WHERE con.conrelid IN ({orders_oid})
+            ) AS attr
+            GROUP BY attr.conrelid, attr.conname
+            ORDER BY attr.conrelid, attr.conname
+            "
+        );
+        let pk_res = try_execute_catalog_query(&cat, &q_pk).unwrap().unwrap();
+        assert_eq!(pk_res.rows.len(), 1);
+        assert_eq!(pk_res.rows[0][0], Some(CatalogValue::Int(orders_oid)));
+        assert_eq!(
+            pk_res.rows[0][1],
+            Some(CatalogValue::TextArray(vec!["id".into()]))
+        );
+        assert_eq!(
+            pk_res.rows[0][2],
+            Some(CatalogValue::Text("orders_pkey".into()))
+        );
+        assert_eq!(pk_res.rows[0][4], Some(CatalogValue::Int(1)));
+        assert_eq!(pk_res.columns[4].pg_type_oid, 21); // int2 (from pg_index.indnkeyatts)
+        assert_eq!(pk_res.rows[0][5], Some(CatalogValue::Bool(false)));
+        assert_eq!(pk_res.columns[5].pg_type_oid, 16);
+
+        // Exact SQLAlchemy 2.0 PGInspector._pg_opclass_notdefault_query
+        let q_opc = "SELECT pg_catalog.pg_opclass.oid, pg_catalog.pg_opclass.opcname FROM pg_catalog.pg_opclass WHERE NOT pg_catalog.pg_opclass.opcdefault";
+        let opc_res = try_execute_catalog_query(&cat, q_opc).unwrap().unwrap();
+        assert_eq!(opc_res.rows.len(), 0);
+
+        // Exact SQLAlchemy 2.0 PGInspector._index_query (BoolArray + IntArray + TextArray OIDs)
+        let q_idx = format!(
+            "
+            SELECT pg_catalog.pg_index.indrelid,
+                   pg_catalog.pg_class.relname,
+                   pg_catalog.pg_index.indisunique,
+                   pg_catalog.pg_index.indisvalid,
+                   pg_catalog.pg_constraint.conrelid IS NOT NULL AS has_constraint,
+                   pg_catalog.pg_index.indoption,
+                   pg_catalog.pg_class.reloptions,
+                   pg_catalog.pg_class.relam,
+                   pg_catalog.pg_index.indnkeyatts,
+                   pg_catalog.pg_index.indnullsnotdistinct,
+                   idx_cols.elements,
+                   idx_cols.elements_is_expr,
+                   idx_cols.elements_opclass
+            FROM pg_catalog.pg_index
+            JOIN pg_catalog.pg_class
+              ON pg_catalog.pg_index.indexrelid = pg_catalog.pg_class.oid
+            LEFT OUTER JOIN (
+                SELECT idx_attr.indexrelid,
+                       min(idx_attr.indrelid) AS min_indrelid,
+                       array_agg(idx_attr.element ORDER BY idx_attr.ord) AS elements,
+                       array_agg(idx_attr.is_expr ORDER BY idx_attr.ord) AS elements_is_expr,
+                       array_agg(idx_attr.att_opclass ORDER BY idx_attr.ord) AS elements_opclass
+                FROM (
+                    SELECT idx.indexrelid,
+                           idx.indrelid,
+                           idx.ord,
+                           CASE WHEN idx.attnum = 0 THEN pg_catalog.pg_get_indexdef(idx.indexrelid, idx.ord + 1, true)
+                                ELSE CAST(pg_catalog.pg_attribute.attname AS TEXT) END AS element,
+                           (idx.attnum = 0) AS is_expr,
+                           CAST(idx.att_opclass AS BIGINT) AS att_opclass
+                    FROM (
+                        SELECT pg_catalog.pg_index.indexrelid,
+                               pg_catalog.pg_index.indrelid,
+                               unnest(pg_catalog.pg_index.indkey) AS attnum,
+                               unnest(pg_catalog.pg_index.indclass) AS att_opclass,
+                               generate_subscripts(pg_catalog.pg_index.indkey, 1) AS ord
+                        FROM pg_catalog.pg_index
+                        WHERE NOT pg_catalog.pg_index.indisprimary
+                          AND pg_catalog.pg_index.indrelid IN ({orders_oid})
+                    ) AS idx
+                    LEFT OUTER JOIN pg_catalog.pg_attribute
+                      ON pg_catalog.pg_attribute.attnum = idx.attnum
+                     AND pg_catalog.pg_attribute.attrelid = idx.indrelid
+                    WHERE idx.indrelid IN ({orders_oid})
+                ) AS idx_attr
+                GROUP BY idx_attr.indexrelid
+            ) AS idx_cols
+              ON pg_catalog.pg_index.indexrelid = idx_cols.indexrelid
+            LEFT OUTER JOIN pg_catalog.pg_constraint
+              ON pg_catalog.pg_index.indrelid = pg_catalog.pg_constraint.conrelid
+             AND pg_catalog.pg_index.indexrelid = pg_catalog.pg_constraint.conindid
+             AND pg_catalog.pg_constraint.contype = ANY(ARRAY['p', 'u', 'x'])
+            WHERE pg_catalog.pg_index.indrelid IN ({orders_oid})
+              AND NOT pg_catalog.pg_index.indisprimary
+            ORDER BY pg_catalog.pg_index.indrelid, pg_catalog.pg_class.relname
+            "
+        );
+        let idx_res = try_execute_catalog_query(&cat, &q_idx).unwrap().unwrap();
+        assert_eq!(idx_res.rows.len(), 1);
+        assert_eq!(
+            idx_res.rows[0][1],
+            Some(CatalogValue::Text("idx_orders_embedding_hnsw".into()))
+        );
+        assert_eq!(
+            idx_res.rows[0][10],
+            Some(CatalogValue::TextArray(vec!["embedding".into()]))
+        );
+        assert_eq!(idx_res.columns[10].pg_type_oid, 1009);
+        assert_eq!(
+            idx_res.rows[0][11],
+            Some(CatalogValue::BoolArray(vec![false]))
+        );
+        assert_eq!(idx_res.columns[11].pg_type_oid, 1000);
+        assert_eq!(idx_res.rows[0][12], Some(CatalogValue::IntArray(vec![0])));
+        assert_eq!(idx_res.columns[12].pg_type_oid, 1016);
+    }
 }
