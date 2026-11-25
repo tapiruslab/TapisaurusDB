@@ -287,6 +287,7 @@ pub fn materialize_catalog(snapshot: &CatalogSnapshot, dialect: CatalogDialect) 
     insert_table(&mut tables, build_pg_roles());
     insert_table(&mut tables, build_empty_pg_matviews());
     insert_table(&mut tables, build_empty_pg_opclass());
+    insert_table(&mut tables, build_empty_pg_language());
     insert_table(&mut tables, build_pg_extension());
 
     // 2. pg_catalog dynamic tables derived from collection metadata
@@ -579,6 +580,8 @@ fn build_pg_class(items: &[MaterializedCollection]) -> CatalogTable {
             CatalogValue::Bool(false),
             CatalogValue::Bool(false),
             CatalogValue::Bool(false),
+            CatalogValue::Bool(false),
+            CatalogValue::Bool(false),
             CatalogValue::Bool(true),
             CatalogValue::Text("d".into()),
             CatalogValue::Bool(false),
@@ -608,6 +611,8 @@ fn build_pg_class(items: &[MaterializedCollection]) -> CatalogTable {
                 CatalogValue::Text("i".into()),
                 CatalogValue::Int(idx.fields.len() as i64),
                 CatalogValue::Int(0),
+                CatalogValue::Bool(false),
+                CatalogValue::Bool(false),
                 CatalogValue::Bool(false),
                 CatalogValue::Bool(false),
                 CatalogValue::Bool(false),
@@ -645,12 +650,14 @@ fn build_pg_class(items: &[MaterializedCollection]) -> CatalogTable {
             CatalogColumn::int2("relchecks"),
             CatalogColumn::bool_col("relhasrules"),
             CatalogColumn::bool_col("relhastriggers"),
+            CatalogColumn::bool_col("relhassubclass"),
+            CatalogColumn::bool_col("relrowsecurity"),
             CatalogColumn::bool_col("relhasrowsecurity"),
             CatalogColumn::bool_col("relispopulated"),
             CatalogColumn::text("relreplident"),
             CatalogColumn::bool_col("relispartition"),
             CatalogColumn::text("relacl"),
-            CatalogColumn::text("reloptions"),
+            CatalogColumn::new("reloptions", 1009),
         ],
         rows,
     }
@@ -1169,6 +1176,12 @@ empty_catalog_table!(
     ]
 );
 empty_catalog_table!(
+    build_empty_pg_language,
+    "pg_catalog",
+    "pg_language",
+    [("oid", 20), ("lanname", 25)]
+);
+empty_catalog_table!(
     build_empty_pg_proc,
     "pg_catalog",
     "pg_proc",
@@ -1176,8 +1189,10 @@ empty_catalog_table!(
         ("oid", 20),
         ("proname", 25),
         ("pronamespace", 20),
+        ("prolang", 20),
         ("prokind", 25),
         ("prorettype", 20),
+        ("prosrc", 25),
     ]
 );
 empty_catalog_table!(
@@ -1214,6 +1229,12 @@ empty_catalog_table!(
         ("sequencename", 25),
         ("sequenceowner", 25),
         ("data_type", 25),
+        ("start_value", 20),
+        ("min_value", 20),
+        ("max_value", 20),
+        ("increment_by", 20),
+        ("cycle", 16),
+        ("cache_size", 20),
     ]
 );
 empty_catalog_table!(
@@ -1309,12 +1330,14 @@ fn build_pg_extension() -> CatalogTable {
             CatalogColumn::text("extname"),
             CatalogColumn::int8("extnamespace"),
             CatalogColumn::text("extversion"),
+            CatalogColumn::bool_col("extrelocatable"),
         ],
         rows: vec![vec![
             CatalogValue::Int(16388),
             CatalogValue::Text("vector".into()),
             CatalogValue::Int(2200),
             CatalogValue::Text("0.7.0".into()),
+            CatalogValue::Bool(true),
         ]],
     }
 }
@@ -1382,6 +1405,7 @@ fn build_info_tables(
                 CatalogValue::Null,
                 CatalogValue::Null,
                 CatalogValue::Text("utf8mb4_general_ci".into()),
+                CatalogValue::Text(String::new()),
                 item.meta
                     .comment
                     .clone()
@@ -1405,6 +1429,7 @@ fn build_info_tables(
             CatalogColumn::text("create_time"),
             CatalogColumn::text("update_time"),
             CatalogColumn::text("table_collation"),
+            CatalogColumn::text("create_options"),
             CatalogColumn::text("table_comment"),
         ],
         rows,

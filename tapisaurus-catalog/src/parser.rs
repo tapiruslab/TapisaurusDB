@@ -22,6 +22,7 @@ pub enum Token {
     Minus,
     Slash,
     Percent,
+    Amp,
     Eq,
     Neq,
     Lt,
@@ -179,6 +180,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::Percent);
                 i += 1;
             }
+            b'&' => {
+                tokens.push(Token::Amp);
+                i += 1;
+            }
             b'=' => {
                 tokens.push(Token::Eq);
                 i += 1;
@@ -318,6 +323,7 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    BitAnd,
     ContainsArr,
     ContainedByArr,
     Regex,
@@ -1075,6 +1081,13 @@ impl Parser {
                     op: BinOp::Div,
                     right: Box::new(rhs),
                 };
+            } else if self.eat_token(&Token::Amp) {
+                let rhs = self.parse_postfix()?;
+                lhs = Expr::Binary {
+                    left: Box::new(lhs),
+                    op: BinOp::BitAnd,
+                    right: Box::new(rhs),
+                };
             } else {
                 break;
             }
@@ -1143,6 +1156,10 @@ impl Parser {
         }
         if self.eat_keyword("FALSE") {
             return Ok(Expr::Literal(CatalogValue::Bool(false)));
+        }
+
+        if self.eat_keyword("BINARY") {
+            return self.parse_primary();
         }
 
         if self.eat_keyword("EXISTS") {

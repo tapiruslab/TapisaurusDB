@@ -650,6 +650,21 @@ fn infer_postgres_param_oids(query: &str, client_oids: &[i32]) -> Vec<i32> {
     let mut inferred: HashMap<usize, i32> = HashMap::new();
 
     while i < bytes.len() {
+        if !in_sq && bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if !in_sq && bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+            continue;
+        }
         if bytes[i] == b'\'' {
             if in_sq && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
                 i += 2;
@@ -730,6 +745,31 @@ pub fn substitute_postgres_params(query: &str, params: &[String]) -> String {
 
     while i < chars.len() {
         let ch = chars[i];
+        if !in_quote && ch == '-' && i + 1 < chars.len() && chars[i + 1] == '-' {
+            out.push('-');
+            out.push('-');
+            i += 2;
+            while i < chars.len() && chars[i] != '\n' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        if !in_quote && ch == '/' && i + 1 < chars.len() && chars[i + 1] == '*' {
+            out.push('/');
+            out.push('*');
+            i += 2;
+            while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
+                out.push(chars[i]);
+                i += 1;
+            }
+            if i + 1 < chars.len() {
+                out.push('*');
+                out.push('/');
+                i += 2;
+            }
+            continue;
+        }
         if ch == '\'' {
             // Check for escaped quote ''
             if in_quote && i + 1 < chars.len() && chars[i + 1] == '\'' {

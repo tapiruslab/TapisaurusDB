@@ -4,14 +4,14 @@
 //! executes queries against `tapisaurus-query` and `DatabaseContext`,
 //! and formats responses as MySQL ResultSets or OK/ERR packets.
 
-use bytes::{Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use std::sync::Arc;
 use tapisaurus_core::document::model::Value;
 use tapisaurus_query::{parse_query, DatabaseContext, QueryResult};
 
 use super::codec::{
     build_column_def, build_eof_packet, build_err_packet, build_ok_packet, build_row_packet,
-    encode_packet, put_lenenc_int, MYSQL_TYPE_LONGLONG, MYSQL_TYPE_VAR_STRING,
+    encode_packet, put_lenenc_int, put_lenenc_str, MYSQL_TYPE_LONGLONG, MYSQL_TYPE_VAR_STRING,
 };
 
 /// Handles a single MySQL COM_QUERY packet (0x03)
@@ -583,6 +583,121 @@ fn format_typed_result_set(
     // 4. Data Rows
     for row in rows {
         packets.push(build_row_packet(*seq, row));
+        *seq = seq.wrapping_add(1);
+    }
+
+    // 5. Final EOF Packet
+    packets.push(build_eof_packet(*seq));
+    *seq = seq.wrapping_add(1);
+
+    packets
+}
+
+/// Handles a MySQL COM_STMT_EXECUTE query (0x17), emitting MySQL Binary Protocol Resultset rows
+/// for `SELECT`/`WITH` catalog queries and standard OK/ERR/binary rows for other statements.
+pub fn handle_mysql_binary_query(
+    db: &Arc<DatabaseContext>,
+    current_db: &str,
+    query_str: &str,
+    start_seq_id: u8,
+) -> Vec<Bytes> {
+    let mut seq = start_seq_id;
+    let trimmed = query_str.trim().trim_end_matches(';').trim();
+    if trimmed.is_empty() {
+        return vec![build_ok_packet(seq, 0, 0, "")];
+    }
+    let upper = trimmed.to_uppercase();
+    if upper.starts_with("SELECT") || upper.starts_with("WITH") || upper.starts_with("(SELECT") {
+        let dialect = tapisaurus_catalog::CatalogDialect::MySql {
+            database: current_db.to_string(),
+        };
+        match db.query_virtual_catalog(trimmed, dialect) {
+            Ok(Some(cat_res)) => {
+                let cols: Vec<String> = cat_res.columns.iter().map(|c| c.name.clone()).collect();
+                let col_oids: Vec<i32> = cat_res.columns.iter().map(|c| c.pg_type_oid).collect();
+                let rows: Vec<Vec<Option<String>>> = cat_res
+                    .rows
+                    .iter()
+                    .map(|row| {
+                        row.iter()
+                            .map(|cell| {
+                                cell.as_ref()
+                                    .and_then(tapisaurus_catalog::CatalogValue::to_mysql_text)
+                            })
+                            .collect()
+                    })
+                    .collect();
+                return format_typed_binary_result_set(
+                    &mut seq, current_db, "", &cols, &col_oids, &rows,
+                );
+            }
+            Ok(None) => {}
+            Err(cat_err) => {
+                return vec![build_err_packet(seq, 1064, "42000", &cat_err)];
+            }
+        }
+    }
+    handle_mysql_query(db, current_db, query_str, start_seq_id)
+}
+
+/// Format a MySQL Binary Protocol ResultSet (used by COM_STMT_EXECUTE).
+fn format_typed_binary_result_set(
+    seq: &mut u8,
+    db: &str,
+    table: &str,
+    columns: &[String],
+    pg_oids: &[i32],
+    rows: &[Vec<Option<String>>],
+) -> Vec<Bytes> {
+    let mut packets = Vec::new();
+
+    // 1. Column Count packet
+    let mut count_payload = BytesMut::new();
+    put_lenenc_int(&mut count_payload, columns.len() as u64);
+    packets.push(encode_packet(*seq, &count_payload));
+    *seq = seq.wrapping_add(1);
+
+    // 2. Column Definitions
+    let mut col_types = Vec::with_capacity(columns.len());
+    for (col, oid) in columns.iter().zip(pg_oids.iter().copied()) {
+        let col_type = match oid {
+            16 | 20 | 21 | 23 => MYSQL_TYPE_LONGLONG,
+            _ => MYSQL_TYPE_VAR_STRING,
+        };
+        col_types.push(col_type);
+        packets.push(build_column_def(*seq, db, table, col, col_type, 255));
+        *seq = seq.wrapping_add(1);
+    }
+
+    // 3. EOF Packet
+    packets.push(build_eof_packet(*seq));
+    *seq = seq.wrapping_add(1);
+
+    // 4. Binary Protocol Resultset Rows
+    let bitmap_len = (columns.len() + 2).div_ceil(8);
+    for row in rows {
+        let mut payload = BytesMut::new();
+        payload.put_u8(0x00); // Binary row packet header
+        let mut null_bitmap = vec![0u8; bitmap_len];
+        for (i, cell) in row.iter().enumerate() {
+            if cell.is_none() {
+                let bit_pos = i + 2;
+                null_bitmap[bit_pos / 8] |= 1 << (bit_pos % 8);
+            }
+        }
+        payload.put_slice(&null_bitmap);
+        for (i, cell) in row.iter().enumerate() {
+            if let Some(val) = cell {
+                let col_type = col_types.get(i).copied().unwrap_or(MYSQL_TYPE_VAR_STRING);
+                if col_type == MYSQL_TYPE_LONGLONG {
+                    let n = val.trim().parse::<i64>().unwrap_or(0);
+                    payload.put_i64_le(n);
+                } else {
+                    put_lenenc_str(&mut payload, val);
+                }
+            }
+        }
+        packets.push(encode_packet(*seq, &payload));
         *seq = seq.wrapping_add(1);
     }
 

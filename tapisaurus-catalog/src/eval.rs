@@ -292,7 +292,7 @@ fn infer_expr_pg_oid(expr: &Expr, schemas: &[SchemaEntry]) -> i32 {
             "unnest" => {
                 if let Some(arg) = args.first() {
                     match infer_expr_pg_oid(arg, schemas) {
-                        1016 | 1005 | 1007 => 20,
+                        22 | 1016 | 1005 | 1007 => 20,
                         1000 => 16,
                         _ => 25,
                     }
@@ -629,6 +629,18 @@ fn try_eval_srf_expr(
                 CatalogValue::IntArray(arr) => arr.into_iter().map(CatalogValue::Int).collect(),
                 CatalogValue::TextArray(arr) => arr.into_iter().map(CatalogValue::Text).collect(),
                 CatalogValue::BoolArray(arr) => arr.into_iter().map(CatalogValue::Bool).collect(),
+                CatalogValue::Text(s) => {
+                    let parts: Vec<&str> = s.split_whitespace().collect();
+                    if !parts.is_empty() && parts.iter().all(|p| p.parse::<i64>().is_ok()) {
+                        parts
+                            .into_iter()
+                            .filter_map(|p| p.parse::<i64>().ok())
+                            .map(CatalogValue::Int)
+                            .collect()
+                    } else {
+                        vec![CatalogValue::Text(s)]
+                    }
+                }
                 CatalogValue::Null => Vec::new(),
                 other => vec![other],
             };
@@ -1356,6 +1368,10 @@ fn eval_binary(
             |a, b| if b == 0 { 0 } else { a / b },
             |a, b| a / b,
         ),
+        BinOp::BitAnd => match (lv.as_i64(), rv.as_i64()) {
+            (Some(a), Some(b)) => CatalogValue::Int(a & b),
+            _ => CatalogValue::Null,
+        },
         BinOp::Eq => CatalogValue::Bool(lv.cmp_sql(&rv) == Some(std::cmp::Ordering::Equal)),
         BinOp::Neq => CatalogValue::Bool(
             !lv.is_null() && !rv.is_null() && lv.cmp_sql(&rv) != Some(std::cmp::Ordering::Equal),
