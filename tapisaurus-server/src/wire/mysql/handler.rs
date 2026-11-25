@@ -242,6 +242,38 @@ pub fn handle_mysql_query(
         if !pks.is_empty() {
             ddl_lines.push(format!("  PRIMARY KEY ({})", pks.join(", ")));
         }
+        let mut seen_keys = std::collections::HashSet::new();
+        for c in &eff_cols {
+            if c.is_unique && !c.is_primary_key {
+                let key_name = format!("{}_{}_key", table_name, c.name);
+                if seen_keys.insert(key_name.clone()) {
+                    ddl_lines.push(format!("  UNIQUE KEY `{key_name}` (`{}`)", c.name));
+                }
+            }
+        }
+        for sec in col.list_secondary_indexes() {
+            if seen_keys.insert(sec.name.clone()) {
+                let prefix = if sec.unique { "UNIQUE KEY" } else { "KEY" };
+                ddl_lines.push(format!("  {prefix} `{}` (`{}`)", sec.name, sec.field));
+            }
+        }
+        for legacy in col.list_indexes() {
+            if seen_keys.insert(legacy.name.clone()) {
+                let prefix = if legacy.unique { "UNIQUE KEY" } else { "KEY" };
+                let fields: Vec<String> = legacy
+                    .fields
+                    .into_iter()
+                    .map(|(f, _)| format!("`{f}`"))
+                    .collect();
+                if !fields.is_empty() {
+                    ddl_lines.push(format!(
+                        "  {prefix} `{}` ({})",
+                        legacy.name,
+                        fields.join(", ")
+                    ));
+                }
+            }
+        }
         if let Some(ref rel) = rel_schema {
             for fk in &rel.foreign_keys {
                 ddl_lines.push(format!(
