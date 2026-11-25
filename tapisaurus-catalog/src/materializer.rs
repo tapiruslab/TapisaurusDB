@@ -782,7 +782,7 @@ fn build_pg_index(items: &[MaterializedCollection]) -> CatalogTable {
                 CatalogValue::IntArray(indkey),
                 CatalogValue::IntArray(vec![0; natts as usize]),
                 CatalogValue::IntArray(vec![0; natts as usize]),
-                CatalogValue::IntArray(vec![0; natts as usize]),
+                CatalogValue::Text(vec!["0"; natts as usize].join(" ")),
                 CatalogValue::Null,
                 CatalogValue::Null,
             ]);
@@ -810,7 +810,7 @@ fn build_pg_index(items: &[MaterializedCollection]) -> CatalogTable {
             CatalogColumn::new("indkey", 1016),
             CatalogColumn::new("indcollation", 1016),
             CatalogColumn::new("indclass", 1016),
-            CatalogColumn::new("indoption", 1016),
+            CatalogColumn::new("indoption", 22), // int2vector (space-separated integers)
             CatalogColumn::text("indexprs"),
             CatalogColumn::text("indpred"),
         ],

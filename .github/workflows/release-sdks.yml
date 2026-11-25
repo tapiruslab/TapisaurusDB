@@ -5,9 +5,16 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      publish_pypi:
+        description: "Publish Python wheel & sdist to PyPI via OIDC Trusted Publishing"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -68,11 +75,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Build Python Wheel
+      - name: Build Python Wheel & Sdist
         run: |
           python -m pip install --upgrade pip build
-          python -m build --wheel bindings/python --outdir dist/python
+          python -m build --wheel --sdist bindings/python --outdir dist/python
           python scripts/ci/verify_sdk_matrix.py --check-python-dist dist/python
+      - name: Upload Python Dist Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tapisaurus-python-dist
+          path: dist/python
       - name: Package Node.js SDK tarball
         working-directory: bindings/node
         run: npm pack
+
+  publish-python-pypi:
+    name: Publish Python SDK to PyPI (OIDC)
+    needs: package-python-and-node-sdks
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_pypi) }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Download Python Dist Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tapisaurus-python-dist
+          path: dist/python
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/python

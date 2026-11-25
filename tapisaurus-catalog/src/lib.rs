@@ -365,6 +365,8 @@ mod tests {
             idx_res.rows[0][1],
             Some(CatalogValue::Text("idx_orders_embedding_hnsw".into()))
         );
+        assert_eq!(idx_res.rows[0][5], Some(CatalogValue::Text("0".into())));
+        assert_eq!(idx_res.columns[5].pg_type_oid, 22); // int2vector
         assert_eq!(
             idx_res.rows[0][10],
             Some(CatalogValue::TextArray(vec!["embedding".into()]))
