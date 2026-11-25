@@ -146,7 +146,7 @@ export class TapisaurusGrpcClient {
 
     const data = await res.json();
     return {
-      insertedCount: data?.data?.inserted_count || documents.len,
+      insertedCount: data?.data?.inserted_count || documents.length,
       insertedIds: data?.data?.inserted_ids || [],
     };
   }
