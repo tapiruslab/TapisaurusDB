@@ -118,6 +118,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     }
                 }
             }
+            b'?' => {
+                tokens.push(Token::Param(0));
+                i += 1;
+            }
             b'@' if i + 1 < bytes.len() && bytes[i + 1] == b'@' => {
                 i += 2;
                 let start = i;

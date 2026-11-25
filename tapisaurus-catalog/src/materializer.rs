@@ -322,12 +322,13 @@ pub fn materialize_catalog(snapshot: &CatalogSnapshot, dialect: CatalogDialect) 
     );
     insert_table(
         &mut tables,
-        build_info_columns(&default_catalog, &default_schema, &items),
+        build_info_columns(&default_catalog, &default_schema, &dialect, &items),
     );
     insert_table(
         &mut tables,
         build_info_table_constraints(&default_catalog, &default_schema, &items),
     );
+    insert_table(&mut tables, build_empty_info_check_constraints());
     insert_table(
         &mut tables,
         build_info_key_column_usage(&default_catalog, &default_schema, &items),
@@ -1436,11 +1437,28 @@ fn build_info_tables(
     }
 }
 
+fn mysql_base_data_type(mysql_type: &str) -> String {
+    let lower = mysql_type.trim().to_ascii_lowercase();
+    let base = lower
+        .split(|c: char| c == '(' || c.is_ascii_whitespace())
+        .next()
+        .unwrap_or("text");
+    match base {
+        "boolean" | "bool" => "tinyint".to_string(),
+        "integer" => "int".to_string(),
+        "numeric" => "decimal".to_string(),
+        other if !other.is_empty() => other.to_string(),
+        _ => "text".to_string(),
+    }
+}
+
 fn build_info_columns(
     catalog: &str,
     default_schema: &str,
+    dialect: &CatalogDialect,
     items: &[MaterializedCollection],
 ) -> CatalogTable {
+    let is_mysql = matches!(dialect, CatalogDialect::MySql { .. });
     let mut rows = Vec::new();
     for item in items {
         let indexed_fields: HashMap<&str, bool> = item
@@ -1459,6 +1477,26 @@ fn build_info_columns(
             } else {
                 ""
             };
+            let info_data_type = if is_mysql {
+                mysql_base_data_type(&col.mysql_type)
+            } else {
+                col.data_type.clone()
+            };
+            let max_len = if is_mysql && info_data_type == "varchar" {
+                col.max_length.or(Some(255))
+            } else {
+                col.max_length
+            };
+            let num_prec = if is_mysql && info_data_type == "decimal" {
+                col.numeric_precision.or(Some(10))
+            } else {
+                col.numeric_precision
+            };
+            let num_scale = if is_mysql && info_data_type == "decimal" {
+                col.numeric_scale.or(Some(0))
+            } else {
+                col.numeric_scale
+            };
             rows.push(vec![
                 CatalogValue::Text(catalog.into()),
                 CatalogValue::Text(default_schema.into()),
@@ -1469,17 +1507,13 @@ fn build_info_columns(
                     .clone()
                     .map_or(CatalogValue::Null, CatalogValue::Text),
                 CatalogValue::Text(if col.nullable { "YES" } else { "NO" }.into()),
-                CatalogValue::Text(col.data_type.clone()),
+                CatalogValue::Text(info_data_type),
                 CatalogValue::Text(col.udt_name.clone()),
                 CatalogValue::Text("pg_catalog".into()),
-                col.max_length
-                    .map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
-                col.numeric_precision
-                    .map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
-                col.numeric_precision
-                    .map_or(CatalogValue::Null, |_| CatalogValue::Int(10)),
-                col.numeric_scale
-                    .map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
+                max_len.map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
+                num_prec.map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
+                num_prec.map_or(CatalogValue::Null, |_| CatalogValue::Int(10)),
+                num_scale.map_or(CatalogValue::Null, |v| CatalogValue::Int(i64::from(v))),
                 CatalogValue::Null,
                 CatalogValue::Text("NO".into()),
                 CatalogValue::Text("NEVER".into()),
@@ -1832,6 +1866,17 @@ empty_catalog_table!(
     ]
 );
 empty_catalog_table!(
+    build_empty_info_check_constraints,
+    "information_schema",
+    "check_constraints",
+    [
+        ("constraint_catalog", 25),
+        ("constraint_schema", 25),
+        ("constraint_name", 25),
+        ("check_clause", 25),
+    ]
+);
+empty_catalog_table!(
     build_empty_info_routines,
     "information_schema",
     "routines",
@@ -1840,6 +1885,7 @@ empty_catalog_table!(
         ("routine_schema", 25),
         ("routine_name", 25),
         ("routine_type", 25),
+        ("routine_definition", 25),
     ]
 );
 empty_catalog_table!(

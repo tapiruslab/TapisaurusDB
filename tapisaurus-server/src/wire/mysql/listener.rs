@@ -135,6 +135,7 @@ async fn handle_mysql_connection(
 
     let mut current_db = handshake_resp
         .database
+        .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "tapisaurus".to_string());
     info!(
         "MySQL client authenticated: user='{}', db='{}', conn_id={conn_id} from {peer_addr}",

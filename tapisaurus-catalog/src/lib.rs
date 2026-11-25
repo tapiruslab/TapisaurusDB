@@ -424,4 +424,176 @@ mod tests {
         assert_eq!(my_cols.rows.len(), 7);
         assert_eq!(my_cols.rows[0][2], Some(CatalogValue::Null));
     }
+
+    #[test]
+    fn test_prisma6_mysql_full_introspection_suite() {
+        let my_cat = materialize_catalog(
+            &sample_snapshot(),
+            CatalogDialect::MySql {
+                database: "tapisaurus".into(),
+            },
+        );
+
+        // 1. Describe with MySQL '?' placeholders (COM_STMT_PREPARE)
+        let q_tables_prep = "
+            SELECT DISTINCT
+              BINARY table_info.table_name AS table_name,
+              table_info.create_options AS create_options,
+              table_info.table_comment AS table_comment
+            FROM information_schema.tables AS table_info
+            JOIN information_schema.columns AS column_info
+                ON BINARY column_info.table_name = BINARY table_info.table_name
+            WHERE
+                table_info.table_schema = ?
+                AND column_info.table_schema = ?
+                -- Exclude views.
+                AND table_info.table_type = 'BASE TABLE'
+            ORDER BY BINARY table_info.table_name
+        ";
+        let desc = try_describe_catalog_query(&my_cat, q_tables_prep)
+            .unwrap()
+            .unwrap();
+        assert_eq!(desc.len(), 3);
+        assert_eq!(desc[0].name, "table_name");
+        assert_eq!(desc[1].name, "create_options");
+        assert_eq!(desc[2].name, "table_comment");
+
+        // 2. Execute get_table_names
+        let q_tables = q_tables_prep.replace('?', "'tapisaurus'");
+        let tbls = try_execute_catalog_query(&my_cat, &q_tables)
+            .unwrap()
+            .unwrap();
+        assert_eq!(tbls.rows.len(), 2);
+        assert_eq!(tbls.rows[0][0], Some(CatalogValue::Text("orders".into())));
+        assert_eq!(tbls.rows[1][0], Some(CatalogValue::Text("users".into())));
+
+        // 3. Execute get_views
+        let q_views = "
+            SELECT TABLE_NAME AS view_name, VIEW_DEFINITION AS view_sql
+            FROM INFORMATION_SCHEMA.VIEWS
+            WHERE TABLE_SCHEMA = 'tapisaurus'
+        ";
+        let views = try_execute_catalog_query(&my_cat, q_views)
+            .unwrap()
+            .unwrap();
+        assert_eq!(views.rows.len(), 0);
+
+        // 4. Execute get_constraints (CHECK_CONSTRAINTS)
+        let q_constraints = "
+            SELECT
+                tc.table_schema AS namespace,
+                tc.table_name AS table_name,
+                tc.constraint_name AS constraint_name,
+                LOWER(tc.constraint_type) AS constraint_type,
+                cc.check_clause AS constraint_definition
+            FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            LEFT JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc
+                ON cc.constraint_schema = tc.table_schema
+                AND cc.constraint_name = tc.constraint_name
+            WHERE constraint_type = 'CHECK'
+            ORDER BY namespace, table_name, constraint_type, constraint_name
+        ";
+        let cons = try_execute_catalog_query(&my_cat, q_constraints)
+            .unwrap()
+            .unwrap();
+        assert_eq!(cons.rows.len(), 0);
+
+        // 5. Execute get_all_columns (exact Prisma 6 query + MySQL data_type normalization)
+        let q_cols = "
+            SELECT
+                column_name column_name,
+                data_type data_type,
+                column_type full_data_type,
+                character_maximum_length character_maximum_length,
+                numeric_precision numeric_precision,
+                numeric_scale numeric_scale,
+                datetime_precision datetime_precision,
+                column_default column_default,
+                is_nullable is_nullable,
+                extra extra,
+                table_name table_name,
+                IF(column_comment = '', NULL, column_comment) AS column_comment
+            FROM information_schema.columns
+            WHERE table_schema = 'tapisaurus'
+            ORDER BY ordinal_position
+        ";
+        let cols = try_execute_catalog_query(&my_cat, q_cols).unwrap().unwrap();
+        assert_eq!(cols.rows.len(), 7);
+        // Verify MySQL data_type normalization (varchar, decimal, tinyint)
+        let email_row = cols
+            .rows
+            .iter()
+            .find(|r| r[0] == Some(CatalogValue::Text("email".into())))
+            .unwrap();
+        assert_eq!(email_row[1], Some(CatalogValue::Text("varchar".into())));
+        assert_eq!(email_row[3], Some(CatalogValue::Int(255)));
+        let total_row = cols
+            .rows
+            .iter()
+            .find(|r| r[0] == Some(CatalogValue::Text("total".into())))
+            .unwrap();
+        assert_eq!(total_row[1], Some(CatalogValue::Text("decimal".into())));
+        assert_eq!(total_row[4], Some(CatalogValue::Int(12)));
+        assert_eq!(total_row[5], Some(CatalogValue::Int(2)));
+
+        // 6. Execute push_foreign_keys
+        let q_fks = "
+            SELECT
+                kcu.constraint_name constraint_name,
+                kcu.column_name column_name,
+                kcu.referenced_table_name referenced_table_name,
+                kcu.referenced_column_name referenced_column_name,
+                kcu.ordinal_position ordinal_position,
+                kcu.table_name table_name,
+                rc.delete_rule delete_rule,
+                rc.update_rule update_rule
+            FROM information_schema.key_column_usage AS kcu
+            INNER JOIN information_schema.referential_constraints AS rc ON
+                BINARY kcu.constraint_name = BINARY rc.constraint_name
+            WHERE
+                BINARY kcu.table_schema = 'tapisaurus'
+                AND BINARY rc.constraint_schema = 'tapisaurus'
+                AND kcu.referenced_column_name IS NOT NULL
+            ORDER BY
+                BINARY kcu.table_schema,
+                BINARY kcu.table_name,
+                BINARY kcu.constraint_name,
+                kcu.ordinal_position
+        ";
+        let fks = try_execute_catalog_query(&my_cat, q_fks).unwrap().unwrap();
+        assert_eq!(fks.rows.len(), 1);
+        assert_eq!(fks.rows[0][1], Some(CatalogValue::Text("user_id".into())));
+        assert_eq!(fks.rows[0][2], Some(CatalogValue::Text("users".into())));
+
+        // 7. Execute push_indexes
+        let q_idx = "
+            SELECT
+                table_name AS table_name,
+                index_name AS index_name,
+                column_name AS column_name,
+                sub_part AS partial,
+                seq_in_index AS seq_in_index,
+                collation AS column_order,
+                non_unique AS non_unique,
+                index_type AS index_type
+            FROM information_schema.statistics
+            WHERE table_schema = 'tapisaurus'
+            ORDER BY BINARY table_name, BINARY index_name, seq_in_index
+        ";
+        let idxs = try_execute_catalog_query(&my_cat, q_idx).unwrap().unwrap();
+        assert!(idxs.rows.len() >= 3);
+
+        // 8. Execute get_procedures
+        let q_procs = "
+            SELECT routine_name AS name,
+                routine_definition AS definition
+            FROM information_schema.routines
+            WHERE ROUTINE_SCHEMA = 'tapisaurus'
+            AND ROUTINE_TYPE = 'PROCEDURE'
+        ";
+        let procs = try_execute_catalog_query(&my_cat, q_procs)
+            .unwrap()
+            .unwrap();
+        assert_eq!(procs.rows.len(), 0);
+    }
 }

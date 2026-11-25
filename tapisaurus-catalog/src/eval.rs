@@ -1735,22 +1735,34 @@ fn eval_scalar_fn(
 
 fn eval_mysql_sysvar(catalog: &VirtualCatalog, var: &str) -> CatalogValue {
     let clean = var.rsplit('.').next().unwrap_or(var);
-    let val = match clean {
-        "version_comment" => "TapisaurusDB Universal Multi-Model Engine (Safe Rust)",
-        "version" => "8.0.35-TapisaurusDB",
-        "collation_connection" | "collation_server" => "utf8mb4_general_ci",
-        "character_set_client" | "character_set_connection" | "character_set_results" => "utf8mb4",
-        "max_allowed_packet" => "67108864",
-        "sql_mode" => "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
-        "time_zone" => "SYSTEM",
-        "system_time_zone" => "UTC",
-        "tx_isolation" | "transaction_isolation" => "READ-COMMITTED",
-        "tx_read_only" | "transaction_read_only" => "0",
-        "auto_increment_increment" => "1",
-        "lower_case_table_names" => "0",
-        _ => catalog.server_version.as_str(),
-    };
-    CatalogValue::Text(val.into())
+    match clean {
+        "max_allowed_packet" => CatalogValue::Int(67_108_864),
+        "wait_timeout" | "interactive_timeout" => CatalogValue::Int(28_800),
+        "net_read_timeout" => CatalogValue::Int(30),
+        "net_write_timeout" => CatalogValue::Int(60),
+        "net_buffer_length" => CatalogValue::Int(16_384),
+        "max_connections" => CatalogValue::Int(10_000),
+        "auto_increment_increment" | "auto_increment_offset" | "autocommit" => CatalogValue::Int(1),
+        "lower_case_table_names" | "tx_read_only" | "transaction_read_only" => CatalogValue::Int(0),
+        "version_comment" => {
+            CatalogValue::Text("TapisaurusDB Universal Multi-Model Engine (Safe Rust)".into())
+        }
+        "version" => CatalogValue::Text("8.0.35-TapisaurusDB".into()),
+        "collation_connection" | "collation_server" => {
+            CatalogValue::Text("utf8mb4_general_ci".into())
+        }
+        "character_set_client"
+        | "character_set_connection"
+        | "character_set_results"
+        | "character_set_server" => CatalogValue::Text("utf8mb4".into()),
+        "sql_mode" => CatalogValue::Text(
+            "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION".into(),
+        ),
+        "time_zone" => CatalogValue::Text("SYSTEM".into()),
+        "system_time_zone" => CatalogValue::Text("UTC".into()),
+        "tx_isolation" | "transaction_isolation" => CatalogValue::Text("READ-COMMITTED".into()),
+        _ => CatalogValue::Text(catalog.server_version.clone()),
+    }
 }
 
 fn lookup_description(catalog: &VirtualCatalog, oid: i64, sub: i64) -> CatalogValue {
