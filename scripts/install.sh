@@ -1,145 +1,142 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # ==============================================================================
-# 🔥 TapisaurusDB Universal Installer for Linux & macOS (Darwin)
+# TapisaurusDB Pre-Built Binary Installer for Linux & macOS
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | sh
 #
-# Architected by Ahmad Faiz <faiz@tapirusdb.com>
+# Optional environment variables:
+#   TAPISAURUS_VERSION=v0.1.0           Pin a specific release tag (default: latest)
+#   TAPISAURUS_INSTALL_DIR=/custom/bin  Override install directory
+#   TAPISAURUS_SKIP_VERIFY=1            Skip SHA-256 verification (not recommended)
+#
+# Copyright (c) 2026 Ahmad Faiz <faiz@tapirusdb.com>
 # ==============================================================================
 
-set -e
+set -eu
 
-RESET="\033[0m"
-BOLD="\033[1m"
-GREEN="\033[32m"
-BLUE="\033[34m"
-CYAN="\033[36m"
-YELLOW="\033[33m"
-RED="\033[31m"
+REPO="tapiruslab/TapisaurusDB"
+VERSION="${TAPISAURUS_VERSION:-latest}"
 
-echo -e "${CYAN}${BOLD}"
-echo "╔══════════════════════════════════════════════════════════════════╗"
-echo "║  🔥 TapisaurusDB — The AI-Native NoSQL Database Engine Installer   ║"
-echo "╚══════════════════════════════════════════════════════════════════╝"
-echo -e "${RESET}"
+info()  { printf '[tapisaurus] %s\n' "$1"; }
+err()   { printf '[tapisaurus] ERROR: %s\n' "$1" >&2; exit 1; }
+
+need_cmd() {
+    command -v "$1" >/dev/null 2>&1 || err "Required command '$1' not found in PATH."
+}
+
+need_cmd uname
+need_cmd tar
+need_cmd mktemp
+
+if command -v curl >/dev/null 2>&1; then
+    DOWNLOADER="curl"
+elif command -v wget >/dev/null 2>&1; then
+    DOWNLOADER="wget"
+else
+    err "Neither 'curl' nor 'wget' was found. Please install one and retry."
+fi
+
+download() {
+    url="$1"
+    dest="$2"
+    if [ "$DOWNLOADER" = "curl" ]; then
+        curl -fsSL --retry 3 --retry-delay 1 "$url" -o "$dest"
+    else
+        wget -qO "$dest" "$url"
+    fi
+}
 
 # 1. Detect OS & Architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 
-case "$ARCH" in
-    x86_64|amd64)
-        TARGET_ARCH="x86_64"
-        ;;
-    aarch64|arm64)
-        TARGET_ARCH="aarch64"
-        ;;
-    *)
-        echo -e "${RED}❌ Unsupported architecture: $ARCH${RESET}"
-        exit 1
-        ;;
-esac
-
+ASSET=""
 case "$OS" in
     linux)
-        TARGET_OS="linux"
+        case "$ARCH" in
+            x86_64|amd64)      ASSET="tapisaurus-linux-x86_64.tar.gz" ;;
+            aarch64|arm64)     ASSET="tapisaurus-linux-arm64-robot-chip.tar.gz" ;;
+            armv7l|armv7)      ASSET="tapisaurus-linux-armv7-embedded-chip.tar.gz" ;;
+            *) err "Unsupported Linux architecture: $ARCH" ;;
+        esac
         ;;
     darwin)
-        TARGET_OS="apple-darwin"
+        case "$ARCH" in
+            arm64|aarch64)     ASSET="tapisaurus-macos-arm64.tar.gz" ;;
+            x86_64|amd64)      ASSET="tapisaurus-macos-x86_64.tar.gz" ;;
+            *) err "Unsupported macOS architecture: $ARCH" ;;
+        esac
         ;;
     *)
-        echo -e "${RED}❌ Unsupported operating system: $OS${RESET}"
-        echo "For Windows, please run: iwr -useb https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex"
-        exit 1
+        err "Unsupported OS: $OS. On Windows, run: irm https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex"
         ;;
 esac
 
-echo -e "${BLUE}ℹ️  Detected System:${RESET} ${BOLD}${TARGET_OS} (${TARGET_ARCH})${RESET}"
+if [ "$VERSION" = "latest" ]; then
+    BASE_URL="https://github.com/${REPO}/releases/latest/download"
+else
+    BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+fi
 
-# 2. Determine Installation Directory
-if [ "$EUID" -eq 0 ]; then
+ARCHIVE_URL="${BASE_URL}/${ASSET}"
+SHA_URL="${ARCHIVE_URL}.sha256"
+
+# 2. Target install directory
+if [ -n "${TAPISAURUS_INSTALL_DIR:-}" ]; then
+    INSTALL_DIR="$TAPISAURUS_INSTALL_DIR"
+elif [ "$(id -u)" -eq 0 ]; then
     INSTALL_DIR="/usr/local/bin"
 else
-    INSTALL_DIR="$HOME/.local/bin"
-    mkdir -p "$INSTALL_DIR"
+    INSTALL_DIR="${HOME}/.local/bin"
 fi
+mkdir -p "$INSTALL_DIR"
 
-echo -e "${BLUE}ℹ️  Target Directory:${RESET} ${BOLD}${INSTALL_DIR}${RESET}"
+TMP_DIR="$(mktemp -d)"
+cleanup() { rm -rf "$TMP_DIR"; }
+trap cleanup EXIT INT TERM
 
-# 3. Build or Download TapisaurusDB Binary
-echo -e "${YELLOW}⚡ Preparing TapisaurusDB binary...${RESET}"
+info "Detected platform: ${OS}/${ARCH}"
+info "Downloading ${ASSET} (${VERSION})..."
+download "$ARCHIVE_URL" "${TMP_DIR}/${ASSET}"
 
-if command -v cargo >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ Found Rust toolchain. Compiling optimized release binary...${RESET}"
-    TMP_DIR=$(mktemp -d)
-    git clone --depth 1 https://github.com/tapiruslab/TapisaurusDB.git "$TMP_DIR/tapisaurus"
-    cd "$TMP_DIR/tapisaurus"
-    cargo build --release
-    cp target/release/tapisaurus "$INSTALL_DIR/tapisaurus"
-    chmod +x "$INSTALL_DIR/tapisaurus"
-    rm -rf "$TMP_DIR"
-else
-    echo -e "${YELLOW}Rust not detected. Installing via source bootstrap...${RESET}"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
-    TMP_DIR=$(mktemp -d)
-    git clone --depth 1 https://github.com/tapiruslab/TapisaurusDB.git "$TMP_DIR/tapisaurus"
-    cd "$TMP_DIR/tapisaurus"
-    cargo build --release
-    cp target/release/tapisaurus "$INSTALL_DIR/tapisaurus"
-    chmod +x "$INSTALL_DIR/tapisaurus"
-    rm -rf "$TMP_DIR"
-fi
-
-# 4. PATH Configuration check
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    SHELL_PROFILE=""
-    if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "/bin/zsh" ]; then
-        SHELL_PROFILE="$HOME/.zshrc"
-    elif [ -n "$BASH_VERSION" ] || [ "$SHELL" = "/bin/bash" ]; then
-        SHELL_PROFILE="$HOME/.bashrc"
+# 3. Verify SHA-256 checksum
+if [ "${TAPISAURUS_SKIP_VERIFY:-0}" != "1" ]; then
+    info "Verifying SHA-256 checksum..."
+    download "$SHA_URL" "${TMP_DIR}/${ASSET}.sha256"
+    EXPECTED="$(awk '{print $1}' "${TMP_DIR}/${ASSET}.sha256" | tr '[:upper:]' '[:lower:]')"
+    if command -v sha256sum >/dev/null 2>&1; then
+        ACTUAL="$(sha256sum "${TMP_DIR}/${ASSET}" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+    elif command -v shasum >/dev/null 2>&1; then
+        ACTUAL="$(shasum -a 256 "${TMP_DIR}/${ASSET}" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
     else
-        SHELL_PROFILE="$HOME/.profile"
+        err "Neither 'sha256sum' nor 'shasum' found. Set TAPISAURUS_SKIP_VERIFY=1 to bypass verification."
     fi
-
-    if [ -f "$SHELL_PROFILE" ]; then
-        echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_PROFILE"
-        echo -e "${GREEN}✓ Added $INSTALL_DIR to PATH in $SHELL_PROFILE${RESET}"
+    if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+        err "SHA-256 mismatch! Expected ${EXPECTED}, got ${ACTUAL}"
     fi
+    info "SHA-256 verified (${ACTUAL})."
 fi
 
-# 5. Linux systemd Service Setup (Optional for root/sudo)
-if [ "$TARGET_OS" = "linux" ] && [ "$EUID" -eq 0 ] && command -v systemctl >/dev/null 2>&1; then
-    echo -e "${YELLOW}⚙️  Configuring systemd background daemon service...${RESET}"
-    cat <<EOF > /etc/systemd/system/tapisaurus.service
-[Unit]
-Description=TapisaurusDB AI-Native NoSQL Database Daemon
-After=network.target
+# 4. Extract and install binary
+tar -xzf "${TMP_DIR}/${ASSET}" -C "$TMP_DIR"
+[ -f "${TMP_DIR}/tapisaurus" ] || err "Archive did not contain expected 'tapisaurus' binary."
+cp "${TMP_DIR}/tapisaurus" "${INSTALL_DIR}/tapisaurus"
+chmod +x "${INSTALL_DIR}/tapisaurus"
 
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/local/bin/tapisaurus serve --wire-port 27017 --http-port 27018 --host 0.0.0.0
-Restart=always
-RestartSec=3
-LimitNOFILE=65535
+# 5. PATH hint
+case ":${PATH}:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *)
+        info "Add ${INSTALL_DIR} to your PATH to run 'tapisaurus' from anywhere:"
+        printf '  export PATH="%s:$PATH"\n' "$INSTALL_DIR"
+        ;;
+esac
 
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-    systemctl enable tapisaurus
-    systemctl restart tapisaurus
-    echo -e "${GREEN}✓ Systemd service 'tapisaurus.service' enabled and running on ports 27017 & 27018!${RESET}"
-fi
-
-echo ""
-echo -e "${GREEN}${BOLD}🎉 TapisaurusDB was installed successfully!${RESET}"
-echo -e "${BOLD}Version:${RESET} $( "$INSTALL_DIR/tapisaurus" --version 2>/dev/null || echo "v0.1.0" )"
-echo ""
-echo -e "${CYAN}To get started immediately:${RESET}"
-echo -e "  ${BOLD}tapisaurus shell${RESET}                         # Interactive Multi-Dialect REPL"
-echo -e "  ${BOLD}tapisaurus serve --wire-port 27017${RESET}       # Launch Dual-Protocol Daemon"
-echo -e "  ${BOLD}tapisaurus backup --output backup.json${RESET}   # Point-In-Time Backup"
-echo ""
+INSTALLED_VER="$("${INSTALL_DIR}/tapisaurus" --version 2>/dev/null || echo "${VERSION}")"
+printf '\n'
+info "Installed successfully: ${INSTALLED_VER} -> ${INSTALL_DIR}/tapisaurus"
+printf '\nQuick start:\n'
+printf '  tapisaurus serve     # Launch all 5 wire gateways (PG 5432, MySQL 3306, Mongo 27017, gRPC 50051, REST 27018)\n'
+printf '  tapisaurus shell     # Interactive SQL / Mongo / openCypher / TapisaurusQL REPL\n'
+printf '  tapisaurus doctor    # Probe active gateways and storage health\n\n'
