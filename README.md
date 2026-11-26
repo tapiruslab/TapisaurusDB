@@ -4,7 +4,7 @@
 
 [![Rust](https://img.shields.io/badge/rust-1.88+_|__edition_2024-orange.svg?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![Status](https://img.shields.io/badge/status-v0.1.0--Developer_Preview-blue.svg?style=for-the-badge)](https://github.com/tapiruslab/TapisaurusDB)
-[![Core Lint](https://img.shields.io/badge/core-unsafe_code_forbidden-brightgreen.svg?style=for-the-badge)](tapisaurus-server/src/lib.rs)
+[![Core Lint](https://img.shields.io/badge/8_of_9_crates-unsafe_code_forbidden-brightgreen.svg?style=for-the-badge)](tapisaurus-server/src/lib.rs)
 [![Tests](https://img.shields.io/badge/tests-380%2B_verified-success.svg?style=for-the-badge)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-BSL_1.1-purple.svg?style=for-the-badge)](LICENSE)
 [![Security](https://img.shields.io/badge/security-EdDSA_Ed25519_%7C_AES--256--GCM-red.svg?style=for-the-badge)](SECURITY.md)
@@ -362,7 +362,7 @@ bash scripts/measure_memory.sh
 # 4. Run multi-protocol wire gateway security and performance benchmark suite:
 cargo test -p tapisaurus-server --test test_wire_security_and_performance
 
-# 5. Run full automated workspace test suite across all 26 suites (188/188 tests passing, 100% pass rate)
+# 5. Run full automated workspace test suite (380+ unit, MVCC SSI, Raft, catalog & chaos tests passing)
 cargo test --workspace
 ```
 
@@ -372,39 +372,46 @@ cargo test --workspace
 
 ```
 tapisaurus/
-├── .github/workflows/  # 🤖 Automated CI/CD Pipeline (fmt, clippy, test, cargo-audit, MSRV)
+├── .github/workflows/  # 🤖 Automated CI/CD Pipeline (fmt, clippy, test, ORM E2E, releases)
 ├── proto/              # ⚡ Official Protocol Buffers v3 Schema (tapisaurus.proto)
-├── bindings/           # 📦 Polyglot SDKs: Python (pyproject.toml), Node.js (npm), Go, and PHP
-├── tapisaurus-core/        # 🌲 LSM-Tree, MemTable, Streaming Compaction, WAL, MVCC ACID, BM25, TTL, Raft, CRDTs, Automated Tiered Storage
-├── tapisaurus-vector/      # 🎯 HNSW Multi-Layer Vector Index with Persistence, 8-Lane SIMD (AVX2/NEON), 32x Binary Quantization
-├── tapisaurus-graph/       # 🕸️ Knowledge Graph, Multi-Hop Traversal & GraphRAG Engine + In-Memory Semantic Cache
-├── tapisaurus-query/       # 🧠 Multi-Dialect Parser (SQL, MongoDB JSON, openCypher, TapisaurusQL), Columnar Batch Analytics & Cost Optimizer
-├── tapisaurus-security/    # 🔒 Zero-Trust AES-256-GCM Encryption, Argon2id & EdDSA (Ed25519) JWT RBAC
-├── tapisaurus-server/      # 🌐 Modular Multi-Protocol Server (MySQL 3306, Postgres 5432, MongoDB 27017, gRPC 50051, REST 27018)
-├── tapisaurus-cli/         # 💻 Production CLI, Interactive REPL Shell, Backup & Restore Tools
+├── bindings/           # 📦 Polyglot SDKs: Python (PyPI), Node.js (npm), Go, PHP, WASM
+├── tapisaurus-core/    # 🌲 LSM-Tree, MemTable, Streaming Compaction, WAL, MVCC SSI, HTAP, BM25, TTL, Raft, Calvin, CRDTs
+├── tapisaurus-catalog/ # 🧩 Dynamic Virtual System Catalog Engine (pg_catalog.* & information_schema.* for Prisma/SQLAlchemy)
+├── tapisaurus-vector/  # 🎯 HNSW, SSD DiskANN (TPDANN01) & SSD IVF-EMEANS (TPIVFE01) Vector Engines
+├── tapisaurus-graph/   # 🕸️ Knowledge Graph, Multi-Hop Traversal & GraphRAG Engine + Semantic Cache
+├── tapisaurus-query/   # 🧠 Multi-Dialect Parser (SQL, MongoDB JSON, openCypher, TapisaurusQL) & Cost Optimizer
+├── tapisaurus-security/# 🔒 Zero-Trust AES-256-GCM Encryption, Argon2id & EdDSA (Ed25519) JWT RBAC
+├── tapisaurus-server/  # 🌐 Modular 5-Way Server (MySQL 3306, Postgres 5432, MongoDB 27017, gRPC 50051, REST 27018)
+├── tapisaurus-sim/     # 🧪 Deterministic Simulation Testing (10,000-op Raft/storage chaos harness)
+├── tapisaurus-cli/     # 💻 Production CLI, Interactive REPL Shell, Benchmark, Doctor, Backup & Restore Tools
 ├── studio/             # 🎛️ Modern Web Management Studio (React + Vite + TailwindCSS)
-├── docs/               # 📚 Comprehensive Guides, Competitive Analysis & API References
-├── docs-site/          # 🌐 Interactive Web Documentation Portal
+├── docs/               # 📚 Compatibility Matrix, Architecture Specs & API References
 ├── CHANGELOG.md        # 📋 Keep a Changelog Version History
 ├── SECURITY.md         # 🛡️ Responsible Disclosure Policy
 ├── CONTRIBUTING.md     # 🤝 Open Source Contribution Guide
-└── tests/              # 🧪 Integration & End-to-End Test Suites (Rust & Python)
+└── tests/              # 🧪 Integration & End-to-End Test Suites (Rust, Python & Prisma 6)
 ```
 
 ---
 
-## 📦 Universal 1-Line Installation
+## 📦 Universal 1-Line Installation & Official SDKs
 
-Install TapisaurusDB on your server, PC, or Mac with a single command:
+Install SHA-256 verified pre-built binaries for Linux (x86_64/ARM64/ARMv7), macOS (Apple Silicon & Intel), or Windows x64 — no Rust toolchain required:
 
 ### 🐧 Linux & 🍎 macOS (Apple Silicon & Intel)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.sh | sh
 ```
 
 ### 🪟 Windows (PowerShell)
 ```powershell
-iwr -useb https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/tapiruslab/TapisaurusDB/main/scripts/install.ps1 | iex
+```
+
+### 🐍 Python & 🟨 Node.js Official SDKs
+```bash
+pip install tapisaurus    # PyPI v0.1.0
+npm install tapisaurus    # npm v0.1.0
 ```
 
 ### 🐳 Docker & Docker Compose
