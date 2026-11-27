@@ -11,6 +11,7 @@ pub mod graph;
 pub mod health;
 pub mod metrics;
 pub mod middleware;
+pub mod studio;
 pub mod tapirsync;
 pub mod vector;
 pub mod websocket;
@@ -97,10 +98,16 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/v1/auth/login", post(auth::auth_login))
         .route("/metrics", get(metrics::metrics_handler))
         .route("/v1/metrics", get(metrics::metrics_handler))
-        .route("/v1/system/profile", get(metrics::system_profile_handler));
+        .route("/v1/system/profile", get(metrics::system_profile_handler))
+        .route("/studio", get(studio::studio_redirect))
+        .route("/studio/", get(studio::studio_index))
+        .route("/studio/workspace.css", get(studio::studio_css))
+        .route("/studio/workspace.js", get(studio::studio_js))
+        .route("/studio/favicon.svg", get(studio::studio_favicon));
 
     // Read-only — requires any valid JWT
     let read_routes = Router::new()
+        .route("/v1/collections", get(collections::list_collections))
         .route(
             "/v1/collections/{name}/documents",
             get(collections::get_collection_documents),
@@ -147,6 +154,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let write_routes = Router::new()
         .route("/v1/query", post(collections::execute_query))
         .route("/v1/tapirsync/push", post(tapirsync::tapirsync_push))
+        .route(
+            "/v1/tapirsync/sync-tables",
+            post(tapirsync::tapirsync_sync_tables),
+        )
         .route("/v1/tapirsync/pull", post(tapirsync::tapirsync_pull))
         .route(
             "/v1/collections/{name}",

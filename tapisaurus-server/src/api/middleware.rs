@@ -131,8 +131,10 @@ pub async fn cors_middleware(req: Request<Body>, next: Next) -> Response {
         .map(|s| s.to_string())
         .unwrap_or_default();
 
-    let allowed_origin_env = std::env::var("TAPISAURUS_ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:27020".to_string());
+    let allowed_origin_env = std::env::var("TAPISAURUS_ALLOWED_ORIGINS").unwrap_or_else(|_| {
+        "https://tapirusdb.com,http://127.0.0.1:27018,http://localhost:27018,http://localhost:27020"
+            .to_string()
+    });
     let allowed_origins: Vec<&str> = allowed_origin_env.split(',').collect();
 
     let is_options = req.method() == Method::OPTIONS;

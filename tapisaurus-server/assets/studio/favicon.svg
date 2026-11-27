@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TapirusDB">
+  <rect width="64" height="64" rx="16" fill="#243778"/>
+  <path d="M14 21h24l10 11-10 11H14l8-11-8-11Z" fill="#fff"/>
+  <path d="M14 21v22h-5V21h5Zm35 8h7v6h-7v-6Z" fill="#8ee3d7"/>
+</svg>

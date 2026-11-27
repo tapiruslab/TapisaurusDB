@@ -17,6 +17,21 @@ use tapisaurus_query::parse_query;
 
 use super::{ApiResponse, AppState};
 
+// ── List Collections ─────────────────────────────────────────────────────────
+
+pub async fn list_collections(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mut names = state.db.list_collections();
+    names.sort();
+    let summaries: Vec<serde_json::Value> = names
+        .into_iter()
+        .map(|name| {
+            let count = state.db.get_or_create_collection(&name).count(&[]);
+            serde_json::json!({ "name": name, "documents": count })
+        })
+        .collect();
+    Json(ApiResponse::ok(summaries))
+}
+
 // ── Query ────────────────────────────────────────────────────────────────────
 
 pub async fn execute_query(

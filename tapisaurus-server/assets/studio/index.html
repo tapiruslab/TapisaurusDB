@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* https:; img-src 'self' data:; object-src 'none'; base-uri 'self'">
+  <meta name="tapirus-mode" content="server">
+  <meta name="tapirus-engine" content="./wasm/tapirus_wasm.js">
+  <meta name="description" content="TapirusDB Studio — Interactive in-browser Rust WebAssembly database IDE for SQL, Vector Search, Property Graphs, GraphRAG, AI Agent Memory, and encrypted .tapir vaults.">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <title>TapirusDB Studio — In-Browser Rust Database IDE</title>
+  <link rel="stylesheet" href="workspace.css">
+  <script type="module" src="workspace.js"></script>
+</head>
+<body>
+  <div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true">
+    <div class="drop-card">
+      <div class="drop-icon" aria-hidden="true">⬇</div>
+      <h2>Drop file to import into TapirusDB</h2>
+      <p>Supports native <code>.tapir</code> vaults, <code>.csv</code> tables, <code>.json</code> arrays, or <code>.txt</code> / <code>.md</code> AI memory documents.</p>
+    </div>
+  </div>
+
+  <header class="ide-topbar">
+    <div class="topbar-left">
+      <button id="toggle-sidebar" class="icon-btn mobile-only" type="button" aria-label="Toggle explorer sidebar" aria-expanded="false">☰</button>
+      <a class="brand" href="/">TAPIRUS<span>DB</span></a>
+      <span class="badge-pill">STUDIO</span>
+      <div class="topbar-divider" aria-hidden="true"></div>
+      <label class="sr-only" for="scenario-select">Load workspace preset</label>
+      <select id="scenario-select" class="topbar-select" title="Switch pre-loaded workspace dataset">
+        <option value="ai-support">Demo: AI Support Agent</option>
+        <option value="medical-vault">Demo: Encrypted Health Vault</option>
+        <option value="edge-telemetry">Demo: Edge Telemetry &amp; Vector</option>
+        <option value="blank">Blank Database</option>
+      </select>
+      <label class="vault-name-wrap" title="Active .tapir file name">
+        <span class="sr-only">Database filename</span>
+        <input id="vault-name" value="ai-support-demo.tapir" maxlength="120" autocomplete="off" spellcheck="false">
+      </label>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="btn-server" class="topbar-btn" type="button" title="Connect to a live TapisaurusDB server and sync via TapirSync">
+        <span id="server-icon" aria-hidden="true">⚡</span>
+        <span id="server-label">Server</span>
+      </button>
+      <button id="btn-encrypt" class="topbar-btn" type="button" title="Encrypt or inspect XChaCha20-Poly1305 vault protection">
+        <span id="encrypt-icon" aria-hidden="true">🔓</span>
+        <span id="encrypt-label">Encrypt</span>
+      </button>
+      <button id="btn-import" class="topbar-btn" type="button" title="Import .tapir, .csv, .json, or .txt">Import</button>
+      <button id="btn-export" class="topbar-btn primary" type="button" title="Download native binary .tapir database">Export .tapir</button>
+      <input id="file-input" type="file" accept=".tapir,.csv,.json,.txt,.md" hidden>
+      <div class="topbar-divider desktop-only" aria-hidden="true"></div>
+      <button id="btn-theme" class="icon-btn" type="button" title="Switch light or dark IDE theme" aria-label="Toggle dark theme">◐</button>
+      <nav class="topbar-links desktop-only" aria-label="Documentation links">
+        <a href="/docs#studio">Guide</a>
+        <a href="/syntax">Syntax</a>
+        <a href="https://github.com/tapiruslab/TapirusDB">GitHub</a>
+      </nav>
+      <span id="engine" class="engine-pill" role="status" data-engine-ready="false">Loading WASM…</span>
+    </div>
+  </header>
+
+  <div class="ide-shell">
+    <aside id="sidebar" class="ide-sidebar" aria-label="Database Explorer">
+      <div class="sidebar-header">
+        <span class="sidebar-title">EXPLORER</span>
+        <div class="sidebar-tools">
+          <button id="btn-new-table" class="mini-btn" type="button" title="Create a new SQL table">+ Table</button>
+          <button id="btn-refresh" class="mini-btn" type="button" title="Refresh catalog">↻</button>
+        </div>
+      </div>
+
+      <div class="sidebar-scroll">
+        <section class="tree-group" aria-labelledby="tree-tables-label">
+          <div class="tree-group-head">
+            <span id="tree-tables-label">Tables</span>
+            <span id="count-tables" class="tree-count">0</span>
+          </div>
+          <ul id="table-list" class="tree-list">
+            <li class="tree-empty">Loading tables…</li>
+          </ul>
+        </section>
+
+        <section class="tree-group" aria-labelledby="tree-memory-label">
+          <div class="tree-group-head">
+            <span id="tree-memory-label">AI Memory Vault</span>
+            <span id="count-memories" class="tree-count">0</span>
+          </div>
+          <ul id="memory-ns-list" class="tree-list">
+            <li class="tree-empty">No sources stored</li>
+          </ul>
+        </section>
+
+        <section class="tree-group" aria-labelledby="tree-graph-label">
+          <div class="tree-group-head">
+            <span id="tree-graph-label">Knowledge Graph</span>
+            <span id="count-graph" class="tree-count">0</span>
+          </div>
+          <button id="sidebar-open-graph" class="tree-nav-btn" type="button">
+            <span>Inspect Graph &amp; GraphRAG</span>
+            <span class="tree-arrow" aria-hidden="true">→</span>
+          </button>
+        </section>
+
+        <section id="server-tree-group" class="tree-group" aria-labelledby="tree-server-label" hidden>
+          <div class="tree-group-head">
+            <span id="tree-server-label">TapisaurusDB</span>
+            <span id="count-srv-cols" class="tree-count">0</span>
+          </div>
+          <div class="server-mini-bar">
+            <button id="btn-mode-local" class="mini-btn active" type="button">Local</button>
+            <button id="btn-mode-remote" class="mini-btn" type="button">Server</button>
+            <button id="btn-quick-push" class="mini-btn" type="button" title="Push local .tapir to TapisaurusDB">⬆ Push</button>
+            <button id="btn-quick-pull" class="mini-btn" type="button" title="Pull TapisaurusDB into local .tapir">⬇ Pull</button>
+          </div>
+          <ul id="server-col-list" class="tree-list">
+            <li class="tree-empty">Connected</li>
+          </ul>
+        </section>
+
+        <section class="tree-group" aria-labelledby="tree-saved-label">
+          <div class="tree-group-head">
+            <span id="tree-saved-label">Saved In Browser</span>
+            <button id="btn-save-copy" class="mini-btn" type="button" title="Save snapshot to IndexedDB">Save</button>
+          </div>
+          <ul id="saved-db-list" class="tree-list">
+            <li class="tree-empty">IndexedDB ready</li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="sidebar-drop" id="sidebar-drop-btn" role="button" tabindex="0">
+        <strong>Drop CSV / JSON / .tapir</strong>
+        <span>Auto-creates tables or opens vault locally</span>
+      </div>
+    </aside>
+
+    <main class="ide-main">
+      <div class="workspace-tabs" role="tablist" aria-label="Studio workbenches">
+        <button class="ws-tab active" role="tab" aria-selected="true" aria-controls="view-data" id="tab-data" data-view="data" type="button">
+          Table Browser
+        </button>
+        <button class="ws-tab" role="tab" aria-selected="false" aria-controls="view-sql" id="tab-sql" data-view="sql" type="button">
+          SQL &amp; Vector
+        </button>
+        <button class="ws-tab" role="tab" aria-selected="false" aria-controls="view-memory" id="tab-memory" data-view="memory" type="button">
+          AI Memory &amp; RAG
+        </button>
+        <button class="ws-tab" role="tab" aria-selected="false" aria-controls="view-graph" id="tab-graph" data-view="graph" type="button">
+          Graph &amp; GraphRAG
+        </button>
+        <button class="ws-tab" role="tab" aria-selected="false" aria-controls="view-xray" id="tab-xray" data-view="xray" type="button">
+          Vault X-Ray &amp; Tools
+        </button>
+      </div>
+
+      <!-- TAB 1: TABLE DATA BROWSER -->
+      <section id="view-data" class="ws-view active" role="tabpanel" aria-labelledby="tab-data">
+        <div class="view-toolbar">
+          <div class="toolbar-group">
+            <h1 id="active-table-title" class="view-title">Select a table</h1>
+            <span id="active-table-meta" class="meta-chip">0 rows</span>
+          </div>
+          <div class="toolbar-group">
+            <label class="sr-only" for="table-filter">Filter rows</label>
+            <input id="table-filter" class="toolbar-input" type="search" placeholder="Filter visible rows…">
+            <button id="btn-insert-row" class="btn-sm primary" type="button">+ Insert Row</button>
+            <button id="btn-open-table-sql" class="btn-sm" type="button">Query in SQL</button>
+            <button id="btn-export-csv" class="btn-sm" type="button">Export CSV</button>
+            <button id="btn-table-code" class="btn-sm" type="button">&lt;/&gt; SDK Code</button>
+          </div>
+        </div>
+        <div id="table-schema-bar" class="schema-strip" aria-label="Table columns"></div>
+        <div class="grid-container">
+          <table class="data-grid" id="browser-grid">
+            <thead id="browser-grid-head"></thead>
+            <tbody id="browser-grid-body">
+              <tr><td class="empty-cell">Loading sample database…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="view-footer">
+          <span id="browser-status" role="status">Ready</span>
+          <div class="pager-controls">
+            <button id="btn-prev-page" class="btn-xs" type="button" disabled>← Prev</button>
+            <span id="page-indicator" class="mono-meta">Page 1</span>
+            <button id="btn-next-page" class="btn-xs" type="button" disabled>Next →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: SQL & VECTOR WORKBENCH -->
+      <section id="view-sql" class="ws-view" role="tabpanel" aria-labelledby="tab-sql" hidden>
+        <div class="view-toolbar">
+          <div class="toolbar-group">
+            <button id="run-sql" class="btn-sm primary" type="button">▶ Run <kbd>Ctrl ↵</kbd></button>
+            <button id="btn-explain-sql" class="btn-sm" type="button">Explain Plan</button>
+            <label class="sr-only" for="sql-snippets">Insert SQL snippet</label>
+            <select id="sql-snippets" class="toolbar-select">
+              <option value="">Insert Cookbook Query…</option>
+              <option value="select-customers">SQL · Customers &amp; Open Tickets (JOIN)</option>
+              <option value="vector-near">Vector · Top-K Nearest Neighbors (VECTOR NEAR)</option>
+              <option value="vector-cosine">Vector · Cosine Similarity Ranking</option>
+              <option value="aggregate">Analytics · Ticket Breakdown by Region</option>
+              <option value="graph-match">Graph · Pattern Match (GRAPH MATCH)</option>
+              <option value="upsert">Write · Upsert with RETURNING</option>
+              <option value="pragma">Schema · Inspect Table Columns (PRAGMA)</option>
+            </select>
+          </div>
+          <div class="toolbar-group">
+            <div class="tx-cluster" role="group" aria-label="Transaction controls">
+              <span id="transaction-status" class="tx-badge">AUTOCOMMIT</span>
+              <button id="btn-tx-begin" class="btn-xs" type="button">BEGIN</button>
+              <button id="btn-tx-commit" class="btn-xs" type="button" disabled>COMMIT</button>
+              <button id="btn-tx-rollback" class="btn-xs" type="button" disabled>ROLLBACK</button>
+            </div>
+            <button id="btn-sql-code" class="btn-sm" type="button">&lt;/&gt; SDK Code</button>
+          </div>
+        </div>
+
+        <div class="sql-split">
+          <div class="sql-editor-pane">
+            <label class="sr-only" for="sql">SQL, Vector, or Graph statement</label>
+            <textarea id="sql" class="code-editor" spellcheck="false" rows="7">SELECT c.name, c.region, t.title, t.priority, t.status
+FROM customers c
+JOIN tickets t ON t.customer_id = c.id
+ORDER BY t.id ASC;</textarea>
+            <details id="parameter-details" class="params-drawer">
+              <summary>Bound parameters (<code>?</code>) <span class="muted">optional JSON array</span></summary>
+              <textarea id="parameters" class="code-editor small" rows="2" spellcheck="false">[]</textarea>
+            </details>
+          </div>
+
+          <div class="sql-results-pane">
+            <div class="subbar">
+              <div class="segmented" role="tablist" aria-label="SQL output format">
+                <button class="seg-btn active" data-sql-out="grid" type="button">Grid</button>
+                <button class="seg-btn" data-sql-out="json" type="button">JSON</button>
+                <button class="seg-btn" data-sql-out="history" type="button">History</button>
+              </div>
+              <span id="sql-status" class="status-line" role="status" data-sequence="0">Ready when engine loads.</span>
+            </div>
+
+            <div id="sql-out-grid" class="grid-container">
+              <table class="data-grid">
+                <thead id="sql-grid-head"></thead>
+                <tbody id="sql-grid-body">
+                  <tr><td class="empty-cell">Press Run (Ctrl+Enter) to execute SQL, Vector, or Graph queries.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="sql-out-json" class="code-pane-wrap" hidden>
+              <pre id="sql-result" class="code-output" tabindex="0">[]</pre>
+            </div>
+
+            <div id="sql-out-history" class="history-wrap" hidden>
+              <ul id="sql-history-list" class="history-list">
+                <li class="tree-empty">No queries executed yet.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: AI MEMORY & LIVE RAG CONTEXT BUILDER -->
+      <section id="view-memory" class="ws-view" role="tabpanel" aria-labelledby="tab-memory" hidden>
+        <div class="memory-split">
+          <div class="memory-left">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">Hybrid AI Memory Retrieval</h2>
+                <p class="panel-sub">BM25 lexical + Recency + Vector RRF fusion running locally in Rust WASM.</p>
+              </div>
+              <button id="btn-memory-code" class="btn-sm" type="button">&lt;/&gt; SDK Code</button>
+            </div>
+
+            <form id="memory-search-form" class="search-bar">
+              <label class="sr-only" for="memory-query">Search agent memories</label>
+              <input id="memory-query" class="search-input" type="search" value="encrypted vaults" placeholder="Ask a question or search keywords…">
+              <select id="memory-mode" class="toolbar-select" aria-label="Ranking mode">
+                <option value="hybrid">Hybrid Score</option>
+                <option value="rrf">RRF Fusion</option>
+                <option value="scoped">Scoped Source Search</option>
+              </select>
+              <button id="recall" class="btn-sm primary" type="submit">Recall</button>
+            </form>
+
+            <div class="chip-row" aria-label="Suggested recall queries">
+              <span class="chip-label">Try:</span>
+              <button class="chip-btn" type="button" data-mem-query="encrypted vaults">encrypted vaults</button>
+              <button class="chip-btn" type="button" data-mem-query="WAL latency APAC">WAL latency APAC</button>
+              <button class="chip-btn" type="button" data-mem-query="HIPAA retention">HIPAA retention</button>
+              <button class="chip-btn" type="button" data-mem-query="telemetry">telemetry</button>
+            </div>
+
+            <details class="store-drawer" id="store-memory-drawer">
+              <summary>+ Store new source memory into <code>.tapir</code></summary>
+              <div class="store-form">
+                <label>Memory content
+                  <textarea id="memory-content" rows="3" placeholder="e.g. APAC enterprise nodes enforce PBKDF2 600k iterations and XChaCha20-Poly1305 page encryption."></textarea>
+                </label>
+                <div class="form-row-3">
+                  <label>Namespace<input id="namespace" value="policies" autocomplete="off"></label>
+                  <label>Session <span class="muted">optional</span><input id="session" placeholder="sess-01" autocomplete="off"></label>
+                  <label>Tags <span class="muted">comma-separated</span><input id="memory-tags" value="enterprise,security" autocomplete="off"></label>
+                </div>
+                <details class="nested-details">
+                  <summary>Advanced: custom embedding vector &amp; importance</summary>
+                  <div class="form-row-2">
+                    <label>Importance (0.1 – 1.0)<input id="memory-importance" type="number" min="0.1" max="1" step="0.05" value="0.85"></label>
+                    <label>Embedding JSON <span class="muted">optional</span><input id="embedding" placeholder="[0.9, 0.1, 0.2, 0.0]" autocomplete="off"></label>
+                  </div>
+                </details>
+                <div class="form-actions">
+                  <button id="remember" class="btn-sm primary" type="button">Store Memory</button>
+                </div>
+              </div>
+            </details>
+
+            <p id="memory-status" class="status-line" role="status" data-sequence="0">Ready to search local AI memory.</p>
+            <div id="memory-cards" class="memory-cards" aria-live="polite"></div>
+          </div>
+
+          <div class="memory-right">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">Live LLM Prompt Context</h2>
+                <p class="panel-sub">Exact output of <code>recall_prompt()</code> ready to inject into your system prompt.</p>
+              </div>
+              <div class="toolbar-group">
+                <span id="prompt-tokens" class="meta-chip">0 tokens</span>
+                <button id="btn-copy-prompt" class="btn-sm" type="button">Copy Prompt</button>
+              </div>
+            </div>
+            <pre id="llm-prompt-preview" class="code-output prompt-box" tabindex="0">Run a recall query to generate prompt-ready context from local .tapir memory.</pre>
+            <div class="prompt-footer">
+              <div class="metric-mini">
+                <span>Stored Sources</span>
+                <strong id="mem-stat-docs">0</strong>
+              </div>
+              <div class="metric-mini">
+                <span>Resident Bytes</span>
+                <strong id="mem-stat-bytes">0 B</strong>
+              </div>
+              <div class="metric-mini">
+                <span>Vector Spaces</span>
+                <strong id="mem-stat-spaces">0</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: INTERACTIVE GRAPH & GRAPHRAG -->
+      <section id="view-graph" class="ws-view" role="tabpanel" aria-labelledby="tab-graph" hidden>
+        <div class="graph-split">
+          <div class="graph-stage-wrap">
+            <div class="view-toolbar">
+              <div class="toolbar-group">
+                <h2 class="panel-title">Property Graph Canvas</h2>
+                <span id="graph-meta" class="meta-chip">0 nodes · 0 edges</span>
+              </div>
+              <div class="toolbar-group">
+                <button id="btn-graph-refresh" class="btn-sm" type="button">Refresh Graph</button>
+                <button id="btn-graph-add-toggle" class="btn-sm" type="button">+ Add Edge</button>
+                <button id="btn-graph-code" class="btn-sm" type="button">&lt;/&gt; SDK Code</button>
+              </div>
+            </div>
+
+            <div id="graph-add-bar" class="inline-builder" hidden>
+              <input id="g-from-id" type="number" min="1" value="4" placeholder="From ID" aria-label="Source node ID">
+              <input id="g-from-label" value="Customer" placeholder="Label" aria-label="Source label">
+              <input id="g-from-name" value="Kestrel AI" placeholder="Name" aria-label="Source name">
+              <input id="g-edge-label" value="DEPLOYS" placeholder="Edge Label" aria-label="Edge label">
+              <input id="g-to-id" type="number" min="1" value="2" placeholder="To ID" aria-label="Target node ID">
+              <button id="btn-graph-insert" class="btn-sm primary" type="button">Insert</button>
+            </div>
+
+            <div class="graph-canvas-box">
+              <svg id="graph-svg" viewBox="0 0 760 440" role="img" aria-label="Interactive TapirusDB Knowledge Graph">
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="26" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1.5 L 10 5 L 0 8.5 z" class="graph-arrow-path"></path>
+                  </marker>
+                  <marker id="arrow-active" viewBox="0 0 10 10" refX="26" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1.5 L 10 5 L 0 8.5 z" class="graph-arrow-active"></path>
+                  </marker>
+                </defs>
+                <g id="graph-edges"></g>
+                <g id="graph-nodes"></g>
+              </svg>
+              <div class="graph-legend" id="graph-legend"></div>
+            </div>
+
+            <div id="node-inspector" class="node-inspector">
+              <span class="muted">Click any node in the canvas to inspect its JSON properties and run multi-hop traversal.</span>
+            </div>
+          </div>
+
+          <div class="graph-rag-panel">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">GraphRAG Multi-Hop Explorer</h2>
+                <p class="panel-sub">Runs <code>graph_rag_query_json()</code> with RRF fusion and highlights discovered hops on the graph.</p>
+              </div>
+            </div>
+
+            <form id="graphrag-form" class="search-bar">
+              <label class="sr-only" for="graphrag-query">Entity or topic to traverse</label>
+              <input id="graphrag-query" class="search-input" value="AuthGateway" placeholder="Entity name or topic…">
+              <select id="graphrag-hops" class="toolbar-select" aria-label="Max traversal hops">
+                <option value="1">1 Hop</option>
+                <option value="2" selected>2 Hops</option>
+                <option value="3">3 Hops</option>
+              </select>
+              <button class="btn-sm primary" type="submit">Traverse</button>
+            </form>
+
+            <div class="chip-row">
+              <span class="chip-label">Seeds:</span>
+              <button class="chip-btn" type="button" data-graph-seed="AuthGateway">AuthGateway</button>
+              <button class="chip-btn" type="button" data-graph-seed="SupportBot">SupportBot</button>
+              <button class="chip-btn" type="button" data-graph-seed="TapirusVault">TapirusVault</button>
+            </div>
+
+            <p id="graphrag-status" class="status-line" role="status">Run GraphRAG to highlight matching entities and relationships.</p>
+            <div id="graphrag-hits" class="graphrag-hits"></div>
+            <h3 class="mini-heading">Generated GraphRAG Prompt Context</h3>
+            <pre id="graphrag-context" class="code-output small-output" tabindex="0"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: VAULT X-RAY, RABITQ & TAP LITE TOOLS -->
+      <section id="view-xray" class="ws-view" role="tabpanel" aria-labelledby="tab-xray" hidden>
+        <div class="xray-grid">
+          <section class="xray-card">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">.tapir Binary File X-Ray</h2>
+                <p class="panel-sub">Inspect real binary headers, page encryption state, and storage footprint.</p>
+              </div>
+              <button id="btn-xray-refresh" class="btn-sm" type="button">Inspect Bytes</button>
+            </div>
+            <div class="kpi-row">
+              <div class="kpi-box"><span>Binary Size</span><strong id="xray-size">—</strong></div>
+              <div class="kpi-box"><span>Magic Header</span><strong id="xray-magic">TAPIRUS\0</strong></div>
+              <div class="kpi-box"><span>Encryption</span><strong id="xray-enc">Plaintext</strong></div>
+              <div class="kpi-box"><span>OPFS 4KB Pager</span><strong id="xray-opfs">Ready</strong></div>
+            </div>
+            <h3 class="mini-heading">First 128 Bytes (Live Hex Dump of <code>export_bytes()</code>)</h3>
+            <pre id="xray-hex" class="code-output hex-output" tabindex="0"></pre>
+            <p class="muted small-note">Encrypting this workspace via the top-bar lock switches page-level storage to XChaCha20-Poly1305 directly inside WebAssembly. Download <code>.tapir</code> anytime to open in Rust, Python, Node.js, or the native CLI.</p>
+          </section>
+
+          <section class="xray-card">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">RaBitQ Vector Quantization Lab</h2>
+                <p class="panel-sub">Live 1-bit &amp; 2-bit vector compression via <code>rabitq_quantize_json()</code> in Rust WASM.</p>
+              </div>
+            </div>
+            <div class="rabitq-controls">
+              <label>Input Vector (Float32 JSON)
+                <textarea id="rabitq-input" rows="2" spellcheck="false">[0.82, -0.45, 0.91, -0.18, 0.64, -0.77, 0.33, -0.52, 0.19, -0.88, 0.41, 0.73, -0.29, 0.56, -0.14, 0.95]</textarea>
+              </label>
+              <div class="toolbar-group">
+                <button id="btn-rabitq-1" class="btn-sm primary" type="button">Quantize 1-bit (32× smaller)</button>
+                <button id="btn-rabitq-2" class="btn-sm" type="button">Quantize 2-bit (16× smaller)</button>
+                <button id="btn-rabitq-rand" class="btn-sm" type="button">Generate 384-dim Vector</button>
+              </div>
+            </div>
+            <div class="kpi-row compact">
+              <div class="kpi-box"><span>Original Float32</span><strong id="rabitq-orig">—</strong></div>
+              <div class="kpi-box"><span>Quantized Payload</span><strong id="rabitq-comp">—</strong></div>
+              <div class="kpi-box"><span>Memory Saved</span><strong id="rabitq-ratio">—</strong></div>
+            </div>
+            <pre id="rabitq-result" class="code-output small-output" tabindex="0">Click Quantize to compress a vector inside WebAssembly.</pre>
+          </section>
+
+          <section class="xray-card xray-wide" aria-labelledby="tap-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="tap-title" class="panel-title">TAP Lite — Local Heuristic Inference</h2>
+                <p class="panel-sub">Zero-cloud text classification and premise-hypothesis verification running locally in Rust WASM (heuristic engine; full model fine-tuning uses the desktop backend).</p>
+              </div>
+              <span class="meta-chip">LOCAL HEURISTIC</span>
+            </div>
+            <div class="tap-split">
+              <div class="tap-col">
+                <label>Text to classify
+                  <textarea id="tap-text" rows="2">Customer vault passed XChaCha20-Poly1305 encryption audit with zero findings.</textarea>
+                </label>
+                <label>Candidate labels (comma-separated)
+                  <input id="tap-candidates" value="security, performance, billing" autocomplete="off">
+                </label>
+                <div class="toolbar-group">
+                  <button class="btn-sm primary" id="tap-classify" type="button">Classify with TAP</button>
+                  <span id="tap-classify-status" class="status-line" role="status"></span>
+                </div>
+                <pre id="tap-classify-result" class="code-output small-output" tabindex="0">[]</pre>
+              </div>
+              <div class="tap-col">
+                <label>Premise
+                  <textarea id="tap-premise" rows="2">TapirusDB stores encrypted .tapir databases locally on the user's device.</textarea>
+                </label>
+                <label>Hypothesis
+                  <textarea id="tap-hypothesis" rows="2">Data stays on this device without cloud egress.</textarea>
+                </label>
+                <div class="toolbar-group">
+                  <button class="btn-sm primary" id="tap-verify" type="button">Check hypothesis</button>
+                  <span id="tap-verify-status" class="status-line" role="status"></span>
+                </div>
+                <pre id="tap-verify-result" class="code-output small-output" tabindex="0">[]</pre>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="ide-statusbar" role="contentinfo">
+    <div class="status-left">
+      <span id="sb-storage" role="status">Initializing workspace…</span>
+      <span class="sb-sep" aria-hidden="true">·</span>
+      <span id="sb-size">0 B</span>
+      <span class="sb-sep" aria-hidden="true">·</span>
+      <span id="sb-security">Plaintext .tapir</span>
+    </div>
+    <div class="status-right">
+      <span id="sb-latency">Idle</span>
+      <span class="sb-sep" aria-hidden="true">·</span>
+      <a href="https://github.com/tapiruslab/TapirusDB">Source</a>
+      <span class="sb-sep" aria-hidden="true">·</span>
+      <a href="./wasm/LICENSE">License</a>
+    </div>
+  </footer>
+
+  <!-- MODAL: CONNECT TO TAPISAURUSDB SERVER & TAPIRSYNC -->
+  <dialog id="modal-server" class="ide-modal wide" aria-labelledby="modal-server-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modal-server-title">Connect to TapisaurusDB Server &amp; TapirSync</h2>
+        <button class="icon-btn" type="button" data-close-modal="modal-server" aria-label="Close">×</button>
+      </div>
+      <p class="modal-desc">Connect directly to a running <code>tapisaurus serve</code> HTTP/REST endpoint (<code>:27018</code>) to query live server collections or sync your browser <code>.tapir</code> vault bidirectionally via <strong>TapirSync</strong>.</p>
+      <form id="server-connect-form" class="server-form">
+        <label class="modal-field">Server URL
+          <input id="srv-url" type="url" value="http://127.0.0.1:27018" placeholder="http://127.0.0.1:27018" required>
+        </label>
+        <div class="form-row-2">
+          <label class="modal-field">Username <span class="muted">optional if using JWT</span>
+            <input id="srv-user" value="admin" autocomplete="username">
+          </label>
+          <label class="modal-field">Password
+            <input id="srv-pass" type="password" placeholder="Server password…" autocomplete="current-password">
+          </label>
+        </div>
+        <label class="modal-field">Bearer JWT Token <span class="muted">optional — overrides username/password</span>
+          <input id="srv-token" type="password" placeholder="Paste JWT token from /v1/auth/login…" autocomplete="off">
+        </label>
+        <p id="srv-error" class="modal-error" hidden></p>
+        <div class="modal-actions">
+          <button id="btn-srv-disconnect" class="btn-sm" type="button" hidden>Disconnect</button>
+          <button id="btn-srv-connect" class="btn-sm primary" type="submit">Connect &amp; Verify</button>
+        </div>
+      </form>
+
+      <div id="srv-connected-box" class="srv-connected-box" hidden>
+        <div class="kpi-row">
+          <div class="kpi-box"><span>Engine</span><strong id="srv-kpi-engine">—</strong></div>
+          <div class="kpi-box"><span>Raft Role</span><strong id="srv-kpi-raft">—</strong></div>
+          <div class="kpi-box"><span>Collections</span><strong id="srv-kpi-cols">0</strong></div>
+          <div class="kpi-box"><span>Active Mode</span><strong id="srv-kpi-mode">Local WASM</strong></div>
+        </div>
+        <div class="srv-sync-actions">
+          <button id="btn-srv-switch-remote" class="btn-sm primary" type="button">Use Server for SQL &amp; Browser</button>
+          <button id="btn-srv-switch-local" class="btn-sm" type="button">Switch Back to Local .tapir</button>
+          <button id="btn-tapirsync-push" class="btn-sm" type="button">⬆ Push .tapir → TapisaurusDB</button>
+          <button id="btn-tapirsync-pull" class="btn-sm" type="button">⬇ Pull TapisaurusDB → .tapir</button>
+        </div>
+        <p id="srv-sync-status" class="status-line" role="status">Connected and ready.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- MODAL: ENCRYPT / UNLOCK VAULT -->
+  <dialog id="modal-encrypt" class="ide-modal" aria-labelledby="modal-encrypt-title">
+    <form method="dialog" class="modal-card" id="encrypt-form">
+      <div class="modal-head">
+        <h2 id="modal-encrypt-title">Encrypt Vault with XChaCha20-Poly1305</h2>
+        <button class="icon-btn" type="button" data-close-modal="modal-encrypt" aria-label="Close">×</button>
+      </div>
+      <p id="encrypt-modal-desc" class="modal-desc">Creates an encrypted TapirusDB WebAssembly instance using <code>TapirusWasm.new_encrypted(passphrase)</code> and migrates your current tables, graph, and AI memories into it.</p>
+      <label class="modal-field">Passphrase
+        <input id="encrypt-passphrase" type="password" minlength="4" placeholder="Enter a strong passphrase…" autocomplete="new-password" required>
+      </label>
+      <p id="encrypt-modal-error" class="modal-error" hidden></p>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" data-close-modal="modal-encrypt">Cancel</button>
+        <button id="encrypt-submit-btn" class="btn-sm primary" type="submit">Enable Encryption</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- MODAL: SDK CODE GENERATOR -->
+  <dialog id="modal-code" class="ide-modal wide" aria-labelledby="modal-code-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modal-code-title">Run This in Your Application</h2>
+        <button class="icon-btn" type="button" data-close-modal="modal-code" aria-label="Close">×</button>
+      </div>
+      <p class="modal-desc">Generated directly from your active Studio query — works identically against the exported <code>.tapir</code> file.</p>
+      <div class="segmented" role="tablist" aria-label="SDK language">
+        <button class="seg-btn active" data-sdk-lang="python" type="button">Python</button>
+        <button class="seg-btn" data-sdk-lang="node" type="button">Node.js / TS</button>
+        <button class="seg-btn" data-sdk-lang="rust" type="button">Rust</button>
+      </div>
+      <pre id="sdk-code-preview" class="code-output sdk-preview" tabindex="0"></pre>
+      <div class="modal-actions">
+        <span id="sdk-copy-status" class="status-line"></span>
+        <button id="btn-copy-sdk" class="btn-sm primary" type="button">Copy Snippet</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- MODAL: CREATE NEW TABLE -->
+  <dialog id="modal-new-table" class="ide-modal" aria-labelledby="modal-table-title">
+    <form class="modal-card" id="new-table-form">
+      <div class="modal-head">
+        <h2 id="modal-table-title">Create New Table</h2>
+        <button class="icon-btn" type="button" data-close-modal="modal-new-table" aria-label="Close">×</button>
+      </div>
+      <label class="modal-field">Table name
+        <input id="nt-name" placeholder="e.g. products" pattern="[A-Za-z_][A-Za-z0-9_]*" required autocomplete="off">
+      </label>
+      <div class="modal-field">
+        <div class="field-head">
+          <span>Columns</span>
+          <button id="btn-add-col" class="mini-btn" type="button">+ Add Column</button>
+        </div>
+        <div id="nt-columns" class="col-builder"></div>
+      </div>
+      <p id="nt-error" class="modal-error" hidden></p>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" data-close-modal="modal-new-table">Cancel</button>
+        <button class="btn-sm primary" type="submit">Create Table</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- MODAL: INSERT ROW -->
+  <dialog id="modal-insert-row" class="ide-modal" aria-labelledby="modal-row-title">
+    <form class="modal-card" id="insert-row-form">
+      <div class="modal-head">
+        <h2 id="modal-row-title">Insert Row</h2>
+        <button class="icon-btn" type="button" data-close-modal="modal-insert-row" aria-label="Close">×</button>
+      </div>
+      <div id="insert-row-fields" class="row-fields"></div>
+      <p id="ir-error" class="modal-error" hidden></p>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" data-close-modal="modal-insert-row">Cancel</button>
+        <button class="btn-sm primary" type="submit">Insert Row</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
