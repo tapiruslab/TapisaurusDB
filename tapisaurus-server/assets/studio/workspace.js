@@ -575,11 +575,13 @@ function refreshTableBrowser() {
     $('browser-grid-head').innerHTML = '';
     $('browser-grid-body').innerHTML = '<tr><td class="empty-cell">Create a table with <strong>+ Table</strong>, load a demo scenario, or drop a <code>.csv</code> file here.</td></tr>';
     $('btn-insert-row').disabled = true;
+    $('btn-convert-table').disabled = true;
     $('btn-export-csv').disabled = true;
     return;
   }
 
   $('btn-insert-row').disabled = false;
+  $('btn-convert-table').disabled = false;
   $('btn-export-csv').disabled = false;
   $('active-table-title').textContent = schema.name;
   activeTableCols = schema.columns || [];
@@ -1881,6 +1883,12 @@ function bindEvents() {
   $('btn-prev-page').addEventListener('click', () => { tablePage--; renderTableBrowserRows(); });
   $('btn-next-page').addEventListener('click', () => { tablePage++; renderTableBrowserRows(); });
   $('btn-insert-row').addEventListener('click', openInsertRowModal);
+  $('btn-convert-table').addEventListener('click', openConvertModal);
+  document.querySelectorAll('[data-convert-target]').forEach(btn => {
+    btn.addEventListener('click', () => setConvertTarget(btn.dataset.convertTarget));
+  });
+  $('convert-form').addEventListener('submit', submitConvertForm);
+  $('btn-download-table-json').addEventListener('click', downloadActiveTableJson);
   $('btn-open-table-sql').addEventListener('click', () => {
     if (!activeTable) return;
     $('sql').value = `SELECT * FROM ${safeIdent(activeTable)} LIMIT 50;`;
@@ -2473,6 +2481,249 @@ async function pullTapirSyncFromServer() {
   }
 }
 
+// ---- QUAD-MODEL CONVERTER (SQL/CSV -> GRAPH / VECTOR / AI DOCUMENTS) ----
+let activeConvertTarget = 'graph';
+
+function toPascalLabel(name) {
+  return String(name || 'Record')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join('') || 'Record';
+}
+
+function computeFeatureVector8(text) {
+  const vec = new Float64Array(8);
+  const clean = String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+  const tokens = clean.split(/\s+/).filter(Boolean);
+  const features = [];
+  for (const tok of tokens) {
+    features.push(tok);
+    for (let i = 0; i <= tok.length - 3; i++) {
+      features.push(tok.slice(i, i + 3));
+    }
+  }
+  for (const feat of features) {
+    let h = 2166136261;
+    for (let i = 0; i < feat.length; i++) {
+      h ^= feat.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const idx = (h >>> 0) % 8;
+    const sign = ((h >>> 8) & 1) === 0 ? 1 : -1;
+    vec[idx] += sign;
+  }
+  let norm = 0;
+  for (let i = 0; i < 8; i++) norm += vec[i] * vec[i];
+  norm = Math.sqrt(norm);
+  if (norm === 0) return [0.3536, 0.3536, 0.3536, 0.3536, 0.3536, 0.3536, 0.3536, 0.3536];
+  return Array.from(vec, v => Number((v / norm).toFixed(4)));
+}
+
+function setConvertTarget(target) {
+  activeConvertTarget = target;
+  document.querySelectorAll('[data-convert-target]').forEach(b => {
+    b.classList.toggle('active', b.dataset.convertTarget === target);
+  });
+  $('conv-opts-graph').hidden = target !== 'graph';
+  $('conv-opts-vector').hidden = target !== 'vector';
+  $('conv-opts-document').hidden = target !== 'document';
+  const labels = {
+    graph: 'Convert to Knowledge Graph →',
+    vector: 'Generate VECTOR(8) Table →',
+    document: 'Index into AI Document Memory →',
+  };
+  $('conv-submit-btn').textContent = labels[target] || 'Convert →';
+}
+
+function populateSelectOptions(selectEl, cols, includeNone = false, preferred = null) {
+  selectEl.innerHTML = '';
+  if (includeNone) {
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = '(None — standalone nodes)';
+    selectEl.appendChild(noneOpt);
+  }
+  for (const c of cols) {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    opt.textContent = `${c.name} (${formatDataType(c.data_type)})`;
+    if (preferred && c.name === preferred) opt.selected = true;
+    selectEl.appendChild(opt);
+  }
+}
+
+function openConvertModal() {
+  if (!activeTable || !activeTableCols.length || !database) return;
+  $('modal-convert-title').textContent = `Convert "${activeTable}" (${activeTableRows.length} rows)`;
+  $('conv-error').hidden = true;
+  const textCol = activeTableCols.find(c => !c.primary_key && formatDataType(c.data_type) === 'TEXT')?.name || activeTableCols[0].name;
+  const relCol = activeTableCols.find(c => c.name !== textCol && !c.primary_key && !formatDataType(c.data_type).startsWith('VECTOR'))?.name || '';
+
+  $('conv-graph-label').value = toPascalLabel(activeTable.replace(/s$/i, ''));
+  $('conv-graph-edge').value = relCol ? `HAS_${safeIdent(relCol).toUpperCase()}` : 'BELONGS_TO';
+  populateSelectOptions($('conv-graph-name-col'), activeTableCols, false, textCol);
+  populateSelectOptions($('conv-graph-rel-col'), activeTableCols, true, relCol);
+
+  $('conv-vec-table').value = `${safeIdent(activeTable)}_vectors`;
+  populateSelectOptions($('conv-vec-label-col'), activeTableCols, false, textCol);
+
+  $('conv-doc-ns').value = safeIdent(activeTable);
+  populateSelectOptions($('conv-doc-tag-col'), activeTableCols, true, relCol);
+
+  setConvertTarget('graph');
+  $('modal-convert').showModal();
+}
+
+function downloadActiveTableJson() {
+  if (!activeTable || !activeTableRows.length) return;
+  const json = JSON.stringify(activeTableRows, null, 2);
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${safeIdent(activeTable)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function submitConvertForm(event) {
+  event.preventDefault();
+  $('conv-error').hidden = true;
+  if (!database || !activeTable || !activeTableRows.length) {
+    $('conv-error').textContent = 'Table has no rows to convert.';
+    $('conv-error').hidden = false;
+    return;
+  }
+
+  try {
+    const start = performance.now();
+    if (activeConvertTarget === 'graph') {
+      const nodeLabel = safeIdent($('conv-graph-label').value || 'Record');
+      const nameCol = $('conv-graph-name-col').value;
+      const relCol = $('conv-graph-rel-col').value;
+      const edgeLabel = safeIdent($('conv-graph-edge').value || 'BELONGS_TO').toUpperCase();
+
+      let nextId = Math.max(100, ...graphState.nodes.map(n => n.id)) + 1;
+      const hubMap = new Map();
+      const rows = activeTableRows.slice(0, 60);
+      let firstSeed = null;
+
+      for (const r of rows) {
+        const displayName = String(r[nameCol] ?? `${nodeLabel}_${nextId}`);
+        if (!firstSeed) firstSeed = displayName;
+        const props = { name: displayName, source_table: activeTable };
+        for (const [k, v] of Object.entries(r)) {
+          if (!Array.isArray(v)) props[k] = v;
+        }
+        const rowNodeId = nextId++;
+        database.execute(
+          `GRAPH INSERT NODE ${rowNodeId} LABEL '${nodeLabel}' PROPERTIES '${JSON.stringify(props).replaceAll("'", "''")}'`,
+        );
+
+        if (relCol && r[relCol] !== null && r[relCol] !== undefined && String(r[relCol]).trim() !== '') {
+          const hubVal = String(r[relCol]);
+          let hubId = hubMap.get(hubVal);
+          if (!hubId) {
+            hubId = nextId++;
+            hubMap.set(hubVal, hubId);
+            const hubLabel = toPascalLabel(relCol);
+            const hubProps = { name: hubVal, group_by: relCol };
+            database.execute(
+              `GRAPH INSERT NODE ${hubId} LABEL '${safeIdent(hubLabel)}' PROPERTIES '${JSON.stringify(hubProps).replaceAll("'", "''")}'`,
+            );
+          }
+          database.execute(
+            `GRAPH INSERT EDGE ${rowNodeId} -> ${hubId} LABEL '${edgeLabel}' WEIGHT 0.90 PROPERTIES '{"from_table":"${safeIdent(activeTable)}"}'`,
+          );
+        }
+      }
+
+      const elapsed = performance.now() - start;
+      $('modal-convert').close();
+      await persistSnapshot();
+      switchView('graph');
+      refreshGraphCanvas();
+      if (firstSeed) {
+        $('graphrag-query').value = firstSeed;
+        await runGraphRag(firstSeed);
+      }
+      setStatus('graphrag-status', `Converted ${rows.length} rows from "${activeTable}" into Knowledge Graph (+${hubMap.size} hub nodes) in ${elapsed.toFixed(2)} ms.`);
+      return;
+    }
+
+    if (activeConvertTarget === 'vector') {
+      const targetTable = safeIdent($('conv-vec-table').value || `${activeTable}_vectors`);
+      const labelCol = $('conv-vec-label-col').value;
+      database.execute(`DROP TABLE IF EXISTS ${targetTable}`);
+      database.execute(
+        `CREATE TABLE ${targetTable} (id INTEGER PRIMARY KEY, source_label TEXT, source_text TEXT, embedding VECTOR(8))`,
+      );
+      const ins = `INSERT INTO ${targetTable} (id, source_label, source_text, embedding) VALUES (?, ?, ?, ?)`;
+      activeTableRows.forEach((r, idx) => {
+        const label = String(r[labelCol] ?? `Row ${idx + 1}`);
+        const text = Object.entries(r)
+          .filter(([, v]) => v !== null && v !== undefined && !Array.isArray(v))
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(' | ');
+        const vec = computeFeatureVector8(text);
+        database.execute_params(ins, JSON.stringify([idx + 1, label, text, vec]));
+      });
+      const elapsed = performance.now() - start;
+      activeTable = targetTable;
+      tablePage = 1;
+      $('modal-convert').close();
+      await persistSnapshot();
+      switchView('data');
+      refreshExplorer();
+      refreshTableBrowser();
+      setStatus('browser-status', `Generated ${activeTableRows.length} normalized VECTOR(8) embeddings in "${targetTable}" (${elapsed.toFixed(2)} ms). Click any VEC[8] badge to run Cosine Search!`);
+      return;
+    }
+
+    // Target: AI Documents / Memory Vault
+    const ns = safeIdent($('conv-doc-ns').value || activeTable);
+    const tagCol = $('conv-doc-tag-col').value;
+    let firstKeyword = '';
+    for (const r of activeTableRows) {
+      const text = Object.entries(r)
+        .filter(([, v]) => v !== null && v !== undefined && !Array.isArray(v))
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' · ');
+      const tags = [activeTable];
+      if (tagCol && r[tagCol] != null) tags.push(String(r[tagCol]).toLowerCase());
+      const embedding = computeFeatureVector8(text);
+      database.store_memory_json(JSON.stringify({
+        content: text,
+        embedding,
+        namespace: ns,
+        importance: 0.85,
+        tags,
+      }));
+      memoryJournal.push({ content: text, embedding, namespace: ns, importance: 0.85, tags });
+      if (!firstKeyword) {
+        const word = text.split(/[^a-zA-Z0-9]+/).find(w => w.length >= 4 && !/^\d+$/.test(w));
+        if (word) firstKeyword = word;
+      }
+    }
+    knownNamespaces.add(ns);
+    const elapsed = performance.now() - start;
+    $('modal-convert').close();
+    await persistSnapshot();
+    refreshExplorer();
+    refreshMemoryStats();
+    switchView('memory');
+    if (firstKeyword) {
+      $('memory-query').value = firstKeyword;
+      await runMemorySearch(firstKeyword);
+    }
+    setStatus('memory-status', `Indexed ${activeTableRows.length} rows from "${activeTable}" into AI Document Memory namespace "${ns}" (${elapsed.toFixed(2)} ms).`);
+  } catch (err) {
+    $('conv-error').textContent = errorMessage(err);
+    $('conv-error').hidden = false;
+  }
+}
+
 // ---- BOOTSTRAP ----
 bindEvents();
 
@@ -2515,9 +2766,28 @@ if (embeddedServerMode) {
     $('engine').textContent = `WASM v${engine.TapirusWasm.version()}`;
     $('engine').dataset.engineReady = 'true';
 
-    // Always boot with an immediately useful pre-loaded interactive dataset
-    // while preserving any saved browser databases in the Explorer sidebar!
-    await loadScenario('ai-support');
+    // Auto-restore the user's last edited database on F5/reload; load default demo on first visit.
+    const lastSaved = localStorage.getItem('tapirus-studio-active-db');
+    let restored = false;
+    if (lastSaved) {
+      try {
+        const bytes = await readSaved(lastSaved);
+        if (bytes) {
+          database = engine.TapirusWasm.import_bytes(bytes);
+          savedName = lastSaved;
+          $('vault-name').value = savedName;
+          $('sb-size').textContent = formatBytes(bytes.length);
+          await refreshAllViews();
+          setFooterStorage(`Restored ${savedName} (auto-saved in IndexedDB)`);
+          restored = true;
+        }
+      } catch {
+        // Encrypted or unreadable draft remains safely in SAVED IN BROWSER list
+      }
+    }
+    if (!restored) {
+      await loadScenario('ai-support');
+    }
     await refreshSavedDbList();
   } catch (err) {
     setStatus('engine', `WASM error: ${errorMessage(err)}`, true);

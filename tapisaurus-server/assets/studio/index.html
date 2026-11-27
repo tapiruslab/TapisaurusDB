@@ -168,6 +168,7 @@
             <label class="sr-only" for="table-filter">Filter rows</label>
             <input id="table-filter" class="toolbar-input" type="search" placeholder="Filter visible rows…">
             <button id="btn-insert-row" class="btn-sm primary" type="button">+ Insert Row</button>
+            <button id="btn-convert-table" class="btn-sm accent-soft" type="button" title="Convert this table into Knowledge Graph, Vector Table, or AI Documents">⇄ Convert Model</button>
             <button id="btn-open-table-sql" class="btn-sm" type="button">Query in SQL</button>
             <button id="btn-export-csv" class="btn-sm" type="button">Export CSV</button>
             <button id="btn-table-code" class="btn-sm" type="button">&lt;/&gt; SDK Code</button>
@@ -540,6 +541,81 @@ ORDER BY t.id ASC;</textarea>
       <a href="./wasm/LICENSE">License</a>
     </div>
   </footer>
+
+  <!-- MODAL: QUAD-MODEL CONVERTER (SQL/CSV -> GRAPH / VECTOR / AI DOCUMENTS) -->
+  <dialog id="modal-convert" class="ide-modal wide" aria-labelledby="modal-convert-title">
+    <form class="modal-card" id="convert-form">
+      <div class="modal-head">
+        <h2 id="modal-convert-title">Convert Table to Another Model</h2>
+        <button class="icon-btn" type="button" data-close-modal="modal-convert" aria-label="Close">×</button>
+      </div>
+      <p id="convert-subtitle" class="modal-desc">Transform any SQL or imported CSV/JSON table directly into a Knowledge Graph, Vector table, or searchable AI Document Memory inside the same <code>.tapir</code> vault.</p>
+
+      <div class="convert-targets" role="radiogroup" aria-label="Target data model">
+        <button class="convert-card active" type="button" data-convert-target="graph">
+          <strong>Knowledge Graph</strong>
+          <span>Creates labeled nodes &amp; relationship edges for SVG Graph + GraphRAG</span>
+        </button>
+        <button class="convert-card" type="button" data-convert-target="vector">
+          <strong>Vector Table (HNSW)</strong>
+          <span>Generates normalized <code>VECTOR(8)</code> embeddings for cosine search</span>
+        </button>
+        <button class="convert-card" type="button" data-convert-target="document">
+          <strong>AI Documents / Memory</strong>
+          <span>Indexes rows into hybrid BM25 + vector AI Memory or downloads JSON</span>
+        </button>
+      </div>
+
+      <div id="conv-opts-graph" class="convert-opts">
+        <div class="form-row-3">
+          <label class="modal-field">Node Label
+            <input id="conv-graph-label" value="Record" required autocomplete="off">
+          </label>
+          <label class="modal-field">Display Name Column
+            <select id="conv-graph-name-col"></select>
+          </label>
+          <label class="modal-field">Link / Group By Column
+            <select id="conv-graph-rel-col"></select>
+          </label>
+        </div>
+        <label class="modal-field">Edge Label (when linking via Group/FK column)
+          <input id="conv-graph-edge" value="BELONGS_TO" autocomplete="off">
+        </label>
+      </div>
+
+      <div id="conv-opts-vector" class="convert-opts" hidden>
+        <div class="form-row-2">
+          <label class="modal-field">Target Vector Table Name
+            <input id="conv-vec-table" placeholder="tickets_vectors" autocomplete="off">
+          </label>
+          <label class="modal-field">Primary Text / Label Column
+            <select id="conv-vec-label-col"></select>
+          </label>
+        </div>
+        <p class="muted small-note">All row columns are combined into a deterministic L2-normalized <code>VECTOR(8)</code> embedding so you can immediately run <code>VECTOR_COSINE</code> and <code>VECTOR NEAR</code> locally without cloud APIs.</p>
+      </div>
+
+      <div id="conv-opts-document" class="convert-opts" hidden>
+        <div class="form-row-2">
+          <label class="modal-field">AI Memory Namespace
+            <input id="conv-doc-ns" placeholder="tickets" autocomplete="off">
+          </label>
+          <label class="modal-field">Tag Column <span class="muted">optional</span>
+            <select id="conv-doc-tag-col"></select>
+          </label>
+        </div>
+        <div class="toolbar-group">
+          <button id="btn-download-table-json" class="btn-sm" type="button">⬇ Download JSON Documents (.json)</button>
+        </div>
+      </div>
+
+      <p id="conv-error" class="modal-error" hidden></p>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" data-close-modal="modal-convert">Cancel</button>
+        <button id="conv-submit-btn" class="btn-sm primary" type="submit">Convert to Knowledge Graph →</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- MODAL: CONNECT TO TAPISAURUSDB SERVER & TAPIRSYNC -->
   <dialog id="modal-server" class="ide-modal wide" aria-labelledby="modal-server-title">
